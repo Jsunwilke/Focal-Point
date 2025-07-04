@@ -1,0 +1,93 @@
+// src/App.js
+import React, { useState } from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import LoginPage from "./components/auth/LoginPage";
+import StudioSignup from "./components/auth/StudioSignup";
+import InvitationAcceptance from "./components/auth/InvitationAcceptance";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
+import Layout from "./components/layout/Layout";
+import Dashboard from "./pages/Dashboard";
+import TeamManagement from "./pages/TeamManagement";
+import SchoolManagement from "./pages/SchoolManagement";
+import DailyReports from "./pages/DailyReports";
+import Sports from "./pages/Sports";
+import Schedule from "./pages/Schedule";
+import "./App.css";
+
+const AppContent = () => {
+  const { user, loading } = useAuth();
+  const [showSignup, setShowSignup] = useState(false);
+
+  // Show loading spinner while Firebase initializes
+  if (loading) {
+    return (
+      <div className="app-loading">
+        <div className="loading-spinner"></div>
+        <p>Loading iconik studio...</p>
+      </div>
+    );
+  }
+
+  return (
+    <Router>
+      <Routes>
+        {/* Public routes */}
+        <Route path="/accept-invitation" element={<InvitationAcceptance />} />
+
+        {/* Auth routes - only show if not logged in */}
+        {!user && (
+          <>
+            <Route
+              path="/signup"
+              element={<StudioSignup onBack={() => setShowSignup(false)} />}
+            />
+            <Route
+              path="/*"
+              element={
+                showSignup ? (
+                  <StudioSignup onBack={() => setShowSignup(false)} />
+                ) : (
+                  <LoginPage onShowSignup={() => setShowSignup(true)} />
+                )
+              }
+            />
+          </>
+        )}
+
+        {/* Protected routes - only show if logged in */}
+        {user && (
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/schedule" element={<Schedule />} />
+                    <Route path="/team" element={<TeamManagement />} />
+                    <Route path="/schools" element={<SchoolManagement />} />
+                    <Route path="/sports" element={<Sports />} />
+                    <Route path="/daily-reports" element={<DailyReports />} />
+                  </Routes>
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+        )}
+      </Routes>
+    </Router>
+  );
+};
+
+const App = () => {
+  return (
+    <AuthProvider>
+      <div className="app">
+        <AppContent />
+      </div>
+    </AuthProvider>
+  );
+};
+
+export default App;

@@ -1,0 +1,500 @@
+/* Card Components */
+
+/* Compact Job Cards - Primary Card Style */
+.compact-job-card {
+  background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  margin-bottom: 16px;
+  transition: all 0.2s ease;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.compact-job-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.compact-job-card.archived-job {
+  background: linear-gradient(145deg, #f0f8f0 0%, #e8f5e8 100%);
+  border-left: 3px solid #28a745;
+}
+
+/* Compact Card Header */
+.compact-header {
+  padding: 12px 16px 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  background: rgba(58, 110, 165, 0.03);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.compact-header .school-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.compact-header .school-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 4px 0;
+  line-height: 1.2;
+  word-wrap: break-word;
+}
+
+.compact-header .date-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.compact-header .season-tag {
+  background: linear-gradient(135deg, #3a6ea5 0%, #2d5a8a 100%);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+/* Job Meta Information */
+.compact-job-card .job-meta {
+  padding: 0 16px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.job-meta .meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.meta-item i {
+  color: #3a6ea5;
+  font-size: 0.8rem;
+}
+
+/* Stats Row */
+.compact-job-card .stats-row {
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  background: rgba(248, 249, 250, 0.5);
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.stats-row .stat-item {
+  text-align: center;
+  flex: 1;
+  padding: 0 8px;
+}
+
+.stat-item .stat-num {
+  display: block;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #1a202c;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.stat-item .stat-lbl {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+
+.stat-item .stat-warn {
+  display: block;
+  font-size: 0.65rem;
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.stat-item .stat-pct {
+  display: block;
+  font-size: 0.7rem;
+  color: #059669;
+  font-weight: 700;
+  background: rgba(5, 150, 105, 0.1);
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-top: 2px;
+}
+
+/* Extra Stats */
+.compact-job-card .extra-stats {
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.extra-stats .extra-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.extra-stat .stat-icon-sm {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: white;
+  flex-shrink: 0;
+}
+
+.extra-stat:nth-child(1) .stat-icon-sm {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+}
+
+.extra-stat:nth-child(2) .stat-icon-sm {
+  background: linear-gradient(135deg, #059669, #047857);
+}
+
+.extra-stat:nth-child(3) .stat-icon-sm {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.extra-stat .stat-text {
+  font-size: 0.8rem;
+  color: #1a202c;
+  font-weight: 600;
+}
+
+/* Compact Actions */
+.compact-actions {
+  padding: 8px 16px 12px;
+  display: flex;
+  gap: 6px;
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
+  background: rgba(248, 249, 250, 0.3);
+}
+
+.compact-btn {
+  flex: 1;
+  padding: 6px 10px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 28px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.compact-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.compact-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.compact-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.compact-btn-icon {
+  flex: 0 0 auto;
+  width: 32px;
+  padding: 6px;
+}
+
+.compact-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #e2e8f0;
+  border-top: 2px solid #475569;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Folder Cards */
+.folder-card-container {
+  cursor: pointer;
+  margin-bottom: 20px;
+}
+
+.folder-card {
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+  transition: all 0.3s ease;
+  height: 150px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.folder-card:hover {
+  background-color: #f8f9fa;
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.folder-icon {
+  font-size: 3rem;
+  color: #3a6ea5;
+  margin-bottom: 10px;
+}
+
+.folder-info .folder-name {
+  margin-bottom: 5px;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.folder-info .folder-count {
+  color: #6c757d;
+  font-size: 0.9rem;
+  margin-bottom: 0;
+}
+
+/* Chart Cards */
+.chart-card {
+  border: none;
+  border-radius: 15px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+}
+
+.chart-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+}
+
+.chart-card .card-header {
+  background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 15px 15px 0 0;
+  padding: 15px 20px;
+  font-weight: 600;
+}
+
+.chart-card .card-body {
+  padding: 20px;
+  height: 350px;
+}
+
+/* Performance Cards */
+.performance-card {
+  border: none;
+  border-radius: 15px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  transition: transform 0.3s ease;
+}
+
+.performance-card:hover {
+  transform: translateY(-3px);
+}
+
+.performance-card .card-header {
+  background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  border: none;
+  border-radius: 15px 15px 0 0;
+  padding: 15px 20px;
+  font-weight: 600;
+}
+
+/* Sport Cards */
+.sport-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 15px;
+  padding: 20px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.sport-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+}
+
+.sport-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.sport-title {
+  margin: 0;
+  font-weight: 600;
+  color: #343a40;
+  font-size: 1.1rem;
+}
+
+/* Legacy Job Cards - To be removed */
+.job-card {
+  border-radius: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  background-color: white;
+  transition: transform 0.2s ease-in-out;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+.job-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.job-header {
+  padding: 15px;
+  border-bottom: 1px solid #e9ecef;
+  background-color: #f8f9fa;
+  border-radius: 10px 10px 0 0;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+}
+
+.job-header h5 {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+
+.job-body {
+  padding: 20px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Archives Styling */
+.archived-job {
+  background-color: #f9f9f9;
+  border-left: 4px solid #28a745;
+}
+
+.archived-job .job-header {
+  background-color: #f0f7f0;
+}
+
+/* Glassmorphism Effects */
+.stats-header-card,
+.chart-card,
+.performance-card,
+.sport-card {
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* Mobile Adjustments */
+@media (max-width: 768px) {
+  .compact-job-card {
+    min-height: 160px;
+    margin-bottom: 12px;
+  }
+
+  .compact-header {
+    padding: 10px 12px 6px;
+  }
+
+  .compact-header .school-name {
+    font-size: 0.9rem;
+  }
+
+  .stats-row {
+    padding: 6px 12px;
+  }
+
+  .stat-item .stat-num {
+    font-size: 1.2rem;
+  }
+
+  .extra-stats {
+    padding: 6px 12px;
+  }
+
+  .compact-actions {
+    padding: 6px 12px 10px;
+    gap: 4px;
+  }
+
+  .compact-btn {
+    font-size: 10px;
+    padding: 5px 8px;
+    min-height: 26px;
+  }
+
+  .compact-btn-icon {
+    width: 28px;
+    padding: 5px;
+  }
+
+  .job-card {
+    margin-bottom: 15px;
+    min-height: 300px;
+  }
+
+  .chart-card .card-body {
+    height: 250px;
+  }
+}

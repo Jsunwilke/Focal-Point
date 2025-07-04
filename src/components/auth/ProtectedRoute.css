@@ -1,0 +1,16 @@
+/* src/components/auth/ProtectedRoute.css */
+.protected-route-loading {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  background-color: var(--background-secondary);
+}
+
+.protected-route-loading p {
+  color: var(--text-secondary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+}

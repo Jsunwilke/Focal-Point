@@ -1,0 +1,115 @@
+/* src/components/layout/Sidebar.css */
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  width: var(--sidebar-width);
+  background-color: var(--background);
+  border-right: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+
+.sidebar__header {
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.sidebar__logo {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--primary-color);
+  margin-bottom: var(--spacing-xs);
+}
+
+.sidebar__subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.sidebar__nav {
+  flex: 1;
+  padding: var(--spacing-lg) 0;
+}
+
+.sidebar__nav-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar__nav-item {
+  margin-bottom: var(--spacing-xs);
+}
+
+.sidebar__nav-link {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: var(--font-size-base);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border-left: 3px solid transparent;
+  position: relative;
+}
+
+.sidebar__nav-link:hover:not(.sidebar__nav-link--disabled) {
+  background-color: var(--background-secondary);
+  color: var(--text-primary);
+}
+
+.sidebar__nav-link--active {
+  background-color: var(--primary-light);
+  color: var(--primary-color);
+  border-left-color: var(--primary-color);
+}
+
+.sidebar__nav-link--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sidebar__nav-badge {
+  font-size: var(--font-size-xs);
+  background-color: var(--text-muted);
+  color: white;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  margin-left: auto;
+}
+
+.sidebar__nav-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+.sidebar__nav-label {
+  font-weight: var(--font-weight-medium);
+}
+
+.sidebar__footer {
+  padding: var(--spacing-lg);
+  border-top: 1px solid var(--border-light);
+}
+
+.sidebar__coming-soon {
+  text-align: center;
+  padding: var(--spacing-md);
+  background-color: var(--background-secondary);
+  border-radius: var(--radius-md);
+}
+
+.sidebar__coming-soon p {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  font-style: italic;
+}

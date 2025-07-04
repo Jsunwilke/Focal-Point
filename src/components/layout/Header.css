@@ -1,0 +1,229 @@
+/* src/components/layout/Header.css */
+.header {
+  position: relative;
+  height: var(--header-height);
+  background-color: var(--background);
+  border-bottom: 1px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
+}
+
+.header__content {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--spacing-lg);
+}
+
+.header__left {
+  flex: 1;
+}
+
+.header__greeting {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.header__date {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.header__right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+}
+
+.header__organization {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--primary-light);
+  border-radius: var(--radius-md);
+}
+
+.header__org-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--primary-color);
+}
+
+.header__user {
+  position: relative;
+}
+
+.header__user-button {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs);
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.header__user-button:hover {
+  background-color: var(--background-secondary);
+}
+
+.header__avatar-container {
+  position: relative;
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.header__avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background-color: var(--primary-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.header__avatar--photo {
+  object-fit: cover;
+  border: 2px solid var(--border-light);
+}
+
+.header__avatar--fallback {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.header__user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.header__user-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.header__user-role {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+.header__dropdown-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.header__user-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: var(--spacing-xs);
+  width: 16rem;
+  background-color: var(--background);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 50;
+}
+
+.header__menu-section {
+  padding: var(--spacing-sm);
+}
+
+.header__menu-section:not(:last-child) {
+  border-bottom: 1px solid var(--border-light);
+}
+
+.header__menu-user-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+}
+
+.header__menu-avatar-container {
+  position: relative;
+  width: 2rem;
+  height: 2rem;
+}
+
+.header__menu-avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background-color: var(--primary-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.header__menu-avatar--photo {
+  object-fit: cover;
+  border: 1px solid var(--border-light);
+}
+
+.header__menu-avatar--fallback {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.header__menu-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.header__menu-email {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.header__menu-item {
+  width: 100%;
+  padding: var(--spacing-sm);
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.header__menu-item:hover {
+  background-color: var(--background-secondary);
+}
+
+.header__menu-item--danger {
+  color: var(--error-color);
+}
+
+.header__menu-item--danger:hover {
+  background-color: #fef2f2;
+}
+
+.header__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
