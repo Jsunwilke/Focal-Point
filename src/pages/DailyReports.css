@@ -1,15 +1,23 @@
 /* src/pages/DailyReports.css */
+
+/* Override layout padding for daily reports to maximize width */
+.layout__content:has(.daily-reports) {
+  padding: 0;
+}
+
 .daily-reports {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
+  padding: var(--spacing-lg);
+  max-width: none; /* Ensure no max-width constraints */
 }
 
 .reports-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--spacing-2xl);
-  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  gap: var(--spacing-md);
 }
 
 .reports-header__content {
@@ -17,14 +25,14 @@
 }
 
 .reports-title {
-  font-size: var(--font-size-3xl);
+  font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
   color: var(--text-primary);
   margin-bottom: var(--spacing-xs);
 }
 
 .reports-subtitle {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-base);
   color: var(--text-secondary);
 }
 
@@ -49,19 +57,19 @@
 .reports-content {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-2xl);
+  gap: var(--spacing-lg);
 }
 
 /* Stats Section */
 .reports-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--spacing-lg);
+  gap: var(--spacing-md);
 }
 
 .reports-stat {
   background-color: var(--background);
-  padding: var(--spacing-lg);
+  padding: var(--spacing-md);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border-light);
@@ -102,7 +110,7 @@
   align-items: flex-start;
   flex-wrap: wrap;
   background-color: var(--background);
-  padding: var(--spacing-lg);
+  padding: var(--spacing-md);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border-light);
@@ -249,7 +257,9 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border-light);
-  overflow: hidden;
+  overflow: visible;
+  width: 100%;
+  max-width: none; /* Remove any max-width constraints */
 }
 
 /* Empty State */
@@ -279,23 +289,159 @@
   margin-bottom: var(--spacing-lg);
 }
 
-/* Card View - Removed */
-
-/* Table View (matching your original app) */
-.reports-table-container {
-  overflow: visible;
+/* Card View */
+.reports-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: var(--spacing-lg);
   padding: var(--spacing-lg);
 }
 
+.report-card {
+  background: var(--background);
+  border-radius: 10px;
+  margin: 0;
+  overflow: hidden;
+  box-shadow: 4px 4px 10px rgba(0,0,0,0.5);
+  transition: transform 0.2s ease-in-out;
+  text-align: left;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.report-card:hover {
+  transform: translateY(-2px);
+}
+
+.report-header {
+  position: relative;
+  background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+  color: white;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 120px;
+}
+
+.report-title {
+  font-size: 3rem;
+  font-weight: 600;
+  margin: -20px;
+  text-align: center;
+}
+
+.header-footer {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+}
+
+.school-name {
+  font-size: 2.2rem;
+  font-weight: 400;
+  margin: 0;
+  opacity: 0.9;
+}
+
+.report-date {
+  font-size: 2.2rem;
+  margin: 0;
+  opacity: 0.9;
+}
+
+.report-content {
+  padding: 20px;
+}
+
+.report-content p {
+  line-height: 1.6;
+  margin: 0.8rem 0;
+  color: #555;
+}
+
+.report-content strong {
+  color: #333;
+}
+
+.notes-box {
+  background: #fff7e6;
+  border-left: 5px solid var(--primary-color);
+  padding: 15px;
+  margin: 15px 0;
+  border-radius: 4px;
+  text-align: left;
+}
+
+.card-photos {
+  display: flex;
+  overflow-x: auto;
+  padding-top: 10px;
+  gap: 8px;
+}
+
+.card-photo {
+  max-width: 300px;
+  max-height: 200px;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+}
+
+/* Table View (matching your original app) */
+.reports-table-container {
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 0;
+  width: 100%;
+  height: calc(90vh - 300px); /* 90% of viewport minus space for controls */
+  margin: 0;
+}
+
 .report-table {
-  width: 85vw;
-  table-layout: fixed;
+  width: 100%;
+  table-layout: fixed; /* Use fixed layout for precise column control */
   border-collapse: collapse;
-  margin: 20px auto;
+  margin: 0;
   background-color: var(--background);
   box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.2);
   border-radius: var(--radius-lg);
   overflow: visible;
+  min-width: 1550px; /* Sum of all column widths (110+140+160+200+160+120+120+110+70+180+180) */
+}
+
+/* Set specific column widths in pixels for better control */
+.report-table colgroup col:nth-child(1) { width: 110px; } /* Date */
+.report-table colgroup col:nth-child(2) { width: 140px; } /* Photographer */
+.report-table colgroup col:nth-child(3) { width: 160px; } /* School/Destination */
+.report-table colgroup col:nth-child(4) { width: 200px; } /* Job Descriptions */
+.report-table colgroup col:nth-child(5) { width: 160px; } /* Extra Items */
+.report-table colgroup col:nth-child(6) { width: 120px; } /* Job Box/Cards */
+.report-table colgroup col:nth-child(7) { width: 120px; } /* Sports BG Shot */
+.report-table colgroup col:nth-child(8) { width: 110px; } /* Cards Scanned */
+.report-table colgroup col:nth-child(9) { width: 70px; }  /* Photo */
+.report-table colgroup col:nth-child(10) { width: 180px; } /* Photoshoot Notes */
+.report-table colgroup col:nth-child(11) { width: 180px; } /* Extra Notes */
+
+.report-table th,
+.report-table td {
+  white-space: nowrap;
+}
+
+/* Allow wrapping for text-heavy columns */
+.report-table th:nth-child(4), /* Job Descriptions */
+.report-table td:nth-child(4),
+.report-table th:nth-child(5), /* Extra Items */
+.report-table td:nth-child(5),
+.report-table th:nth-child(10), /* Photoshoot Notes */
+.report-table td:nth-child(10),
+.report-table th:nth-child(11), /* Extra Notes */
+.report-table td:nth-child(11) {
+  white-space: normal;
+  word-wrap: break-word;
 }
 
 .report-table thead th {
@@ -311,8 +457,9 @@
   padding: 12px;
   border-bottom: 1px solid var(--border-light);
   text-align: left;
-  word-break: break-word;
   border-right: 1px solid #ccc;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .report-table th:last-child,
@@ -381,7 +528,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 10002; /* Higher than report modal (9999) */
   padding: var(--spacing-md);
 }
 
@@ -432,6 +579,42 @@
 
 .image-modal__download:hover {
   background-color: var(--primary-hover);
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  display: flex;
+  align-items: center;
+}
+
+.toggle-switch label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+
+.toggle-switch input[type="checkbox"] {
+  cursor: pointer;
+}
+
+/* Override modal positioning to ensure proper centering */
+.modal-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 9999 !important;
+  padding: 20px;
 }
 
 /* Report Detail Modal - Updated to match your site's modals */
@@ -524,6 +707,84 @@
   border-color: var(--primary-color);
 }
 
+/* Edit form styles */
+.edit-form-section {
+  margin-bottom: 1.5rem;
+}
+
+.form-box {
+  background: #fdfdfd;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  margin-bottom: 1.5rem;
+}
+
+.checkbox-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background: var(--background);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm);
+  margin-top: 4px;
+}
+
+.checkbox-group label,
+.radio-group label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: 4px;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+}
+
+.radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  background: var(--background);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm);
+  margin-top: 4px;
+}
+
+.form-textarea {
+  width: 100%;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color var(--transition-fast);
+}
+
+.form-textarea:focus {
+  border-color: var(--primary-color);
+  outline: none;
+}
+
+.form-select {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  background-color: var(--background);
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.form-select:focus {
+  border-color: var(--primary-color);
+  outline: none;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .reports-controls {
@@ -540,11 +801,13 @@
   }
 
   .reports-table-container {
-    padding: var(--spacing-sm);
+    padding: 0;
+    height: calc(90vh - 250px); /* Adjust for mobile */
   }
 
   .report-table {
-    width: 95vw;
+    width: 100%;
+    min-width: 1200px; /* Smaller but still showing all columns on mobile */
   }
 
   .report-modal__content {

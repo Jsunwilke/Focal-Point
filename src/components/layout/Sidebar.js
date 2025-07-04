@@ -9,6 +9,7 @@ import {
   BarChart3,
   Settings,
   Trophy,
+  FileText,
 } from "lucide-react";
 import "./Sidebar.css";
 
@@ -51,6 +52,13 @@ const Sidebar = () => {
       label: "Team",
       icon: Users,
       path: "/team",
+      enabled: true,
+    },
+    {
+      id: "daily-reports",
+      label: "Daily Reports",
+      icon: FileText,
+      path: "/daily-reports",
       enabled: true,
     },
     {

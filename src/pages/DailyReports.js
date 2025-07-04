@@ -1,5 +1,6 @@
 // src/pages/DailyReports.js
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import ReactDOM from "react-dom";
 import {
   Search,
   X,
@@ -18,7 +19,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import {
-  getDailyJobReports,
+  subscribeToDailyJobReports,
+  updateDailyJobReport,
   getSchools,
   getTeamMembers,
 } from "../firebase/firestore";
@@ -34,6 +36,7 @@ const DailyReports = () => {
   const [sortField, setSortField] = useState("date");
   const [sortDirection, setSortDirection] = useState("desc");
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [viewMode, setViewMode] = useState("database"); // 'card' or 'database'
   const [selectedReport, setSelectedReport] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
   const [currentImage, setCurrentImage] = useState("");
@@ -110,34 +113,52 @@ const DailyReports = () => {
 
   // Load data effect
   useEffect(() => {
-    loadData();
-  }, [organization]);
-
-  const loadData = async () => {
     if (!organization?.id) return;
 
-    try {
-      setLoading(true);
+    let unsubscribe;
+    
+    const loadInitialData = async () => {
+      try {
+        setLoading(true);
 
-      // Load all the data in parallel
-      const [reportsData, schoolsData, photographersData] = await Promise.all([
-        getDailyJobReports(organization.id),
-        getSchools(organization.id),
-        getTeamMembers(organization.id),
-      ]);
+        // Load schools and photographers
+        const [schoolsData, photographersData] = await Promise.all([
+          getSchools(organization.id),
+          getTeamMembers(organization.id),
+        ]);
 
-      setReports(reportsData);
-      setSchools(schoolsData.map((s) => s.value || s.name));
-      setPhotographers(
-        photographersData.map((p) => p.firstName).filter(Boolean)
-      );
-    } catch (err) {
-      setError("Failed to load daily reports");
-      console.error("Error loading data:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+        setSchools(schoolsData.map((s) => s.value || s.name));
+        setPhotographers(
+          photographersData.map((p) => p.firstName).filter(Boolean)
+        );
+
+        // Subscribe to real-time reports updates
+        unsubscribe = subscribeToDailyJobReports(
+          organization.id,
+          (reportsData) => {
+            setReports(reportsData);
+            setLoading(false);
+          },
+          (err) => {
+            setError("Failed to load daily reports");
+            console.error("Error loading reports:", err);
+            setLoading(false);
+          }
+        );
+      } catch (err) {
+        setError("Failed to load data");
+        console.error("Error loading data:", err);
+        setLoading(false);
+      }
+    };
+
+    loadInitialData();
+
+    // Cleanup subscription on unmount
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [organization]);
 
   // Filtered and sorted reports
   const filteredAndSortedReports = useMemo(() => {
@@ -316,16 +337,78 @@ const DailyReports = () => {
   }, []);
 
   const saveEdit = useCallback(async () => {
-    // Implementation for saving edited report would go here
-    // This would use your updateDoc function
-    console.log("Saving edited report:", editingReport);
-    setEditingReport(null);
-    setSelectedReport(editingReport);
+    if (!editingReport || !editingReport.id) return;
+    
+    try {
+      const { id, ...reportData } = editingReport;
+      await updateDailyJobReport(id, reportData);
+      setEditingReport(null);
+      setSelectedReport(null);
+    } catch (error) {
+      console.error("Error saving report:", error);
+      alert("Failed to save changes. Please try again.");
+    }
   }, [editingReport]);
 
   const cancelEdit = useCallback(() => {
     setEditingReport(null);
   }, []);
+
+  // Render card view
+  const renderCardView = () => {
+    return (
+      <div className="reports-cards">
+        {filteredAndSortedReports.map((report) => (
+          <div
+            key={report.id}
+            className="report-card"
+            onClick={() => openReportModal(report)}
+          >
+            <div className="report-header">
+              <h2 className="report-title">{report.yourName || "Unknown"}</h2>
+              <div className="header-footer">
+                <p className="school-name">{report.schoolOrDestination || "Unknown"}</p>
+                <p className="report-date">{formatDate(report.date)}</p>
+              </div>
+            </div>
+            <div className="report-content">
+              <p><strong>Job Descriptions:</strong> {(report.jobDescriptions || []).join(", ")}</p>
+              <p><strong>Extra Items:</strong> {(report.extraItems || []).join(", ")}</p>
+              <p><strong>Job Box/Cards:</strong> {report.jobBoxAndCameraCards || "N/A"}</p>
+              <p><strong>Sports BG Shot:</strong> {report.sportsBackgroundShot || "N/A"}</p>
+              <p><strong>Cards Scanned:</strong> {report.cardsScannedChoice || "N/A"}</p>
+              {(report.photoshootNoteText || report.jobDescriptionText) && (
+                <div className="notes-box">
+                  {report.photoshootNoteText && (
+                    <p><strong>Photoshoot Notes:</strong> {report.photoshootNoteText}</p>
+                  )}
+                  {report.jobDescriptionText && (
+                    <p><strong>Extra Notes:</strong> {report.jobDescriptionText}</p>
+                  )}
+                </div>
+              )}
+              {report.photoURLs && report.photoURLs.length > 0 && (
+                <div className="card-photos">
+                  {report.photoURLs.map((url, index) => (
+                    <img
+                      key={index}
+                      src={url}
+                      alt="Daily Job Photo"
+                      className="card-photo"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openImageModal(url);
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -401,6 +484,18 @@ const DailyReports = () => {
             </div>
           </div>
 
+          {/* View Toggle */}
+          <div className="toggle-switch">
+            <label>
+              <input
+                type="checkbox"
+                checked={viewMode === "database"}
+                onChange={(e) => setViewMode(e.target.checked ? "database" : "card")}
+              />
+              Database View
+            </label>
+          </div>
+
           {/* Sort Menu */}
           <div className="reports-sort">
             <button
@@ -437,7 +532,7 @@ const DailyReports = () => {
           </div>
         </div>
 
-        {/* Reports Table */}
+        {/* Reports Table/Cards */}
         <div className="reports-list">
           {filteredAndSortedReports.length === 0 ? (
             <div className="reports-empty">
@@ -461,6 +556,8 @@ const DailyReports = () => {
                 </>
               )}
             </div>
+          ) : viewMode === "card" ? (
+            renderCardView()
           ) : (
             <div className="reports-table-container">
               <table className="report-table">
@@ -538,8 +635,23 @@ const DailyReports = () => {
       )}
 
       {/* Image Modal */}
-      {showImageModal && (
-        <div className="image-modal" onClick={() => setShowImageModal(false)}>
+      {showImageModal && ReactDOM.createPortal(
+        <div 
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.9)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10002,
+            padding: "20px",
+          }}
+          onClick={() => setShowImageModal(false)}
+        >
           <div className="image-modal__content">
             <button
               className="image-modal__close"
@@ -559,7 +671,8 @@ const DailyReports = () => {
               </a>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Report Detail Modal */}
@@ -609,38 +722,203 @@ const ReportDetailModal = ({
     return isNaN(parsed.getTime()) ? "N/A" : parsed.toLocaleDateString();
   };
 
+  const handleEditChange = (field, value) => {
+    onStartEdit({ ...editingReport, [field]: value });
+  };
+
+  const handleCheckboxChange = (field, option, checked) => {
+    const currentValues = editingReport[field] || [];
+    const newValues = checked
+      ? [...currentValues, option]
+      : currentValues.filter((v) => v !== option);
+    handleEditChange(field, newValues);
+  };
+
   if (editingReport) {
-    return (
-      <div className="modal-overlay">
-        <div className="modal modal--large">
+    return ReactDOM.createPortal(
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 10001,
+          padding: "20px",
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            onClose();
+          }
+        }}
+      >
+        <div 
+          className="modal modal--large"
+          style={{
+            position: "relative",
+            margin: "0",
+            transform: "none",
+          }}
+        >
           <div className="modal__header">
             <h2 className="modal__title">Edit Report</h2>
             <button className="modal__close" onClick={onClose} type="button">
               <X size={20} />
             </button>
           </div>
-          <div className="modal__form">
-            {/* Edit form would go here - similar to your buildEditableForm */}
-            <div className="form-section">
+          <div className="modal__form" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+            <div className="edit-form-section form-box">
               <label className="form-label">Date:</label>
               <div className="form-value">{formatDate(editingReport.date)}</div>
             </div>
 
-            <div className="form-section">
+            <div className="edit-form-section form-box">
               <label className="form-label">Photographer:</label>
-              <input
-                type="text"
-                className="form-input"
-                defaultValue={editingReport.yourName || ""}
+              <select
+                className="form-select"
+                value={editingReport.yourName || ""}
+                onChange={(e) => handleEditChange("yourName", e.target.value)}
+              >
+                <option value="">--Select--</option>
+                {photographers.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="edit-form-section form-box">
+              <label className="form-label">School or Destination:</label>
+              <select
+                className="form-select"
+                value={editingReport.schoolOrDestination || ""}
+                onChange={(e) => handleEditChange("schoolOrDestination", e.target.value)}
+              >
+                <option value="">--Select--</option>
+                {schools.map((school) => (
+                  <option key={school} value={school}>
+                    {school}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="edit-form-section form-box">
+              <label className="form-label">Job Descriptions (select all that apply):</label>
+              <div className="checkbox-group">
+                {jobDescriptionOptions.map((option) => (
+                  <label key={option}>
+                    <input
+                      type="checkbox"
+                      checked={(editingReport.jobDescriptions || []).includes(option)}
+                      onChange={(e) =>
+                        handleCheckboxChange("jobDescriptions", option, e.target.checked)
+                      }
+                    />
+                    {option}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="edit-form-section form-box">
+              <label className="form-label">Extra Items Added (select all that apply):</label>
+              <div className="checkbox-group">
+                {extraItemsOptions.map((option) => (
+                  <label key={option}>
+                    <input
+                      type="checkbox"
+                      checked={(editingReport.extraItems || []).includes(option)}
+                      onChange={(e) =>
+                        handleCheckboxChange("extraItems", option, e.target.checked)
+                      }
+                    />
+                    {option}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="edit-form-section form-box">
+              <label className="form-label">Job Box and Camera Cards Turned In:</label>
+              <div className="radio-group">
+                {radioOptionsYesNoNA.map((option) => (
+                  <label key={option}>
+                    <input
+                      type="radio"
+                      name="jobBoxAndCameraCards"
+                      value={option}
+                      checked={editingReport.jobBoxAndCameraCards === option}
+                      onChange={(e) =>
+                        handleEditChange("jobBoxAndCameraCards", e.target.value)
+                      }
+                    />
+                    {option}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="edit-form-section form-box">
+              <label className="form-label">Sports BG Shot:</label>
+              <div className="radio-group">
+                {radioOptionsYesNoNA.map((option) => (
+                  <label key={option}>
+                    <input
+                      type="radio"
+                      name="sportsBackgroundShot"
+                      value={option}
+                      checked={editingReport.sportsBackgroundShot === option}
+                      onChange={(e) =>
+                        handleEditChange("sportsBackgroundShot", e.target.value)
+                      }
+                    />
+                    {option}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="edit-form-section form-box">
+              <label className="form-label">Cards Scanned:</label>
+              <div className="radio-group">
+                {radioOptionsYesNo.map((option) => (
+                  <label key={option}>
+                    <input
+                      type="radio"
+                      name="cardsScannedChoice"
+                      value={option}
+                      checked={editingReport.cardsScannedChoice === option}
+                      onChange={(e) =>
+                        handleEditChange("cardsScannedChoice", e.target.value)
+                      }
+                    />
+                    {option}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="edit-form-section form-box">
+              <label className="form-label">Photoshoot Notes:</label>
+              <textarea
+                className="form-textarea"
+                value={editingReport.photoshootNoteText || ""}
+                onChange={(e) => handleEditChange("photoshootNoteText", e.target.value)}
               />
             </div>
 
-            <div className="form-section">
-              <label className="form-label">School/Destination:</label>
-              <input
-                type="text"
-                className="form-input"
-                defaultValue={editingReport.schoolOrDestination || ""}
+            <div className="edit-form-section form-box">
+              <label className="form-label">Extra Notes:</label>
+              <textarea
+                className="form-textarea"
+                value={editingReport.jobDescriptionText || ""}
+                onChange={(e) => handleEditChange("jobDescriptionText", e.target.value)}
               />
             </div>
 
@@ -655,13 +933,40 @@ const ReportDetailModal = ({
             </div>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 
-  return (
-    <div className="modal-overlay">
-      <div className="modal modal--large">
+  return ReactDOM.createPortal(
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 10001,
+        padding: "20px",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div 
+        className="modal modal--large"
+        style={{
+          position: "relative",
+          margin: "0",
+          transform: "none",
+        }}
+      >
         <div className="modal__header">
           <h2 className="modal__title">
             {report.yourName || "Unknown Photographer"}
@@ -758,7 +1063,8 @@ const ReportDetailModal = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

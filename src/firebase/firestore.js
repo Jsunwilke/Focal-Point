@@ -12,6 +12,8 @@ import {
   serverTimestamp,
   updateDoc,
   deleteDoc,
+  onSnapshot,
+  orderBy,
 } from "firebase/firestore";
 import { firestore } from "./config";
 
@@ -311,7 +313,46 @@ export const getDailyJobReports = async (
   }
 };
 
-// Schools Functions (renamed from Dropdown Data)
+export const updateDailyJobReport = async (reportId, reportData) => {
+  try {
+    await updateDoc(doc(firestore, "dailyJobReports", reportId), {
+      ...reportData,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Error updating daily job report:", error);
+    throw error;
+  }
+};
+
+// Subscribe to real-time daily job reports updates
+export const subscribeToDailyJobReports = (organizationID, callback, errorCallback) => {
+  const q = query(
+    collection(firestore, "dailyJobReports"),
+    where("organizationID", "==", organizationID),
+    orderBy("timestamp", "desc")
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const reports = [];
+      snapshot.forEach((doc) => {
+        reports.push({
+          id: doc.id,
+          ...doc.data(),
+        });
+      });
+      callback(reports);
+    },
+    (error) => {
+      console.error("Error in daily job reports listener:", error);
+      if (errorCallback) errorCallback(error);
+    }
+  );
+};
+
+// Get schools from schools collection
 export const getSchools = async (organizationID) => {
   try {
     const q = query(
