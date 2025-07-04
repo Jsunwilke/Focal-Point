@@ -1,36 +1,6 @@
 /* src/components/settings/ProfileSettingsModal.css */
 
-/* Modal Overlay - Ensure it covers the entire viewport and ignores sidebar */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: var(--spacing-md);
-}
-
-.modal {
-  background-color: var(--background);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  width: 100%;
-  max-width: 600px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  position: relative;
-  margin: 0;
-}
+/* ProfileSettingsModal inherits base modal styles from Modal.css */
 
 .modal--large {
   max-width: 800px;
@@ -528,10 +498,6 @@
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .modal-overlay {
-    padding: var(--spacing-sm);
-  }
-
   .modal--large {
     max-width: 95vw;
     margin: var(--spacing-sm);

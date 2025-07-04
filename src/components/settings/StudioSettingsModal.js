@@ -1,5 +1,6 @@
 // src/components/settings/StudioSettingsModal.js
 import React, { useState, useEffect } from "react";
+import ReactDOM from "react-dom";
 import {
   X,
   Building,
@@ -16,6 +17,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { updateOrganization } from "../../firebase/firestore";
 import Button from "../shared/Button";
+import "../shared/Modal.css";
 import "./StudioSettingsModal.css";
 
 const StudioSettingsModal = ({ isOpen, onClose }) => {
@@ -318,9 +320,35 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
     { key: "sunday", label: "Sunday" },
   ];
 
-  return (
-    <div className="modal-overlay">
-      <div className="modal modal--large">
+  const modalContent = (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 10001,
+        padding: "20px",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleCancel();
+        }
+      }}
+    >
+      <div 
+        className="modal modal--large"
+        style={{
+          position: "relative",
+          margin: "0",
+          transform: "none",
+        }}
+      >
         <div className="modal__header">
           <div className="modal__header-content">
             <h2 className="modal__title">Studio Settings</h2>
@@ -833,6 +861,8 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
       </div>
     </div>
   );
+
+  return ReactDOM.createPortal(modalContent, document.body);
 };
 
 export default StudioSettingsModal;
