@@ -1,7 +1,10 @@
 // src/components/schools/AddSchoolModal.js
 import React, { useState } from "react";
-import { X, School, MapPin, User, Mail, Phone } from "lucide-react";
+import ReactDOM from "react-dom";
+import { X, School, MapPin, User, Mail, Phone, Save, Map } from "lucide-react";
 import Button from "../shared/Button";
+import MapModal from "../shared/MapModal";
+import "../shared/Modal.css";
 import "./AddSchoolModal.css";
 
 const AddSchoolModal = ({
@@ -34,6 +37,7 @@ const AddSchoolModal = ({
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [showMapModal, setShowMapModal] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -105,22 +109,114 @@ const AddSchoolModal = ({
     }
   };
 
-  return (
-    <div className="modal-overlay">
-      <div className="modal modal--large">
+  const handleCoordinatesFromMap = (coordinates) => {
+    const coordString = `${coordinates[0]},${coordinates[1]}`;
+    setFormData((prev) => ({
+      ...prev,
+      coordinates: coordString,
+    }));
+    setShowMapModal(false);
+    
+    // Clear any coordinate errors
+    if (errors.coordinates) {
+      setErrors((prev) => ({
+        ...prev,
+        coordinates: "",
+      }));
+    }
+  };
+
+  const parseInitialCoordinates = () => {
+    if (!formData.coordinates) return [39.7817, -89.6501]; // Default to Springfield, IL
+    
+    const coords = formData.coordinates.split(",");
+    if (coords.length === 2) {
+      const lat = parseFloat(coords[0].trim());
+      const lng = parseFloat(coords[1].trim());
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return [lat, lng];
+      }
+    }
+    return [39.7817, -89.6501]; // Fallback to default
+  };
+
+  const isValidAddress = () => {
+    return formData.street?.trim() && 
+           formData.city?.trim() && 
+           formData.state?.trim();
+  };
+
+  const getFormattedAddress = () => {
+    if (!isValidAddress()) return "";
+    return `${formData.street.trim()}, ${formData.city.trim()}, ${formData.state.trim()}${formData.zipCode?.trim() ? ` ${formData.zipCode.trim()}` : ""}`;
+  };
+
+  const modalContent = (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 10001,
+        padding: "20px",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div 
+        className="modal modal--large"
+        style={{
+          position: "relative",
+          margin: "0",
+          transform: "none",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal__header">
-          <h2 className="modal__title">
-            {isEditing ? "Edit School" : "Add School"}
-          </h2>
+          <div className="modal__header-content">
+            <h2 className="modal__title">
+              {isEditing ? "Edit School" : "Add School"}
+            </h2>
+            <p className="modal__subtitle">
+              {isEditing ? "Update school information and contact details" : "Add a new school to your organization"}
+            </p>
+          </div>
           <button className="modal__close" onClick={onClose} type="button">
             <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="modal__form">
-          {errors.submit && <div className="form-error">{errors.submit}</div>}
+        <form 
+          onSubmit={handleSubmit} 
+          className="modal__form"
+          style={{
+            height: "100%",
+            display: "flex",
+            flexDirection: "column"
+          }}
+        >
+          {errors.submit && (
+            <div className="form-error form-error--global">{errors.submit}</div>
+          )}
 
-          <div className="form-section">
+          <div 
+            className="modal__content"
+            style={{
+              maxHeight: "60vh",
+              overflowY: "auto",
+              flex: "1"
+            }}
+          >
+            <div className="form-section">
             <h3 className="form-section__title">
               <School size={16} />
               School Information
@@ -220,23 +316,38 @@ const AddSchoolModal = ({
               <label htmlFor="coordinates" className="form-label">
                 GPS Coordinates
               </label>
-              <input
-                type="text"
-                id="coordinates"
-                name="coordinates"
-                className={`form-input ${
-                  errors.coordinates ? "form-input--error" : ""
-                }`}
-                value={formData.coordinates}
-                onChange={handleChange}
-                placeholder="39.7817,-89.6501"
-              />
+              <div className="form-input-group">
+                <input
+                  type="text"
+                  id="coordinates"
+                  name="coordinates"
+                  className={`form-input ${
+                    errors.coordinates ? "form-input--error" : ""
+                  }`}
+                  value={formData.coordinates}
+                  readOnly
+                  placeholder={isValidAddress() ? "Will be set from map location" : "Enter address first to set location"}
+                />
+                {isValidAddress() && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowMapModal(true)}
+                    className="form-input-button"
+                  >
+                    <Map size={16} />
+                    Set on Map
+                  </Button>
+                )}
+              </div>
               {errors.coordinates && (
                 <span className="form-error-text">{errors.coordinates}</span>
               )}
               <span className="form-hint">
-                Format: latitude,longitude (for navigation and mileage
-                calculation)
+                {isValidAddress() 
+                  ? "Click 'Set on Map' to pinpoint the exact school location"
+                  : "Complete the address fields above to enable map location setting"
+                }
               </span>
             </div>
           </div>
@@ -318,19 +429,38 @@ const AddSchoolModal = ({
               />
             </div>
           </div>
+          </div>
 
-          <div className="modal__actions">
-            <Button type="button" variant="secondary" onClick={onClose}>
+          <div 
+            className="modal__actions"
+            style={{
+              flexShrink: 0,
+              marginTop: "auto"
+            }}
+          >
+            <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" loading={loading}>
-              {isEditing ? "Update School" : "Add School"}
+              <Save size={16} />
+              {isEditing ? "Save Changes" : "Add School"}
             </Button>
           </div>
         </form>
       </div>
+
+      {/* Map Modal */}
+      <MapModal
+        isOpen={showMapModal}
+        onClose={() => setShowMapModal(false)}
+        initialCoordinates={parseInitialCoordinates()}
+        initialAddress={getFormattedAddress()}
+        onCoordinatesChange={handleCoordinatesFromMap}
+      />
     </div>
   );
+
+  return ReactDOM.createPortal(modalContent, document.body);
 };
 
 export default AddSchoolModal;
