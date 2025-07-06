@@ -1,44 +1,40 @@
 // src/components/sessions/CreateSessionModal.js - Updated with multiple photographers support
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { X, Calendar, Clock, MapPin, Users, Check } from "lucide-react";
 import Button from "../shared/Button";
-import { createSession } from "../../firebase/firestore";
+import { createSession, getSchools } from "../../firebase/firestore";
 
 const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization }) => {
   const [loading, setLoading] = useState(false);
+  const [schools, setSchools] = useState([]);
   const [formData, setFormData] = useState({
-    title: "",
-    sport: "",
-    location: "",
+    schoolId: "",
     date: "",
     startTime: "09:00",
     endTime: "17:00",
+    sessionType: "sports", // Added session type
     photographerIds: [], // Changed to array for multiple photographers
     photographerNotes: {}, // New field for photographer-specific notes
     notes: "",
     status: "scheduled",
-    sessionType: "sports", // Added session type
   });
   const [errors, setErrors] = useState({});
 
-  const sports = [
-    "Basketball",
-    "Football",
-    "Soccer",
-    "Baseball",
-    "Volleyball",
-    "Tennis",
-    "Track & Field",
-    "Swimming",
-    "Wrestling",
-    "Golf",
-    "Cross Country",
-    "Softball",
-    "Portrait Day",
-    "Graduation",
-    "Other",
-  ];
+  // Load schools when modal opens
+  useEffect(() => {
+    const loadSchools = async () => {
+      if (isOpen && organization?.id) {
+        try {
+          const schoolsData = await getSchools(organization.id);
+          setSchools(schoolsData);
+        } catch (error) {
+          console.error("Error loading schools:", error);
+        }
+      }
+    };
+    loadSchools();
+  }, [isOpen, organization?.id]);
 
   const sessionTypes = [
     { value: "sports", label: "Sports Photography" },
@@ -94,16 +90,8 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization }) => {
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.title.trim()) {
-      newErrors.title = "Title is required";
-    }
-
-    if (!formData.sport) {
-      newErrors.sport = "Sport/Activity is required";
-    }
-
-    if (!formData.location.trim()) {
-      newErrors.location = "Location is required";
+    if (!formData.schoolId) {
+      newErrors.schoolId = "School is required";
     }
 
     if (!formData.date) {
@@ -152,34 +140,34 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization }) => {
           notes: formData.photographerNotes[member.id] || "", // Include photographer-specific notes
         }));
 
+      // Get school details
+      const selectedSchool = schools.find(school => school.id === formData.schoolId);
+      
       const sessionData = {
-        title: formData.title,
-        sport: formData.sport,
-        location: formData.location,
+        schoolId: formData.schoolId,
+        schoolName: selectedSchool?.value || "",
         date: formData.date,
         startTime: formData.startTime,
         endTime: formData.endTime,
+        sessionType: formData.sessionType,
         photographers: selectedPhotographers, // Array of photographer objects
         notes: formData.notes,
         status: formData.status,
-        sessionType: formData.sessionType,
       };
 
       await createSession(organization.id, sessionData);
 
       // Reset form and close modal
       setFormData({
-        title: "",
-        sport: "",
-        location: "",
+        schoolId: "",
         date: "",
         startTime: "09:00",
         endTime: "17:00",
+        sessionType: "sports",
         photographerIds: [],
         photographerNotes: {},
         notes: "",
         status: "scheduled",
-        sessionType: "sports",
       });
       setErrors({});
       onClose();
@@ -308,21 +296,29 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization }) => {
                     className="form-label d-flex align-items-center gap-2"
                     style={{ fontWeight: "500", marginBottom: "0.5rem" }}
                   >
-                    <Calendar size={16} />
-                    Session Title
+                    <MapPin size={16} />
+                    School
+                    <span style={{ color: "#dc3545" }}>*</span>
                   </label>
-                  <input
-                    type="text"
-                    name="title"
-                    value={formData.title}
+                  <select
+                    name="schoolId"
+                    value={formData.schoolId}
                     onChange={handleChange}
-                    className={`form-control ${
-                      errors.title ? "is-invalid" : ""
+                    className={`form-select ${
+                      errors.schoolId ? "is-invalid" : ""
                     }`}
-                    placeholder="e.g., Spring Basketball Tournament"
-                  />
-                  {errors.title && (
-                    <div className="invalid-feedback">{errors.title}</div>
+                  >
+                    <option value="">Select School</option>
+                    {schools
+                      .sort((a, b) => (a.value || "").localeCompare(b.value || ""))
+                      .map((school) => (
+                        <option key={school.id} value={school.id}>
+                          {school.value}
+                        </option>
+                      ))}
+                  </select>
+                  {errors.schoolId && (
+                    <div className="invalid-feedback">{errors.schoolId}</div>
                   )}
                 </div>
 
@@ -345,58 +341,6 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization }) => {
                       </option>
                     ))}
                   </select>
-                </div>
-              </div>
-
-              <div className="row">
-                <div className="col-md-6 mb-3">
-                  <label
-                    className="form-label"
-                    style={{ fontWeight: "500", marginBottom: "0.5rem" }}
-                  >
-                    Sport/Activity
-                  </label>
-                  <select
-                    name="sport"
-                    value={formData.sport}
-                    onChange={handleChange}
-                    className={`form-select ${
-                      errors.sport ? "is-invalid" : ""
-                    }`}
-                  >
-                    <option value="">Select Sport/Activity</option>
-                    {sports.map((sport) => (
-                      <option key={sport} value={sport}>
-                        {sport}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.sport && (
-                    <div className="invalid-feedback">{errors.sport}</div>
-                  )}
-                </div>
-
-                <div className="col-md-6 mb-3">
-                  <label
-                    className="form-label d-flex align-items-center gap-2"
-                    style={{ fontWeight: "500", marginBottom: "0.5rem" }}
-                  >
-                    <MapPin size={16} />
-                    Location
-                  </label>
-                  <input
-                    type="text"
-                    name="location"
-                    value={formData.location}
-                    onChange={handleChange}
-                    className={`form-control ${
-                      errors.location ? "is-invalid" : ""
-                    }`}
-                    placeholder="e.g., Lincoln High School Gym"
-                  />
-                  {errors.location && (
-                    <div className="invalid-feedback">{errors.location}</div>
-                  )}
                 </div>
               </div>
             </div>

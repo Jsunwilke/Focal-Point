@@ -3,24 +3,33 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
+// Validate that all required environment variables are present
+const requiredEnvVars = [
+  'REACT_APP_FIREBASE_API_KEY',
+  'REACT_APP_FIREBASE_AUTH_DOMAIN',
+  'REACT_APP_FIREBASE_PROJECT_ID',
+  'REACT_APP_FIREBASE_STORAGE_BUCKET',
+  'REACT_APP_FIREBASE_MESSAGING_SENDER_ID',
+  'REACT_APP_FIREBASE_APP_ID'
+];
+
+const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+
+if (missingEnvVars.length > 0) {
+  throw new Error(
+    `Missing required environment variables: ${missingEnvVars.join(', ')}\n` +
+    'Please create a .env.local file based on .env.example and add your Firebase credentials.'
+  );
+}
+
 const firebaseConfig = {
-  apiKey:
-    process.env.REACT_APP_FIREBASE_API_KEY ||
-    "AIzaSyDt4mswBUoezAZgaklrqReiI5De6TyF5o0",
-  authDomain:
-    process.env.REACT_APP_FIREBASE_AUTH_DOMAIN ||
-    "focal-point-c452c.firebaseapp.com",
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "focal-point-c452c",
-  storageBucket:
-    process.env.REACT_APP_FIREBASE_STORAGE_BUCKET ||
-    "focal-point-c452c.firebasestorage.app",
-  messagingSenderId:
-    process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "157275128489",
-  appId:
-    process.env.REACT_APP_FIREBASE_APP_ID ||
-    "1:157275128489:web:d92d4907730ca0b7f7dfb8",
-  measurementId:
-    process.env.REACT_APP_FIREBASE_MEASUREMENT_ID || "G-RRWX7C9PVR",
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID, // Optional for Google Analytics
 };
 
 // Initialize Firebase - check if already initialized
