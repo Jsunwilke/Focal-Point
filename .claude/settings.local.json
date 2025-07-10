@@ -9,7 +9,25 @@
       "Bash(grep:*)",
       "Bash(npm run lint)",
       "Bash(node:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npm run lint:*)",
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "Bash(ls:*)",
+      "Bash(npm start:*)",
+      "WebFetch(domain:dribbble.com)",
+      "Bash(export NVM_DIR=\"$HOME/.nvm\")",
+      "Bash([ -s \"$NVM_DIR/nvm.sh\" ])",
+      "Bash(. \"$NVM_DIR/nvm.sh\")",
+      "Bash(nvm install:*)",
+      "Bash(nvm use:*)",
+      "Bash(firebase projects:list:*)",
+      "Bash(firebase use:*)",
+      "Bash(REACT_APP_FIREBASE_API_KEY=AIzaSyDt4mswBUoezAZgaklrqReiI5De6TyF5o0 REACT_APP_FIREBASE_AUTH_DOMAIN=focal-point-c452c.firebaseapp.com REACT_APP_FIREBASE_PROJECT_ID=focal-point-c452c REACT_APP_FIREBASE_STORAGE_BUCKET=focal-point-c452c.firebasestorage.app REACT_APP_FIREBASE_MESSAGING_SENDER_ID=157275128489 REACT_APP_FIREBASE_APP_ID=1:157275128489:web:d92d4907730ca0b7f7dfb8 REACT_APP_FIREBASE_MEASUREMENT_ID=G-RRWX7C9PVR NODE_ENV=production npm run build)",
+      "Bash(firebase deploy:*)",
+      "Bash(timeout 15s npm start)",
+      "Bash(cp:*)",
+      "Bash(timeout 10s npm start)"
     ],
     "deny": []
   }

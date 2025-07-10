@@ -1,0 +1,13 @@
+/* Template Builder Layout - Full viewport control without conflicts */
+.tb-layout {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #f8f9fa;
+  overflow: hidden;
+  z-index: 1000;
+}

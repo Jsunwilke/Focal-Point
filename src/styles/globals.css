@@ -14,7 +14,7 @@ body {
 }
 
 #root {
-  min-height: 100vh;
+  height: 100vh;
 }
 
 /* Form elements */
@@ -477,6 +477,38 @@ button:focus {
   background-color: #7c3aed;
 }
 
+.session-block--portrait {
+  background-color: #10b981;
+}
+
+.session-block--portrait:hover {
+  background-color: #059669;
+}
+
+.session-block--event {
+  background-color: #f59e0b;
+}
+
+.session-block--event:hover {
+  background-color: #d97706;
+}
+
+.session-block--graduation {
+  background-color: #3b82f6;
+}
+
+.session-block--graduation:hover {
+  background-color: #2563eb;
+}
+
+.session-block--other {
+  background-color: #6b7280;
+}
+
+.session-block--other:hover {
+  background-color: #4b5563;
+}
+
 .session-block__title {
   font-weight: var(--font-weight-medium);
   margin-bottom: 2px;
@@ -555,7 +587,23 @@ button:focus {
 }
 
 .month-session--sports {
-  background-color: var(--primary-color);
+  background-color: #8b5cf6;
+}
+
+.month-session--portrait {
+  background-color: #10b981;
+}
+
+.month-session--event {
+  background-color: #f59e0b;
+}
+
+.month-session--graduation {
+  background-color: #3b82f6;
+}
+
+.month-session--other {
+  background-color: #6b7280;
 }
 
 .month-session__more {
@@ -665,6 +713,7 @@ button:focus {
   margin-bottom: var(--spacing-md);
 }
 
+/* Generic form field container - used for standard form layouts */
 .form-field {
   display: flex;
   flex-direction: column;

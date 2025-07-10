@@ -73,7 +73,7 @@ const Sidebar = () => {
       label: "Settings",
       icon: Settings,
       path: "/settings",
-      enabled: false,
+      enabled: true,
     },
   ];
 

@@ -1,9 +1,10 @@
 // src/components/sessions/EditSessionModal.js
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
-import { X, Calendar, Clock, MapPin, Users, Check, Trash2 } from "lucide-react";
-import Button from "../shared/Button";
+import { X, Clock, MapPin, Users, Check, Trash2 } from "lucide-react";
+import TimeSelect from "../shared/TimeSelect";
 import { updateSession, deleteSession, getSchools } from "../../firebase/firestore";
+import { getOrganizationSessionTypes, getSessionTypeColor, normalizeSessionTypes } from "../../utils/sessionTypes";
 
 const EditSessionModal = ({
   isOpen,
@@ -22,8 +23,8 @@ const EditSessionModal = ({
     schoolId: "",
     date: "",
     startTime: "09:00",
-    endTime: "17:00",
-    sessionType: "sports",
+    endTime: "15:00",
+    sessionTypes: ["other"],
     photographerIds: [],
     notes: "",
     photographerNotes: {}, // New field for photographer-specific notes
@@ -46,13 +47,11 @@ const EditSessionModal = ({
     loadSchools();
   }, [isOpen, organization?.id]);
 
-  const sessionTypes = [
-    { value: "sports", label: "Sports Photography" },
-    { value: "portrait", label: "Portrait Day" },
-    { value: "event", label: "School Event" },
-    { value: "graduation", label: "Graduation" },
-    { value: "other", label: "Other" },
-  ];
+  // Get session types from organization configuration
+  const sessionTypes = getOrganizationSessionTypes(organization).map(type => ({
+    value: type.id,
+    label: type.name
+  }));
 
   const statusOptions = [
     { value: "scheduled", label: "Scheduled" },
@@ -108,7 +107,7 @@ const EditSessionModal = ({
         date: session.date || "",
         startTime: session.startTime || "09:00",
         endTime: session.endTime || "17:00",
-        sessionType: session.sessionType || session.type || "sports",
+        sessionTypes: normalizeSessionTypes(session.sessionTypes || session.sessionType || session.type || "other"),
         photographerIds: photographerIds,
         notes: session.notes || "",
         photographerNotes: photographerNotes,
@@ -131,6 +130,39 @@ const EditSessionModal = ({
       setErrors((prev) => ({
         ...prev,
         [name]: "",
+      }));
+    }
+  };
+
+  // Handle session type checkbox changes
+  const handleSessionTypeChange = (sessionTypeId) => {
+    setFormData((prev) => {
+      const currentTypes = prev.sessionTypes || [];
+      const isSelected = currentTypes.includes(sessionTypeId);
+      
+      let newTypes;
+      if (isSelected) {
+        // Remove the session type, but ensure at least one remains
+        newTypes = currentTypes.filter(id => id !== sessionTypeId);
+        if (newTypes.length === 0) {
+          newTypes = ['other']; // Always keep at least "other"
+        }
+      } else {
+        // Add the session type
+        newTypes = [...currentTypes, sessionTypeId];
+      }
+      
+      return {
+        ...prev,
+        sessionTypes: newTypes
+      };
+    });
+
+    // Clear error when user makes selection
+    if (errors.sessionTypes) {
+      setErrors((prev) => ({
+        ...prev,
+        sessionTypes: "",
       }));
     }
   };
@@ -184,6 +216,10 @@ const EditSessionModal = ({
       newErrors.photographerIds = "At least one photographer is required";
     }
 
+    if (!formData.sessionTypes || formData.sessionTypes.length === 0) {
+      newErrors.sessionTypes = "At least one session type is required";
+    }
+
     // Validate time range
     if (formData.startTime && formData.endTime) {
       const start = new Date(`2000-01-01 ${formData.startTime}`);
@@ -223,11 +259,16 @@ const EditSessionModal = ({
         date: formData.date,
         startTime: formData.startTime,
         endTime: formData.endTime,
-        sessionType: formData.sessionType,
+        sessionTypes: formData.sessionTypes,
         photographers: selectedPhotographers,
         notes: formData.notes,
         status: formData.status,
+        // Explicitly remove legacy fields
+        sessionType: null,
+        sport: null,
       };
+
+      console.log("EditSessionModal - Update data:", updateData);
 
       await updateSession(session.sessionId || session.id, updateData);
 
@@ -410,20 +451,74 @@ const EditSessionModal = ({
                     className="form-label"
                     style={{ fontWeight: "500", marginBottom: "0.5rem" }}
                   >
-                    Session Type
+                    Session Types
+                    <span style={{ color: "#dc3545" }}>*</span>
                   </label>
-                  <select
-                    name="sessionType"
-                    value={formData.sessionType}
-                    onChange={handleChange}
-                    className="form-select"
-                  >
+                  <div style={{ 
+                    border: `1px solid ${errors.sessionTypes ? '#dc3545' : '#dee2e6'}`,
+                    borderRadius: '0.375rem',
+                    padding: '0.5rem',
+                    maxHeight: '120px',
+                    overflow: 'auto'
+                  }}>
                     {sessionTypes.map((type) => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
+                      <div key={type.value} style={{ marginBottom: '0.5rem' }}>
+                        <label style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '0.5rem',
+                          cursor: 'pointer',
+                          fontSize: '0.875rem'
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={formData.sessionTypes.includes(type.value)}
+                            onChange={() => handleSessionTypeChange(type.value)}
+                            style={{ marginRight: '0.25rem' }}
+                          />
+                          <div style={{
+                            width: '12px',
+                            height: '12px',
+                            backgroundColor: getSessionTypeColor(type.value, organization),
+                            borderRadius: '2px',
+                            border: '1px solid rgba(0,0,0,0.2)'
+                          }}></div>
+                          {type.label}
+                        </label>
+                      </div>
                     ))}
-                  </select>
+                  </div>
+                  {errors.sessionTypes && (
+                    <div style={{ color: '#dc3545', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+                      {errors.sessionTypes}
+                    </div>
+                  )}
+                  
+                  {/* Selected Types Preview */}
+                  {formData.sessionTypes.length > 0 && (
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#6c757d', marginBottom: '0.25rem' }}>
+                        Selected:
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                        {formData.sessionTypes.map(typeId => {
+                          const type = sessionTypes.find(t => t.value === typeId);
+                          return type ? (
+                            <span key={typeId} style={{
+                              backgroundColor: getSessionTypeColor(typeId, organization),
+                              color: 'white',
+                              padding: '0.125rem 0.375rem',
+                              borderRadius: '0.25rem',
+                              fontSize: '0.75rem',
+                              fontWeight: '500'
+                            }}>
+                              {type.label}
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="col-md-3 mb-3">
@@ -493,12 +588,11 @@ const EditSessionModal = ({
                     <Clock size={16} />
                     Start Time
                   </label>
-                  <input
-                    type="time"
+                  <TimeSelect
                     name="startTime"
                     value={formData.startTime}
                     onChange={handleChange}
-                    className={`form-control ${
+                    className={`form-select ${
                       errors.startTime ? "is-invalid" : ""
                     }`}
                   />
@@ -514,12 +608,11 @@ const EditSessionModal = ({
                   >
                     End Time
                   </label>
-                  <input
-                    type="time"
+                  <TimeSelect
                     name="endTime"
                     value={formData.endTime}
                     onChange={handleChange}
-                    className={`form-control ${
+                    className={`form-select ${
                       errors.endTime ? "is-invalid" : ""
                     }`}
                   />

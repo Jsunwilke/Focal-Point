@@ -1,8 +1,10 @@
 // src/components/team/InviteUserModal.js
 import React, { useState } from "react";
+import ReactDOM from "react-dom";
 import { X, Mail, User, Shield } from "lucide-react";
 import Button from "../shared/Button";
 import { isValidEmail } from "../../utils/validation";
+import "../shared/Modal.css";
 import "./InviteUserModal.css";
 
 const InviteUserModal = ({ onClose, onInvite, organization }) => {
@@ -94,9 +96,41 @@ const InviteUserModal = ({ onClose, onInvite, organization }) => {
     }
   };
 
-  return (
-    <div className="modal-overlay">
-      <div className="modal">
+  const modalContent = (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 10001,
+        padding: "20px",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: "white",
+          borderRadius: "8px",
+          width: "90%",
+          maxWidth: "600px",
+          maxHeight: "90vh",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 20px 25px rgba(0, 0, 0, 0.15)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal__header">
           <h2 className="modal__title">Invite Team Member</h2>
           <button className="modal__close" onClick={onClose} type="button">
@@ -104,7 +138,7 @@ const InviteUserModal = ({ onClose, onInvite, organization }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="modal__form">
+        <form onSubmit={handleSubmit} className="modal__form" style={{ flex: 1, overflow: "auto" }}>
           {errors.submit && <div className="form-error">{errors.submit}</div>}
 
           <div className="form-section">
@@ -235,6 +269,8 @@ const InviteUserModal = ({ onClose, onInvite, organization }) => {
       </div>
     </div>
   );
+
+  return ReactDOM.createPortal(modalContent, document.body);
 };
 
 export default InviteUserModal;

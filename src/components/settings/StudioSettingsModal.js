@@ -13,10 +13,19 @@ import {
   Camera,
   Shield,
   Settings as SettingsIcon,
+  Tag,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { updateOrganization } from "../../firebase/firestore";
 import Button from "../shared/Button";
+import { 
+  getOrganizationSessionTypes, 
+  createSessionType, 
+  validateSessionType,
+  getDefaultSessionTypesForNewOrg 
+} from "../../utils/sessionTypes";
 import "../shared/Modal.css";
 import "./StudioSettingsModal.css";
 
@@ -68,11 +77,14 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
       defaultSessionDuration: 60,
       bufferTime: 15,
     },
+    sessionTypes: [],
   });
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [activeTab, setActiveTab] = useState("general");
+  const [newSessionType, setNewSessionType] = useState({ name: '', color: '#3b82f6' });
+  const [sessionTypeErrors, setSessionTypeErrors] = useState({});
 
   // Check if user has admin permissions
   const isAdmin = userProfile?.role === "admin";
@@ -155,7 +167,9 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
             organization.preferences?.defaultSessionDuration || 60,
           bufferTime: organization.preferences?.bufferTime || 15,
         },
+        sessionTypes: organization.sessionTypes || getDefaultSessionTypesForNewOrg(),
       });
+      console.log("Initialized session types:", organization.sessionTypes || getDefaultSessionTypesForNewOrg());
     }
   }, [isOpen, organization]);
 
@@ -202,6 +216,62 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
     }
   };
 
+  // Session Type Management Functions
+  const handleAddSessionType = () => {
+    console.log("Adding session type:", newSessionType);
+    const validation = validateSessionType(newSessionType);
+    if (!validation.isValid) {
+      console.log("Validation failed:", validation.errors);
+      setSessionTypeErrors(validation.errors);
+      return;
+    }
+
+    // Check for duplicate names
+    const existingNames = formData.sessionTypes.map(type => type.name.toLowerCase());
+    if (existingNames.includes(newSessionType.name.toLowerCase())) {
+      console.log("Duplicate name found");
+      setSessionTypeErrors({ name: 'Session type name already exists' });
+      return;
+    }
+
+    const sessionType = createSessionType(newSessionType.name, newSessionType.color);
+    console.log("Created session type:", sessionType);
+    
+    setFormData(prev => {
+      const updated = {
+        ...prev,
+        sessionTypes: [...prev.sessionTypes, sessionType]
+      };
+      console.log("Updated session types:", updated.sessionTypes);
+      return updated;
+    });
+
+    // Reset form
+    setNewSessionType({ name: '', color: '#3b82f6' });
+    setSessionTypeErrors({});
+  };
+
+  const handleRemoveSessionType = (sessionTypeId) => {
+    // Prevent removing the "Other" type
+    if (sessionTypeId === 'other') {
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      sessionTypes: prev.sessionTypes.filter(type => type.id !== sessionTypeId)
+    }));
+  };
+
+  const handleSessionTypeColorChange = (sessionTypeId, color) => {
+    setFormData(prev => ({
+      ...prev,
+      sessionTypes: prev.sessionTypes.map(type => 
+        type.id === sessionTypeId ? { ...type, color } : type
+      )
+    }));
+  };
+
   const validateForm = () => {
     const newErrors = {};
 
@@ -227,6 +297,13 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
         "Please enter a valid website URL (include http:// or https://)";
     }
 
+    // Ensure we have at least one session type (should always have "Other")
+    if (!formData.sessionTypes || formData.sessionTypes.length === 0) {
+      console.log("No session types found, adding default");
+      formData.sessionTypes = [{ id: 'other', name: 'Other', color: '#000000' }];
+    }
+
+    console.log("Form validation passed, session types:", formData.sessionTypes);
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -245,6 +322,8 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
         ...formData,
         updatedAt: new Date(),
       };
+
+      console.log("Saving studio settings with session types:", updateData.sessionTypes);
 
       // Update organization in Firestore
       await updateOrganization(organization.id, updateData);
@@ -307,6 +386,7 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
     { id: "general", label: "General", icon: Building },
     { id: "hours", label: "Hours", icon: Clock },
     { id: "pricing", label: "Pricing", icon: DollarSign },
+    { id: "sessiontypes", label: "Session Types", icon: Tag },
     { id: "policies", label: "Policies", icon: SettingsIcon },
   ];
 
@@ -347,6 +427,12 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
           position: "relative",
           margin: "0",
           transform: "none",
+          width: "95%",
+          maxWidth: "1000px",
+          maxHeight: "95vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
         }}
       >
         <div className="modal__header">
@@ -380,12 +466,22 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
           })}
         </div>
 
-        <form onSubmit={handleSubmit} className="modal__form">
+        <form onSubmit={handleSubmit} className="modal__form" style={{ 
+          display: "flex", 
+          flexDirection: "column", 
+          height: "100%",
+          overflow: "hidden" 
+        }}>
           {errors.submit && (
             <div className="form-error form-error--global">{errors.submit}</div>
           )}
 
-          <div className="modal__content">
+          <div className="modal__content" style={{ 
+            flex: 1, 
+            overflow: "auto",
+            minHeight: 0,
+            padding: "0 1rem"
+          }}>
             {activeTab === "general" && (
               <div className="tab-content">
                 <div className="form-section">
@@ -772,6 +868,151 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
               </div>
             )}
 
+            {activeTab === "sessiontypes" && (
+              <div className="tab-content">
+                <div className="form-section">
+                  <h3 className="form-section__title">
+                    <Tag size={16} />
+                    Session Types
+                  </h3>
+                  <p className="form-section__description">
+                    Customize the session types available for your organization. Each type has a unique color for easy identification.
+                  </p>
+
+                  {/* Add New Session Type */}
+                  <div className="session-type-form">
+                    <h4 style={{ marginBottom: '1rem', fontSize: '1rem', fontWeight: '600' }}>Add New Session Type</h4>
+                    <div className="form-row">
+                      <div className="form-group" style={{ flex: 2 }}>
+                        <label className="form-label">Session Type Name</label>
+                        <input
+                          type="text"
+                          className={`form-input ${sessionTypeErrors.name ? 'form-input--error' : ''}`}
+                          value={newSessionType.name}
+                          onChange={(e) => {
+                            setNewSessionType(prev => ({ ...prev, name: e.target.value }));
+                            if (sessionTypeErrors.name) {
+                              setSessionTypeErrors(prev => ({ ...prev, name: '' }));
+                            }
+                          }}
+                          placeholder="e.g., School Dance, Team Photos"
+                        />
+                        {sessionTypeErrors.name && (
+                          <span className="form-error-text">{sessionTypeErrors.name}</span>
+                        )}
+                      </div>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label className="form-label">Color</label>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          <input
+                            type="color"
+                            value={newSessionType.color}
+                            onChange={(e) => setNewSessionType(prev => ({ ...prev, color: e.target.value }))}
+                            style={{ width: '3rem', height: '2.5rem', border: 'none', borderRadius: '4px' }}
+                          />
+                          <input
+                            type="text"
+                            className="form-input"
+                            value={newSessionType.color}
+                            onChange={(e) => setNewSessionType(prev => ({ ...prev, color: e.target.value }))}
+                            placeholder="#3b82f6"
+                            style={{ flex: 1 }}
+                          />
+                        </div>
+                        {sessionTypeErrors.color && (
+                          <span className="form-error-text">{sessionTypeErrors.color}</span>
+                        )}
+                      </div>
+                      <div className="form-group" style={{ flex: 0, display: 'flex', alignItems: 'end' }}>
+                        <Button
+                          type="button"
+                          variant="primary"
+                          onClick={handleAddSessionType}
+                          style={{ height: '2.5rem' }}
+                        >
+                          <Plus size={16} />
+                          Add
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Existing Session Types */}
+                  <div className="session-types-list" style={{ marginTop: '2rem' }}>
+                    <h4 style={{ marginBottom: '1rem', fontSize: '1rem', fontWeight: '600' }}>Current Session Types</h4>
+                    <div className="session-types-grid" style={{ 
+                      maxHeight: '300px', 
+                      overflow: 'auto',
+                      border: '1px solid var(--border-color, #dee2e6)',
+                      borderRadius: '8px',
+                      padding: '0.5rem'
+                    }}>
+                      {formData.sessionTypes.map((sessionType) => (
+                        <div key={sessionType.id} className="session-type-item" style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '1rem',
+                          padding: '1rem',
+                          border: '1px solid var(--border-color, #dee2e6)',
+                          borderRadius: '8px',
+                          marginBottom: '0.5rem'
+                        }}>
+                          <div style={{
+                            width: '2rem',
+                            height: '2rem',
+                            backgroundColor: sessionType.color,
+                            borderRadius: '4px',
+                            border: '1px solid rgba(0,0,0,0.1)'
+                          }}></div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: '500', marginBottom: '0.25rem' }}>
+                              {sessionType.name}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #6c757d)' }}>
+                              {sessionType.color}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <input
+                              type="color"
+                              value={sessionType.color}
+                              onChange={(e) => handleSessionTypeColorChange(sessionType.id, e.target.value)}
+                              style={{ width: '2rem', height: '2rem', border: 'none', borderRadius: '4px' }}
+                            />
+                            {sessionType.id !== 'other' && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSessionType(sessionType.id)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: 'var(--danger-color, #dc3545)',
+                                  cursor: 'pointer',
+                                  padding: '0.25rem'
+                                }}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                            {sessionType.id === 'other' && (
+                              <div style={{ 
+                                fontSize: '0.75rem', 
+                                color: 'var(--text-secondary, #6c757d)',
+                                fontStyle: 'italic',
+                                padding: '0.25rem 0.5rem'
+                              }}>
+                                Default
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {activeTab === "policies" && (
               <div className="tab-content">
                 <div className="form-section">
@@ -838,7 +1079,12 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
             )}
           </div>
 
-          <div className="modal__actions">
+          <div className="modal__actions" style={{ 
+            flexShrink: 0,
+            borderTop: "1px solid var(--border-color, #dee2e6)",
+            padding: "1rem",
+            backgroundColor: "var(--background, #ffffff)"
+          }}>
             <Button
               type="button"
               variant="secondary"

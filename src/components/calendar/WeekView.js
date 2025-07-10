@@ -1,5 +1,6 @@
 // src/components/calendar/WeekView.js - Clean version with Multiple Photographers Support
 import React, { useState } from "react";
+import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
 
 const WeekView = ({
   currentDate,
@@ -8,6 +9,7 @@ const WeekView = ({
   teamMembers = [],
   scheduleType,
   userProfile,
+  organization,
   onUpdateSession,
   onSessionClick, // New prop for handling session clicks
 }) => {
@@ -71,6 +73,36 @@ const WeekView = ({
     return `${year}-${month}-${day}`;
   };
 
+  // Format time to AM/PM format
+  const formatTime = (time) => {
+    if (!time) return "";
+    const [hours, minutes] = time.split(":");
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${ampm}`;
+  };
+
+  // Calculate session duration
+  const calculateDuration = (startTime, endTime) => {
+    if (!startTime || !endTime) return "";
+    
+    const start = new Date(`2000-01-01T${startTime}`);
+    const end = new Date(`2000-01-01T${endTime}`);
+    const diffMs = end - start;
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (diffHours > 0 && diffMins > 0) {
+      return `${diffHours}h ${diffMins}m`;
+    } else if (diffHours > 0) {
+      return `${diffHours}h`;
+    } else if (diffMins > 0) {
+      return `${diffMins}m`;
+    }
+    return "";
+  };
+
   // Get user initials for avatar
   const getUserInitials = (member) => {
     if (member.firstName && member.lastName) {
@@ -123,6 +155,51 @@ const WeekView = ({
     scheduleType === "my"
       ? teamMembers.filter((member) => member.id === userProfile?.id)
       : teamMembers.filter((member) => member.isActive);
+
+  // Calculate total hours for a photographer in the current week
+  const calculatePhotographerHours = (photographerId) => {
+    const photographerSessions = sessions.filter((session) => {
+      // Check if session is in current week
+      let sessionDate;
+      if (typeof session.date === "string") {
+        const [year, month, dayOfMonth] = session.date.split("-").map(Number);
+        sessionDate = new Date(year, month - 1, dayOfMonth);
+      } else {
+        sessionDate = new Date(session.date);
+      }
+      
+      const weekStart = dateRange.start;
+      const weekEnd = dateRange.end;
+      
+      return (
+        session.photographerId === photographerId &&
+        sessionDate >= weekStart &&
+        sessionDate <= weekEnd
+      );
+    });
+
+    return photographerSessions.reduce((totalHours, session) => {
+      if (session.startTime && session.endTime) {
+        const start = new Date(`2000-01-01 ${session.startTime}`);
+        const end = new Date(`2000-01-01 ${session.endTime}`);
+        const duration = (end - start) / (1000 * 60 * 60); // Convert to hours
+        return totalHours + duration;
+      }
+      return totalHours;
+    }, 0);
+  };
+
+  // Format hours for display
+  const formatHours = (hours) => {
+    const wholeHours = Math.floor(hours);
+    const minutes = Math.round((hours % 1) * 60);
+    
+    if (minutes === 0) {
+      return `${wholeHours}h`;
+    } else {
+      return `${wholeHours}h ${minutes}m`;
+    }
+  };
 
   // Drag and Drop Handlers
   const handleDragStart = (e, session) => {
@@ -222,20 +299,119 @@ const WeekView = ({
     );
   };
 
-  // Get session color based on type
-  const getSessionColor = (sessionType) => {
-    switch (sessionType) {
-      case "sports":
-        return "#8b5cf6";
-      case "portrait":
-        return "#3b82f6";
-      case "event":
-        return "#f59e0b";
-      case "graduation":
-        return "#10b981";
-      default:
-        return "#ef4444";
-    }
+  // Get session color based on order within the day
+  const getSessionColorByOrder = (orderIndex) => {
+    const colors = [
+      "#3b82f6", // Blue - 1st session
+      "#10b981", // Green - 2nd session 
+      "#8b5cf6", // Purple - 3rd session
+      "#f59e0b", // Orange - 4th session
+      "#ef4444", // Red - 5th session
+      "#06b6d4", // Cyan - 6th session
+      "#8b5a3c", // Brown - 7th session
+      "#6b7280", // Gray - 8th+ sessions
+    ];
+    return colors[orderIndex] || colors[colors.length - 1];
+  };
+
+  // Get session type color for badges using organization configuration
+  const getSessionTypeBadgeColor = (type) => {
+    return getSessionTypeColor(type, organization);
+  };
+
+  // Get global session order for consistent colors across views
+  const getGlobalSessionOrderForDay = (day) => {
+    const dayFormatted = formatLocalDate(day);
+    
+    // Debug logging for session order issues
+    console.log(`WeekView - Getting sessions for ${dayFormatted}`);
+    
+    // Get ALL sessions for this day across all photographers
+    const allDaySessions = sessions.filter((session) => {
+      let sessionDate;
+      if (typeof session.date === "string") {
+        const [year, month, dayOfMonth] = session.date.split("-").map(Number);
+        sessionDate = new Date(year, month - 1, dayOfMonth);
+      } else {
+        sessionDate = new Date(session.date);
+      }
+      
+      const sessionFormatted = formatLocalDate(sessionDate);
+      return sessionFormatted === dayFormatted;
+    });
+
+    // Group sessions by unique identifier to avoid duplicates (same logic as MonthView)
+    const uniqueSessions = {};
+    allDaySessions.forEach((session) => {
+      // Create unique key based on session properties to properly deduplicate multi-photographer sessions
+      const key = `${session.date}-${session.startTime}-${session.schoolId}-${session.sessionType || 'default'}`;
+      
+      // Debug: Log session details
+      console.log(`WeekView - Processing session: ${session.schoolName}, schoolId: ${session.schoolId}, key: ${key}`);
+      
+      if (!uniqueSessions[key]) {
+        // Store the session with all photographer information
+        uniqueSessions[key] = {
+          ...session,
+          allPhotographers: []
+        };
+      }
+      
+      // Add photographer info to the session
+      if (session.photographerId) {
+        uniqueSessions[key].allPhotographers.push(session.photographerId);
+      }
+      if (session.photographerIds) {
+        uniqueSessions[key].allPhotographers.push(...session.photographerIds);
+      }
+    });
+
+    // Get unique sessions array
+    const uniqueSessionsArray = Object.values(uniqueSessions).map(session => ({
+      ...session,
+      allPhotographers: [...new Set(session.allPhotographers)] // Remove duplicate photographer IDs
+    }));
+
+    // Sort by start time, then by session ID for consistent ordering when times are identical
+    const sortedSessions = uniqueSessionsArray.sort((a, b) => {
+      if (a.startTime && b.startTime) {
+        const timeComparison = a.startTime.localeCompare(b.startTime);
+        if (timeComparison !== 0) {
+          return timeComparison;
+        }
+        // If start times are identical, sort by session ID for consistency
+        return (a.id || '').localeCompare(b.id || '');
+      }
+      return 0;
+    });
+    
+    // Debug logging
+    console.log(`WeekView - Found ${sortedSessions.length} unique sessions for ${dayFormatted}:`, 
+      sortedSessions.map(s => ({ 
+        schoolName: s.schoolName, 
+        sessionType: s.sessionType, 
+        startTime: s.startTime,
+        key: `${s.date}-${s.startTime}-${s.schoolId}-${s.sessionType || 'default'}`
+      }))
+    );
+    
+    return sortedSessions;
+  };
+
+  // Sort sessions by start time to determine order
+  const getSortedSessionsForDay = (photographerId, day) => {
+    const sessions = getSessionsForPhotographerOnDay(photographerId, day);
+    return sessions.sort((a, b) => {
+      if (a.startTime && b.startTime) {
+        const timeComparison = a.startTime.localeCompare(b.startTime);
+        if (timeComparison !== 0) {
+          return timeComparison;
+        }
+        // If start times are identical, sort by session ID for consistency
+        return (a.id || '').localeCompare(b.id || '');
+      }
+      return 0;
+    });
   };
 
   // Inline styles
@@ -336,9 +512,9 @@ const WeekView = ({
     return baseStyle;
   };
 
-  const getSessionBlockStyle = (session) => {
+  const getSessionBlockStyle = (session, orderIndex) => {
     const baseStyle = {
-      backgroundColor: getSessionColor(session.type),
+      backgroundColor: getSessionColorByOrder(orderIndex),
       color: "white",
       padding: "var(--spacing-xs, 4px)",
       borderRadius: "var(--radius-sm, 4px)",
@@ -437,17 +613,15 @@ const WeekView = ({
                     color: "var(--text-secondary, #6c757d)",
                   }}
                 >
-                  0h • $0.00
+                  {formatHours(calculatePhotographerHours(member.id))}
                 </div>
               </div>
             </div>
 
             {/* Day Cells */}
             {weekDays.map((day, dayIndex) => {
-              const daySessions = getSessionsForPhotographerOnDay(
-                member.id,
-                day
-              );
+              const daySessions = getSortedSessionsForDay(member.id, day);
+              
               return (
                 <div
                   key={`cell-${member.id}-${dayIndex}`}
@@ -476,49 +650,109 @@ const WeekView = ({
                     </div>
                   )}
 
-                  {daySessions.map((session) => (
-                    <div
-                      key={session.id}
-                      className={`session-block session-block--${session.type}`}
-                      draggable="true"
-                      onDragStart={(e) => handleDragStart(e, session)}
-                      onDragEnd={handleDragEnd}
-                      onClick={() => {
-                        if (onSessionClick) {
-                          onSessionClick(session);
+                  {daySessions.map((session) => {
+                    // Get global order for this session - same logic as MonthView
+                    const globalSessionOrder = getGlobalSessionOrderForDay(day);
+                    const globalOrderIndex = globalSessionOrder.findIndex(
+                      globalSession => globalSession.id === session.id || 
+                      (globalSession.sessionId && globalSession.sessionId === session.sessionId)
+                    );
+                    
+                    
+                    return (
+                      <div
+                        key={session.id}
+                        className="session-block"
+                        draggable="true"
+                        onDragStart={(e) => handleDragStart(e, session)}
+                        onDragEnd={handleDragEnd}
+                        onClick={() => {
+                          if (onSessionClick) {
+                            onSessionClick(session);
+                          }
+                        }}
+                        style={{
+                          ...getSessionBlockStyle(session, globalOrderIndex),
+                          backgroundColor: getSessionColorByOrder(globalOrderIndex),
+                          color: "white"
+                        }}
+                      >
+                      <div
+                        className="session-block__time"
+                        style={{ 
+                          fontSize: "11px",
+                          fontWeight: "500",
+                          marginBottom: "3px",
+                          opacity: 0.9,
+                          lineHeight: "1.2"
+                        }}
+                      >
+                        {formatTime(session.startTime)} - {formatTime(session.endTime)}
+                        {calculateDuration(session.startTime, session.endTime) && 
+                          ` (${calculateDuration(session.startTime, session.endTime)})`
                         }
-                      }}
-                      style={getSessionBlockStyle(session)}
-                    >
-                      <div
-                        className="session-block__title"
-                        style={{ fontWeight: "500", marginBottom: "2px" }}
-                      >
-                        {session.startTime} - {session.endTime}
                       </div>
                       <div
-                        className="session-block__details"
-                        style={{ opacity: 0.9, fontSize: "11px" }}
+                        className="session-block__school"
+                        style={{ 
+                          fontSize: "12px",
+                          fontWeight: "600",
+                          lineHeight: "1.2",
+                          color: "white",
+                          marginBottom: "3px"
+                        }}
                       >
-                        {session.sport} • {session.location || session.title}
+                        {session.schoolName || 'School'}
                       </div>
+                      {(session.sessionTypes || session.sessionType) && (
+                        <div style={{ display: 'flex', gap: '2px', flexWrap: 'wrap', marginTop: '2px' }}>
+                          {(() => {
+                            const sessionTypes = normalizeSessionTypes(session.sessionTypes || session.sessionType);
+                            const colors = getSessionTypeColors(sessionTypes, organization);
+                            const names = getSessionTypeNames(sessionTypes, organization);
+                            
+                            return sessionTypes.map((type, index) => (
+                              <div
+                                key={`${type}-${index}`}
+                                className="session-block__badge"
+                                style={{
+                                  fontSize: "8px",
+                                  backgroundColor: colors[index],
+                                  color: "white",
+                                  padding: "1px 4px",
+                                  borderRadius: "6px",
+                                  textTransform: "capitalize",
+                                  fontWeight: "500",
+                                  display: "inline-block",
+                                  lineHeight: "1.2"
+                                }}
+                              >
+                                {names[index]}
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      )}
                       {session.notes && (
                         <div
                           className="session-block__notes"
                           style={{
                             fontSize: "10px",
-                            opacity: 0.8,
+                            opacity: 0.7,
                             fontStyle: "italic",
-                            marginTop: "2px",
+                            marginTop: "3px",
+                            borderTop: "1px solid rgba(255,255,255,0.2)",
+                            paddingTop: "2px"
                           }}
                         >
-                          {session.notes.length > 30
-                            ? `${session.notes.substring(0, 30)}...`
+                          {session.notes.length > 25
+                            ? `${session.notes.substring(0, 25)}...`
                             : session.notes}
                         </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })}

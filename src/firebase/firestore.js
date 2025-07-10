@@ -261,15 +261,41 @@ export const updateUserRole = async (userId, newRole) => {
 };
 
 // Daily Job Reports Functions
-export const createDailyJobReport = async (organizationID, reportData) => {
+export const createDailyJobReport = async (reportData) => {
   try {
-    const reportRef = await addDoc(collection(firestore, "dailyJobReports"), {
-      ...reportData,
-      organizationID,
+    // Prepare the report data structure
+    const finalReportData = {
+      organizationID: reportData.organizationID,
+      userId: reportData.userId,
       timestamp: serverTimestamp(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    };
+
+    // Check if this is a template-based report
+    if (reportData.templateId) {
+      // Template-based report structure
+      finalReportData.templateId = reportData.templateId;
+      finalReportData.templateName = reportData.templateName;
+      finalReportData.templateVersion = reportData.templateVersion || 1;
+      
+      // Core fields that all reports have
+      finalReportData.date = reportData.date;
+      finalReportData.yourName = reportData.photographer;
+      
+      // Store template-specific fields in customFields
+      finalReportData.customFields = {};
+      Object.keys(reportData).forEach(key => {
+        if (!['organizationID', 'userId', 'templateId', 'templateName', 'templateVersion', 'date', 'photographer'].includes(key)) {
+          finalReportData.customFields[key] = reportData[key];
+        }
+      });
+    } else {
+      // Legacy report structure - pass through all data
+      Object.assign(finalReportData, reportData);
+    }
+
+    const reportRef = await addDoc(collection(firestore, "dailyJobReports"), finalReportData);
     return reportRef.id;
   } catch (error) {
     console.error("Error creating daily job report:", error);
@@ -644,11 +670,17 @@ export const updateSDCardStatus = async (
   }
 };
 
-// Daily Job Report Templates Functions (for web app)
+// Report Templates Functions
 export const getReportTemplates = async (organizationID, shootType = null) => {
   try {
+    console.log("Fetching report templates for organization:", organizationID);
+    
+    if (!organizationID) {
+      throw new Error("Organization ID is required");
+    }
+    
     let q = query(
-      collection(firestore, "dailyJobReportTemplates"),
+      collection(firestore, "reportTemplates"),
       where("organizationID", "==", organizationID),
       where("isActive", "==", true)
     );
@@ -667,34 +699,138 @@ export const getReportTemplates = async (organizationID, shootType = null) => {
       });
     });
 
+    console.log("Found templates:", templates.length);
     return templates;
   } catch (error) {
     console.error("Error fetching report templates:", error);
+    console.error("Error code:", error.code);
+    console.error("Error message:", error.message);
     throw error;
   }
 };
 
-export const createReportTemplate = async (
-  organizationID,
-  templateData,
-  createdBy
-) => {
+export const createReportTemplate = async (templateData) => {
   try {
+    console.log("Creating report template:", templateData);
+    
+    // Validate required fields
+    if (!templateData.name) {
+      throw new Error("Template name is required");
+    }
+    if (!templateData.organizationID) {
+      throw new Error("Organization ID is required");
+    }
+    if (!templateData.fields || !Array.isArray(templateData.fields)) {
+      throw new Error("Template fields must be an array");
+    }
+    
     const templateRef = await addDoc(
-      collection(firestore, "dailyJobReportTemplates"),
+      collection(firestore, "reportTemplates"),
       {
         ...templateData,
-        organizationID,
-        createdBy,
         isActive: true,
         version: 1,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }
     );
+    
+    console.log("Template created with ID:", templateRef.id);
     return templateRef.id;
   } catch (error) {
     console.error("Error creating report template:", error);
+    console.error("Error code:", error.code);
+    console.error("Error message:", error.message);
+    throw error;
+  }
+};
+
+// Update report template
+export const updateReportTemplate = async (templateId, templateData) => {
+  try {
+    console.log("Updating report template:", templateId, templateData);
+    
+    if (!templateId) {
+      throw new Error("Template ID is required");
+    }
+    
+    await updateDoc(doc(firestore, "reportTemplates", templateId), {
+      ...templateData,
+      updatedAt: serverTimestamp(),
+    });
+    
+    console.log("Report template updated successfully");
+  } catch (error) {
+    console.error("Error updating report template:", error);
+    console.error("Error code:", error.code);
+    console.error("Error message:", error.message);
+    throw error;
+  }
+};
+
+// Delete report template
+export const deleteReportTemplate = async (templateId) => {
+  try {
+    console.log("Deleting report template:", templateId);
+    
+    if (!templateId) {
+      throw new Error("Template ID is required");
+    }
+    
+    await deleteDoc(doc(firestore, "reportTemplates", templateId));
+    console.log("Report template deleted successfully");
+  } catch (error) {
+    console.error("Error deleting report template:", error);
+    console.error("Error code:", error.code);
+    console.error("Error message:", error.message);
+    throw error;
+  }
+};
+
+// Get single report template
+export const getReportTemplate = async (templateId) => {
+  try {
+    const templateDoc = await getDoc(doc(firestore, "reportTemplates", templateId));
+    if (templateDoc.exists()) {
+      return { id: templateDoc.id, ...templateDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching report template:", error);
+    throw error;
+  }
+};
+
+// Set default template for a shoot type
+export const setDefaultTemplate = async (organizationID, shootType, templateId) => {
+  try {
+    // First, remove default flag from all templates of this shoot type
+    const q = query(
+      collection(firestore, "reportTemplates"),
+      where("organizationID", "==", organizationID),
+      where("shootType", "==", shootType),
+      where("isDefault", "==", true)
+    );
+    
+    const snapshot = await getDocs(q);
+    const batch = [];
+    
+    snapshot.forEach((doc) => {
+      batch.push(updateDoc(doc.ref, { isDefault: false }));
+    });
+    
+    // Wait for all updates to complete
+    await Promise.all(batch);
+    
+    // Set the new default template
+    await updateDoc(doc(firestore, "reportTemplates", templateId), {
+      isDefault: true,
+      updatedAt: serverTimestamp(),
+    });
+    
+    console.log("Default template updated successfully");
+  } catch (error) {
+    console.error("Error setting default template:", error);
     throw error;
   }
 };

@@ -19,6 +19,7 @@ import {
   Filter,
   CalendarDays,
   FileSpreadsheet,
+  Plus,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -28,6 +29,7 @@ import {
   getTeamMembers,
 } from "../firebase/firestore";
 import Button from "../components/shared/Button";
+import CreateReportModal from "../components/reports/CreateReportModal";
 import "./DailyReports.css";
 
 const DailyReports = () => {
@@ -66,6 +68,12 @@ const DailyReports = () => {
   // Bulk selection state
   const [selectedReports, setSelectedReports] = useState(new Set());
   const [showBulkActions, setShowBulkActions] = useState(false);
+
+  // Create report modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // Report type filter state
+  const [reportTypeFilter, setReportTypeFilter] = useState("all"); // 'all', 'template', 'legacy'
 
   // Job description options (from your original app)
   const JOB_DESCRIPTION_OPTIONS = [
@@ -232,12 +240,49 @@ const DailyReports = () => {
     }
   }, [dateFilter, customDateRange]);
 
+  // Helper functions for template-based reports
+  const isTemplateBased = (report) => {
+    return report.templateId && report.customFields;
+  };
+
+  const getReportDisplayData = (report) => {
+    if (isTemplateBased(report)) {
+      // Template-based report
+      return {
+        photographer: report.yourName,
+        school: report.customFields?.schools?.join?.(", ") || 
+                report.customFields?.school || 
+                report.schoolOrDestination ||
+                "Unknown",
+        templateName: report.templateName,
+        customFields: report.customFields,
+        isTemplate: true
+      };
+    } else {
+      // Legacy report
+      return {
+        photographer: report.yourName,
+        school: report.schoolOrDestination,
+        jobDescriptions: report.jobDescriptions,
+        extraItems: report.extraItems,
+        isTemplate: false
+      };
+    }
+  };
+
   // Filtered and sorted reports
   const filteredAndSortedReports = useMemo(() => {
     let filtered = reports;
 
     // Filter by date range
     filtered = filtered.filter((report) => isDateInRange(report.date));
+    
+    // Filter by report type (template vs legacy)
+    if (reportTypeFilter === "template") {
+      filtered = filtered.filter((report) => isTemplateBased(report));
+    } else if (reportTypeFilter === "legacy") {
+      filtered = filtered.filter((report) => !isTemplateBased(report));
+    }
     
     // Filter by photographer
     if (selectedPhotographer) {
@@ -246,14 +291,29 @@ const DailyReports = () => {
     
     // Filter by school
     if (selectedSchool) {
-      filtered = filtered.filter((report) => report.schoolOrDestination === selectedSchool);
+      filtered = filtered.filter((report) => {
+        const displayData = getReportDisplayData(report);
+        return displayData.school?.includes(selectedSchool) || report.schoolOrDestination === selectedSchool;
+      });
     }
     
     // Filter by job type
     if (selectedJobType) {
       filtered = filtered.filter((report) => {
-        const jobTypes = Array.isArray(report.jobDescriptions) ? report.jobDescriptions : [];
-        return jobTypes.includes(selectedJobType);
+        if (isTemplateBased(report)) {
+          // For template-based reports, search in customFields
+          const customFields = report.customFields || {};
+          return Object.values(customFields).some(value => {
+            if (Array.isArray(value)) {
+              return value.includes(selectedJobType);
+            }
+            return String(value).includes(selectedJobType);
+          });
+        } else {
+          // Legacy report filtering
+          const jobTypes = Array.isArray(report.jobDescriptions) ? report.jobDescriptions : [];
+          return jobTypes.includes(selectedJobType);
+        }
       });
     }
 
@@ -304,7 +364,7 @@ const DailyReports = () => {
     });
 
     return sorted;
-  }, [reports, searchTerm, sortField, sortDirection, isDateInRange, selectedPhotographer, selectedSchool, selectedJobType]);
+  }, [reports, searchTerm, sortField, sortDirection, isDateInRange, selectedPhotographer, selectedSchool, selectedJobType, reportTypeFilter, isTemplateBased, getReportDisplayData]);
   
   // Paginated reports
   const paginatedReports = useMemo(() => {
@@ -320,7 +380,7 @@ const DailyReports = () => {
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, dateFilter, selectedPhotographer, selectedSchool, selectedJobType, customDateRange]);
+  }, [searchTerm, dateFilter, selectedPhotographer, selectedSchool, selectedJobType, customDateRange, reportTypeFilter]);
 
   // Setup column resizing after table renders - simplified
   useEffect(() => {
@@ -482,6 +542,7 @@ const DailyReports = () => {
     setSelectedPhotographer("");
     setSelectedSchool("");
     setSelectedJobType("");
+    setReportTypeFilter("all");
     setSearchTerm("");
     setCurrentPage(1);
   }, []);
@@ -1000,54 +1061,88 @@ const DailyReports = () => {
     const reportsToShow = showPagination ? paginatedReports : filteredAndSortedReports;
     return (
       <div className="reports-cards">
-        {reportsToShow.map((report) => (
-          <div
-            key={report.id}
-            className="report-card"
-            onClick={() => openReportModal(report)}
-          >
-            <div className="report-header">
-              <h2 className="report-title">{report.yourName || "Unknown"}</h2>
-              <div className="header-footer">
-                <p className="school-name">{report.schoolOrDestination || "Unknown"}</p>
-                <p className="report-date">{formatDate(report.date)}</p>
+        {reportsToShow.map((report) => {
+          const displayData = getReportDisplayData(report);
+          
+          return (
+            <div
+              key={report.id}
+              className={`report-card ${displayData.isTemplate ? 'report-card--template' : 'report-card--legacy'}`}
+              onClick={() => openReportModal(report)}
+            >
+              <div className="report-header">
+                <h2 className="report-title">{displayData.photographer || "Unknown"}</h2>
+                <div className="header-footer">
+                  <p className="school-name">{displayData.school}</p>
+                  <p className="report-date">{formatDate(report.date)}</p>
+                  {displayData.isTemplate && (
+                    <span className="template-badge">{displayData.templateName}</span>
+                  )}
+                </div>
+              </div>
+              <div className="report-content">
+                {displayData.isTemplate ? (
+                  // Template-based report content
+                  <>
+                    {displayData.customFields && Object.entries(displayData.customFields).map(([key, value]) => {
+                      if (!value || key === 'schools' || key === 'school') return null;
+                      
+                      let displayValue = value;
+                      if (Array.isArray(value)) {
+                        displayValue = value.join(", ");
+                      } else if (typeof value === 'boolean') {
+                        displayValue = value ? "Yes" : "No";
+                      }
+                      
+                      return (
+                        <p key={key}>
+                          <strong>{key.charAt(0).toUpperCase() + key.slice(1)}:</strong> {displayValue}
+                        </p>
+                      );
+                    })}
+                  </>
+                ) : (
+                  // Legacy report content
+                  <>
+                    <p><strong>Job Descriptions:</strong> {(report.jobDescriptions || []).join(", ")}</p>
+                    <p><strong>Extra Items:</strong> {(report.extraItems || []).join(", ")}</p>
+                    <p><strong>Job Box/Cards:</strong> {report.jobBoxAndCameraCards || "N/A"}</p>
+                    <p><strong>Sports BG Shot:</strong> {report.sportsBackgroundShot || "N/A"}</p>
+                    <p><strong>Cards Scanned:</strong> {report.cardsScannedChoice || "N/A"}</p>
+                    {(report.photoshootNoteText || report.jobDescriptionText) && (
+                      <div className="notes-box">
+                        {report.photoshootNoteText && (
+                          <p><strong>Photoshoot Notes:</strong> {report.photoshootNoteText}</p>
+                        )}
+                        {report.jobDescriptionText && (
+                          <p><strong>Extra Notes:</strong> {report.jobDescriptionText}</p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+                
+                {/* Photos section for both types */}
+                {report.photoURLs && report.photoURLs.length > 0 && (
+                  <div className="card-photos">
+                    {report.photoURLs.map((url, index) => (
+                      <img
+                        key={index}
+                        src={url}
+                        alt="Daily Job Photo"
+                        className="card-photo"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openImageModal(url);
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-            <div className="report-content">
-              <p><strong>Job Descriptions:</strong> {(report.jobDescriptions || []).join(", ")}</p>
-              <p><strong>Extra Items:</strong> {(report.extraItems || []).join(", ")}</p>
-              <p><strong>Job Box/Cards:</strong> {report.jobBoxAndCameraCards || "N/A"}</p>
-              <p><strong>Sports BG Shot:</strong> {report.sportsBackgroundShot || "N/A"}</p>
-              <p><strong>Cards Scanned:</strong> {report.cardsScannedChoice || "N/A"}</p>
-              {(report.photoshootNoteText || report.jobDescriptionText) && (
-                <div className="notes-box">
-                  {report.photoshootNoteText && (
-                    <p><strong>Photoshoot Notes:</strong> {report.photoshootNoteText}</p>
-                  )}
-                  {report.jobDescriptionText && (
-                    <p><strong>Extra Notes:</strong> {report.jobDescriptionText}</p>
-                  )}
-                </div>
-              )}
-              {report.photoURLs && report.photoURLs.length > 0 && (
-                <div className="card-photos">
-                  {report.photoURLs.map((url, index) => (
-                    <img
-                      key={index}
-                      src={url}
-                      alt="Daily Job Photo"
-                      className="card-photo"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openImageModal(url);
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
@@ -1064,10 +1159,18 @@ const DailyReports = () => {
     <div className="daily-reports">
       <div className="reports-header">
         <div className="reports-header__content">
-          <h1 className="reports-title">Daily Reports</h1>
-          <p className="reports-subtitle">
-            View and manage daily job reports from your photography team
-          </p>
+          <div className="reports-header__text">
+            <h1 className="reports-title">Daily Reports</h1>
+            <p className="reports-subtitle">
+              View and manage daily job reports from your photography team
+            </p>
+          </div>
+          <div className="reports-header__actions">
+            <Button onClick={() => setShowCreateModal(true)}>
+              <Plus size={16} />
+              Create Report
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -1406,6 +1509,19 @@ const DailyReports = () => {
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Report Type Filter */}
+          <div className="reports-type-filter">
+            <select
+              value={reportTypeFilter}
+              onChange={(e) => setReportTypeFilter(e.target.value)}
+              className="reports-type-filter__select"
+            >
+              <option value="all">All Reports</option>
+              <option value="template">Template-Based</option>
+              <option value="legacy">Legacy Reports</option>
+            </select>
           </div>
 
           {/* View Toggle */}
@@ -1919,6 +2035,18 @@ const DailyReports = () => {
           radioOptionsYesNo={RADIO_OPTIONS_YES_NO}
           schools={schools}
           photographers={photographers}
+        />
+      )}
+
+      {/* Create Report Modal */}
+      {showCreateModal && (
+        <CreateReportModal
+          onClose={() => setShowCreateModal(false)}
+          onReportCreated={(reportData) => {
+            console.log("New report created:", reportData);
+            // Refresh reports list
+            // You could call a refresh function here
+          }}
         />
       )}
     </div>

@@ -29,14 +29,24 @@ export const AuthProvider = ({ children }) => {
   // Load user profile - exposed as a function so it can be called after updates
   const loadUserProfile = async (uid = null) => {
     const userId = uid || user?.uid;
-    if (!userId) return null;
+    console.log("📋 loadUserProfile called with uid:", userId);
+    if (!userId) {
+      console.log("❌ No userId provided to loadUserProfile");
+      return null;
+    }
 
     try {
       const profile = await getUserProfile(userId);
+      console.log("📋 getUserProfile result:", { 
+        profile: !!profile, 
+        organizationID: profile?.organizationID,
+        isActive: profile?.isActive,
+        email: profile?.email 
+      });
       setUserProfile(profile);
       return profile;
     } catch (error) {
-      console.error("Error loading user profile:", error);
+      console.error("❌ Error in loadUserProfile:", error);
       return null;
     }
   };
@@ -45,14 +55,23 @@ export const AuthProvider = ({ children }) => {
   const loadOrganization = async (organizationID = null) => {
     const orgId =
       organizationID || userProfile?.organizationID || organization?.id;
-    if (!orgId) return null;
+    console.log("🏢 loadOrganization called with orgId:", orgId);
+    if (!orgId) {
+      console.log("❌ No organizationID provided to loadOrganization");
+      return null;
+    }
 
     try {
       const org = await getOrganization(orgId);
+      console.log("🏢 getOrganization result:", { 
+        organization: !!org, 
+        orgId: org?.id,
+        orgName: org?.name 
+      });
       setOrganization(org);
       return org;
     } catch (error) {
-      console.error("Error loading organization:", error);
+      console.error("❌ Error in loadOrganization:", error);
       return null;
     }
   };
@@ -60,24 +79,45 @@ export const AuthProvider = ({ children }) => {
   // Listen for auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log("🔐 AUTH STATE CHANGED:", { user: !!user, uid: user?.uid });
+      
       if (user) {
         setUser(user);
+        console.log("✅ User set in state");
+        
         try {
           // Get user profile
+          console.log("📋 Loading user profile...");
           const profile = await loadUserProfile(user.uid);
+          console.log("📋 User profile loaded:", { 
+            profile: !!profile, 
+            organizationID: profile?.organizationID,
+            isActive: profile?.isActive 
+          });
 
           // Get organization if user has one
           if (profile?.organizationID) {
-            await loadOrganization(profile.organizationID);
+            console.log("🏢 Loading organization:", profile.organizationID);
+            const org = await loadOrganization(profile.organizationID);
+            console.log("🏢 Organization loaded:", { 
+              organization: !!org, 
+              orgId: org?.id,
+              orgName: org?.name 
+            });
+          } else {
+            console.log("⚠️ No organizationID found in profile");
           }
         } catch (error) {
-          console.error("Error loading user data:", error);
+          console.error("❌ Error loading user data:", error);
         }
       } else {
+        console.log("🚪 User logged out");
         setUser(null);
         setUserProfile(null);
         setOrganization(null);
       }
+      
+      console.log("⏰ Setting loading to false");
       setLoading(false);
     });
 

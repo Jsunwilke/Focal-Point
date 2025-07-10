@@ -11,6 +11,7 @@ const CalendarView = ({
   teamMembers,
   scheduleType,
   userProfile,
+  organization,
   onUpdateSession,
   onSessionClick, // New prop for handling session clicks
 }) => {
@@ -25,6 +26,7 @@ const CalendarView = ({
             teamMembers={teamMembers}
             scheduleType={scheduleType}
             userProfile={userProfile}
+            organization={organization}
             onUpdateSession={onUpdateSession}
             onSessionClick={onSessionClick} // Pass the click handler
           />
@@ -38,6 +40,7 @@ const CalendarView = ({
             teamMembers={teamMembers}
             scheduleType={scheduleType}
             userProfile={userProfile}
+            organization={organization}
             onUpdateSession={onUpdateSession} // Pass the update handler (for future month view drag & drop)
             onSessionClick={onSessionClick} // Pass the click handler (for future month view)
           />
@@ -51,6 +54,7 @@ const CalendarView = ({
             teamMembers={teamMembers}
             scheduleType={scheduleType}
             userProfile={userProfile}
+            organization={organization}
             onUpdateSession={onUpdateSession}
             onSessionClick={onSessionClick} // Pass the click handler
           />

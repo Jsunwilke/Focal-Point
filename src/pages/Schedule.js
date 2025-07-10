@@ -5,6 +5,7 @@ import {
   getTeamMembers,
   updateSession,
   getSession,
+  getSchools,
 } from "../firebase/firestore";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { firestore } from "../firebase/config";
@@ -12,6 +13,7 @@ import CalendarView from "../components/calendar/CalendarView";
 import CreateSessionModal from "../components/sessions/CreateSessionModal";
 import EditSessionModal from "../components/sessions/EditSessionModal";
 import SessionDetailsModal from "../components/sessions/SessionDetailsModal";
+import StatsModal from "../components/stats/StatsModal";
 import {
   ChevronLeft,
   ChevronRight,
@@ -19,8 +21,6 @@ import {
   Filter,
   Users,
   Map,
-  Calendar as CalendarIcon,
-  Tag,
   X,
 } from "lucide-react";
 
@@ -93,10 +93,14 @@ const Schedule = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showTeamFilter, setShowTeamFilter] = useState(false);
+  const [showSchoolFilter, setShowSchoolFilter] = useState(false);
+  const [showStatsModal, setShowStatsModal] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [schools, setSchools] = useState([]);
   const [visiblePhotographers, setVisiblePhotographers] = useState(new Set());
+  const [visibleSchools, setVisibleSchools] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
 
@@ -115,6 +119,17 @@ const Schedule = () => {
       sessionsQuery,
       (snapshot) => {
         console.log("Sessions updated from Firestore:", snapshot.docs.length);
+        
+        // Debug: Log each raw session from Firestore
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          console.log(`Raw Firestore session ${doc.id}:`, {
+            sessionType: data.sessionType,
+            schoolId: data.schoolId,
+            schoolName: data.schoolName,
+            startTime: data.startTime
+          });
+        });
 
         const sessionsData = [];
         snapshot.forEach((doc) => {
@@ -153,16 +168,17 @@ const Schedule = () => {
                 id: `${session.id}-${photographer.id}`,
                 sessionId: session.id,
                 title:
-                  session.title || `${session.sport} at ${session.location}`,
+                  session.title || `${session.sessionType || 'Session'} at ${session.schoolName || 'School'}`,
                 date: sessionDate,
                 startTime: session.startTime,
                 endTime: session.endTime,
                 photographerId: photographer.id,
                 photographerName: photographer.name,
-                type: session.sessionType || "session",
+                sessionType: session.sessionType || "session",
                 status: session.status || "scheduled",
-                location: session.location,
-                sport: session.sport,
+                schoolId: session.schoolId,
+                schoolName: session.schoolName || session.location || "",
+                location: session.location || session.schoolName || "",
                 notes: session.notes,
               }));
             } else {
@@ -172,16 +188,17 @@ const Schedule = () => {
                   id: session.id,
                   sessionId: session.id,
                   title:
-                    session.title || `${session.sport} at ${session.location}`,
+                    session.title || `${session.sessionType || 'Session'} at ${session.schoolName || 'School'}`,
                   date: sessionDate,
                   startTime: session.startTime,
                   endTime: session.endTime,
                   photographerId: session.photographer?.id || null,
                   photographerName: session.photographer?.name || null,
-                  type: session.sessionType || "session",
+                  sessionType: session.sessionType || "session",
                   status: session.status || "scheduled",
-                  location: session.location,
-                  sport: session.sport,
+                  schoolId: session.schoolId,
+                  schoolName: session.schoolName || session.location || "",
+                  location: session.location || session.schoolName || "",
                   notes: session.notes,
                 },
               ];
@@ -189,6 +206,15 @@ const Schedule = () => {
           })
           .flat();
 
+        // Debug: Log processed sessions
+        console.log("Processed sessions for calendar:", sessionData.map(s => ({
+          id: s.id,
+          sessionType: s.sessionType,
+          schoolId: s.schoolId,
+          schoolName: s.schoolName,
+          photographerId: s.photographerId
+        })));
+        
         setSessions(sessionData);
         setLoading(false);
       },
@@ -273,6 +299,26 @@ const Schedule = () => {
       console.log("Cleaning up team members listener");
       unsubscribe();
     };
+  }, [organization?.id]);
+
+  // Load schools when organization changes
+  useEffect(() => {
+    const loadSchools = async () => {
+      if (!organization?.id) return;
+
+      try {
+        console.log("Loading schools for organization:", organization.id);
+        const schoolsData = await getSchools(organization.id);
+        setSchools(schoolsData);
+        
+        // Initialize visible schools to show all schools by default
+        setVisibleSchools(new Set(schoolsData.map(school => school.id)));
+      } catch (error) {
+        console.error("Error loading schools:", error);
+      }
+    };
+
+    loadSchools();
   }, [organization?.id]);
 
   // Handle session updates (for drag & drop)
@@ -433,6 +479,30 @@ const Schedule = () => {
     savePhotographerPreferences(organization.id, emptySet);
   };
 
+  // Handle school filter toggle
+  const handleSchoolFilterToggle = (schoolId) => {
+    setVisibleSchools((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(schoolId)) {
+        newSet.delete(schoolId);
+      } else {
+        newSet.add(schoolId);
+      }
+      return newSet;
+    });
+  };
+
+  // Handle show/hide all schools
+  const handleShowAllSchools = () => {
+    const allSchoolIds = new Set(schools.map((school) => school.id));
+    setVisibleSchools(allSchoolIds);
+  };
+
+  const handleHideAllSchools = () => {
+    const emptySet = new Set();
+    setVisibleSchools(emptySet);
+  };
+
   // Handle session click to open details modal (not edit modal)
   const handleSessionClick = (session) => {
     console.log("Session clicked, opening details modal:", session);
@@ -547,7 +617,7 @@ const Schedule = () => {
     }
   };
 
-  // Filter sessions based on schedule type and visible photographers
+  // Filter sessions based on schedule type, visible photographers, and visible schools
   const filteredSessions = sessions.filter((session) => {
     // First filter by schedule type (my vs full)
     const passesScheduleFilter =
@@ -558,7 +628,11 @@ const Schedule = () => {
       session.photographerId
     );
 
-    return passesScheduleFilter && passesPhotographerFilter;
+    // Then filter by visible schools (if any schools are selected)
+    const passesSchoolFilter = 
+      visibleSchools.size === 0 || visibleSchools.has(session.schoolId);
+
+    return passesScheduleFilter && passesPhotographerFilter && passesSchoolFilter;
   });
 
   // Filter team members for display in calendar
@@ -729,9 +803,14 @@ const Schedule = () => {
         <div className="schedule__controls-right">
           {/* Filter Buttons */}
           <div className="schedule__filters">
-            <button className="schedule__filter-btn">
+            <button
+              className={`schedule__filter-btn ${
+                showSchoolFilter ? "schedule__filter-btn--active" : ""
+              }`}
+              onClick={() => setShowSchoolFilter(!showSchoolFilter)}
+            >
               <Map size={16} />
-              <span>Locations</span>
+              <span>Schools ({visibleSchools.size})</span>
             </button>
             <button
               className={`schedule__filter-btn ${
@@ -742,18 +821,13 @@ const Schedule = () => {
               <Users size={16} />
               <span>Team ({visiblePhotographers.size})</span>
             </button>
-            <button className="schedule__filter-btn">
-              <Tag size={16} />
-              <span>Tags</span>
-            </button>
-            <button className="schedule__filter-btn">
-              <CalendarIcon size={16} />
-              <span>Events</span>
-            </button>
           </div>
 
           {/* Action Buttons */}
-          <button className="schedule__stats-btn">
+          <button 
+            className="schedule__stats-btn"
+            onClick={() => setShowStatsModal(true)}
+          >
             <Filter size={16} />
             <span>Stats</span>
           </button>
@@ -769,12 +843,6 @@ const Schedule = () => {
 
       {/* Stats Bar */}
       <div className="schedule__stats">
-        <div className="schedule__stat">
-          <span className="schedule__stat-label">EST. WAGES</span>
-          <span className="schedule__stat-value">
-            ${stats.wages.toFixed(2)}
-          </span>
-        </div>
         <div className="schedule__stat">
           <span className="schedule__stat-label">SCHEDULED HOURS</span>
           <span className="schedule__stat-value">
@@ -804,6 +872,7 @@ const Schedule = () => {
           teamMembers={filteredTeamMembers}
           scheduleType={scheduleType}
           userProfile={userProfile}
+          organization={organization}
           onUpdateSession={handleUpdateSession}
           onSessionClick={handleSessionClick}
         />
@@ -992,6 +1061,173 @@ const Schedule = () => {
         </div>
       )}
 
+      {/* School Filter Dropdown */}
+      {showSchoolFilter && (
+        <div
+          style={{
+            position: "fixed",
+            top: "0",
+            left: "0",
+            right: "0",
+            bottom: "0",
+            zIndex: 9999,
+          }}
+          onClick={() => setShowSchoolFilter(false)}
+        >
+          <div
+            style={{
+              position: "absolute",
+              top: "120px",
+              right: "20px",
+              backgroundColor: "white",
+              border: "1px solid #dee2e6",
+              borderRadius: "8px",
+              boxShadow: "0 10px 25px rgba(0, 0, 0, 0.15)",
+              minWidth: "300px",
+              maxHeight: "400px",
+              overflow: "hidden",
+              zIndex: 10000,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Filter Header */}
+            <div
+              style={{
+                padding: "1rem",
+                borderBottom: "1px solid #dee2e6",
+                backgroundColor: "#f8f9fa",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: "0.5rem",
+                }}
+              >
+                <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: "600" }}>
+                  Filter Schools
+                </h4>
+                <button
+                  onClick={() => setShowSchoolFilter(false)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "0.25rem",
+                    color: "#6c757d",
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  onClick={handleShowAllSchools}
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    fontSize: "0.75rem",
+                    backgroundColor: "#007bff",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Show All
+                </button>
+                <button
+                  onClick={handleHideAllSchools}
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    fontSize: "0.75rem",
+                    backgroundColor: "#6c757d",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Hide All
+                </button>
+              </div>
+            </div>
+
+            {/* Filter List */}
+            <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+              {schools
+                .sort((a, b) => (a.value || "").localeCompare(b.value || ""))
+                .map((school) => (
+                  <div
+                    key={school.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "0.75rem 1rem",
+                      borderBottom: "1px solid #f1f3f4",
+                      cursor: "pointer",
+                      backgroundColor: visibleSchools.has(school.id)
+                        ? "#f8f9fa"
+                        : "white",
+                      transition: "background-color 0.2s",
+                    }}
+                    onClick={() => handleSchoolFilterToggle(school.id)}
+                  >
+                    <div
+                      style={{
+                        width: "18px",
+                        height: "18px",
+                        border: "2px solid #dee2e6",
+                        borderRadius: "3px",
+                        marginRight: "0.75rem",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: visibleSchools.has(school.id)
+                          ? "#007bff"
+                          : "white",
+                        borderColor: visibleSchools.has(school.id)
+                          ? "#007bff"
+                          : "#dee2e6",
+                      }}
+                    >
+                      {visibleSchools.has(school.id) && (
+                        <div
+                          style={{
+                            width: "10px",
+                            height: "10px",
+                            backgroundColor: "white",
+                            borderRadius: "1px",
+                          }}
+                        />
+                      )}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: "500", fontSize: "0.875rem" }}>
+                        {school.value}
+                      </div>
+                    </div>
+                    {/* Show session count for this school */}
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#6c757d",
+                        backgroundColor: "#f1f3f4",
+                        padding: "0.25rem 0.5rem",
+                        borderRadius: "12px",
+                      }}
+                    >
+                      {sessions.filter((s) => s.schoolId === school.id).length}{" "}
+                      sessions
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Session Details Modal */}
       {showDetailsModal && selectedSession && (
         <SessionDetailsModal
@@ -1002,6 +1238,8 @@ const Schedule = () => {
           }}
           session={selectedSession}
           teamMembers={teamMembers}
+          userProfile={userProfile}
+          organization={organization}
           onEditSession={handleEditSessionFromDetails}
         />
       )}
@@ -1020,6 +1258,18 @@ const Schedule = () => {
           organization={organization}
           onSessionUpdated={handleSessionUpdated}
           onSessionDeleted={handleSessionDeleted}
+        />
+      )}
+
+      {/* Stats Modal */}
+      {showStatsModal && (
+        <StatsModal
+          isOpen={showStatsModal}
+          onClose={() => setShowStatsModal(false)}
+          sessions={sessions}
+          teamMembers={teamMembers}
+          schools={schools}
+          userProfile={userProfile}
         />
       )}
 

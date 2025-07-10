@@ -13,12 +13,15 @@ import {
   Tag,
 } from "lucide-react";
 import { getSession } from "../../firebase/firestore";
+import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
 
 const SessionDetailsModal = ({
   isOpen,
   onClose,
   session, // This is the individual calendar entry (photographer shift)
   teamMembers,
+  userProfile, // Current signed-in user
+  organization,
   onEditSession, // Callback to open the edit modal
 }) => {
   const [fullSessionData, setFullSessionData] = useState(null);
@@ -97,19 +100,9 @@ const SessionDetailsModal = ({
     }
   };
 
-  const getSessionTypeColor = (type) => {
-    switch (type) {
-      case "sports":
-        return "#8b5cf6";
-      case "portrait":
-        return "#3b82f6";
-      case "event":
-        return "#f59e0b";
-      case "graduation":
-        return "#10b981";
-      default:
-        return "#ef4444";
-    }
+  // Get session type color using organization configuration
+  const getSessionTypeBadgeColor = (type) => {
+    return getSessionTypeColor(type, organization);
   };
 
   const modalContent = (
@@ -221,49 +214,71 @@ const SessionDetailsModal = ({
                 <div
                   style={{
                     display: "flex",
-                    alignItems: "center",
+                    alignItems: "flex-start",
                     gap: "1rem",
-                    marginBottom: "0.5rem",
+                    marginBottom: "0.75rem",
                   }}
                 >
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: "1.5rem",
-                      fontWeight: "600",
-                    }}
-                  >
-                    {session.title || `${session.sport} at ${session.location}`}
-                  </h3>
-                  <span
-                    style={{
-                      backgroundColor: getSessionTypeColor(session.type),
-                      color: "white",
-                      padding: "0.25rem 0.75rem",
-                      borderRadius: "1rem",
-                      fontSize: "0.75rem",
-                      fontWeight: "500",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {session.type || "Session"}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    backgroundColor: getStatusColor(session.status),
-                    color: "white",
-                    padding: "0.25rem 0.75rem",
-                    borderRadius: "1rem",
-                    fontSize: "0.75rem",
-                    fontWeight: "500",
-                  }}
-                >
-                  <Tag size={12} />
-                  {(session.status || "scheduled").toUpperCase()}
+                  <div style={{ flex: 1 }}>
+                    <h3
+                      style={{
+                        margin: 0,
+                        fontSize: "1.4rem",
+                        fontWeight: "600",
+                        color: "#333",
+                        marginBottom: "0.25rem"
+                      }}
+                    >
+                      {session.schoolName || 'School'}
+                    </h3>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.9rem",
+                        color: "#666",
+                        fontWeight: "400"
+                      }}
+                    >
+                      {session.title || `${session.sessionType || 'Session'} Session`}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                    {(() => {
+                      const sessionTypes = normalizeSessionTypes(session.sessionTypes || session.sessionType);
+                      const colors = getSessionTypeColors(sessionTypes, organization);
+                      const names = getSessionTypeNames(sessionTypes, organization);
+                      
+                      return sessionTypes.map((type, index) => (
+                        <span
+                          key={`${type}-${index}`}
+                          style={{
+                            backgroundColor: colors[index],
+                            color: "white",
+                            padding: "0.3rem 0.8rem",
+                            borderRadius: "1rem",
+                            fontSize: "0.75rem",
+                            fontWeight: "500",
+                            textTransform: "capitalize",
+                          }}
+                        >
+                          {names[index]}
+                        </span>
+                      ));
+                    })()}
+                    <span
+                      style={{
+                        backgroundColor: getStatusColor(session.status),
+                        color: "white",
+                        padding: "0.3rem 0.8rem",
+                        borderRadius: "1rem",
+                        fontSize: "0.75rem",
+                        fontWeight: "500",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {session.status || "scheduled"}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -342,10 +357,10 @@ const SessionDetailsModal = ({
                     }}
                   >
                     <MapPin size={16} />
-                    LOCATION
+                    SCHOOL
                   </div>
                   <div style={{ fontSize: "1rem", fontWeight: "500" }}>
-                    {session.location || "Not specified"}
+                    {session.schoolName || "Not specified"}
                   </div>
                 </div>
                 <div>
@@ -361,10 +376,10 @@ const SessionDetailsModal = ({
                     }}
                   >
                     <Tag size={16} />
-                    SPORT/ACTIVITY
+                    SESSION TYPE
                   </div>
                   <div style={{ fontSize: "1rem", fontWeight: "500" }}>
-                    {session.sport || "Not specified"}
+                    {session.sessionType || "Not specified"}
                   </div>
                 </div>
               </div>
@@ -392,35 +407,26 @@ const SessionDetailsModal = ({
                     gap: "0.5rem",
                   }}
                 >
-                  {allAssignedPhotographers.map((photographer, index) => (
-                    <span
-                      key={index}
-                      style={{
-                        backgroundColor:
-                          photographer.id === session.photographerId
-                            ? "#e3f2fd"
-                            : "#f1f3f4",
-                        border:
-                          photographer.id === session.photographerId
-                            ? "2px solid #007bff"
-                            : "1px solid #dee2e6",
-                        color:
-                          photographer.id === session.photographerId
-                            ? "#007bff"
-                            : "#495057",
-                        padding: "0.5rem 0.75rem",
-                        borderRadius: "0.5rem",
-                        fontSize: "0.875rem",
-                        fontWeight:
-                          photographer.id === session.photographerId
-                            ? "600"
-                            : "500",
-                      }}
-                    >
-                      {photographer.name}
-                      {photographer.id === session.photographerId && " (You)"}
-                    </span>
-                  ))}
+                  {allAssignedPhotographers.map((photographer, index) => {
+                    const isCurrentUser = photographer.id === userProfile?.id;
+                    return (
+                      <span
+                        key={index}
+                        style={{
+                          backgroundColor: isCurrentUser ? "#e3f2fd" : "#f1f3f4",
+                          border: isCurrentUser ? "2px solid #007bff" : "1px solid #dee2e6",
+                          color: isCurrentUser ? "#007bff" : "#495057",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "0.5rem",
+                          fontSize: "0.875rem",
+                          fontWeight: isCurrentUser ? "600" : "500",
+                        }}
+                      >
+                        {photographer.name}
+                        {isCurrentUser && " (You)"}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
 

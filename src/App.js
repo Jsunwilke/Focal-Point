@@ -7,12 +7,16 @@ import StudioSignup from "./components/auth/StudioSignup";
 import InvitationAcceptance from "./components/auth/InvitationAcceptance";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Layout from "./components/layout/Layout";
+import TemplateBuilderLayout from "./components/layout/TemplateBuilderLayout";
 import Dashboard from "./pages/Dashboard";
 import TeamManagement from "./pages/TeamManagement";
 import SchoolManagement from "./pages/SchoolManagement";
 import DailyReports from "./pages/DailyReports";
 import Sports from "./pages/Sports";
 import Schedule from "./pages/Schedule";
+import Settings from "./pages/Settings";
+import TemplatesList from "./pages/TemplatesList";
+import TemplateBuilder from "./pages/TemplateBuilder";
 import "./App.css";
 
 const AppContent = () => {
@@ -57,23 +61,50 @@ const AppContent = () => {
 
         {/* Protected routes - only show if logged in */}
         {user && (
-          <Route
-            path="/*"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/schedule" element={<Schedule />} />
-                    <Route path="/team" element={<TeamManagement />} />
-                    <Route path="/schools" element={<SchoolManagement />} />
-                    <Route path="/sports" element={<Sports />} />
-                    <Route path="/daily-reports" element={<DailyReports />} />
-                  </Routes>
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
+          <>
+            {/* Template Builder routes with dedicated layout */}
+            <Route
+              path="/settings/templates/new"
+              element={
+                <ProtectedRoute>
+                  <TemplateBuilderLayout>
+                    <TemplateBuilder />
+                  </TemplateBuilderLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings/templates/:templateId"
+              element={
+                <ProtectedRoute>
+                  <TemplateBuilderLayout>
+                    <TemplateBuilder />
+                  </TemplateBuilderLayout>
+                </ProtectedRoute>
+              }
+            />
+            
+            {/* Regular app routes with standard layout */}
+            <Route
+              path="/*"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Routes>
+                      <Route path="/" element={<Dashboard />} />
+                      <Route path="/schedule" element={<Schedule />} />
+                      <Route path="/team" element={<TeamManagement />} />
+                      <Route path="/schools" element={<SchoolManagement />} />
+                      <Route path="/sports" element={<Sports />} />
+                      <Route path="/daily-reports" element={<DailyReports />} />
+                      <Route path="/settings" element={<Settings />} />
+                      <Route path="/settings/templates" element={<TemplatesList />} />
+                    </Routes>
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+          </>
         )}
       </Routes>
     </Router>
