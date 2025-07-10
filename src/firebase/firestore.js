@@ -834,3 +834,585 @@ export const setDefaultTemplate = async (organizationID, shootType, templateId) 
     throw error;
   }
 };
+
+// Time Tracking Functions
+
+// Clock in - creates a new time entry
+export const clockIn = async (userId, organizationID, sessionId = null, notes = null) => {
+  try {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    // Check if user is already clocked in
+    const existingEntry = await getCurrentTimeEntry(userId, organizationID);
+    if (existingEntry) {
+      throw new Error("User is already clocked in. Please clock out first.");
+    }
+
+    const timeEntryData = {
+      userId,
+      organizationID,
+      clockInTime: serverTimestamp(),
+      date: today,
+      status: "clocked-in",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    if (sessionId) {
+      timeEntryData.sessionId = sessionId;
+    }
+
+    if (notes) {
+      timeEntryData.notes = notes;
+    }
+
+    const docRef = await addDoc(collection(firestore, "timeEntries"), timeEntryData);
+    console.log("Clock in successful:", docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error("Error clocking in:", error);
+    throw error;
+  }
+};
+
+// Clock out - updates existing time entry
+export const clockOut = async (userId, organizationID, notes = null) => {
+  try {
+    const currentEntry = await getCurrentTimeEntry(userId, organizationID);
+    
+    if (!currentEntry) {
+      throw new Error("No active time entry found. Please clock in first.");
+    }
+
+    const updateData = {
+      clockOutTime: serverTimestamp(),
+      status: "clocked-out",
+      updatedAt: serverTimestamp(),
+    };
+
+    if (notes) {
+      updateData.notes = notes;
+    }
+
+    await updateDoc(doc(firestore, "timeEntries", currentEntry.id), updateData);
+    console.log("Clock out successful:", currentEntry.id);
+    return currentEntry.id;
+  } catch (error) {
+    console.error("Error clocking out:", error);
+    throw error;
+  }
+};
+
+// Get current active time entry for a user
+export const getCurrentTimeEntry = async (userId, organizationID) => {
+  try {
+    const q = query(
+      collection(firestore, "timeEntries"),
+      where("userId", "==", userId),
+      where("organizationID", "==", organizationID),
+      where("status", "==", "clocked-in")
+    );
+
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      return null;
+    }
+
+    // Return the first (and should be only) active entry
+    const doc = querySnapshot.docs[0];
+    return { id: doc.id, ...doc.data() };
+  } catch (error) {
+    console.error("Error getting current time entry:", error);
+    throw error;
+  }
+};
+
+// Get time entries for a user within a date range
+export const getTimeEntries = async (userId, organizationID, startDate = null, endDate = null) => {
+  try {
+    let q = query(
+      collection(firestore, "timeEntries"),
+      where("userId", "==", userId),
+      where("organizationID", "==", organizationID),
+      orderBy("clockInTime", "desc")
+    );
+
+    if (startDate && endDate) {
+      q = query(q, where("date", ">=", startDate), where("date", "<=", endDate));
+    }
+
+    const querySnapshot = await getDocs(q);
+    const entries = [];
+
+    querySnapshot.forEach((doc) => {
+      entries.push({
+        id: doc.id,
+        ...doc.data(),
+      });
+    });
+
+    return entries;
+  } catch (error) {
+    console.error("Error fetching time entries:", error);
+    throw error;
+  }
+};
+
+// Get time entries for all users in organization (admin function)
+export const getAllTimeEntries = async (organizationID, startDate = null, endDate = null) => {
+  try {
+    let q = query(
+      collection(firestore, "timeEntries"),
+      where("organizationID", "==", organizationID),
+      orderBy("clockInTime", "desc")
+    );
+
+    if (startDate && endDate) {
+      q = query(q, where("date", ">=", startDate), where("date", "<=", endDate));
+    }
+
+    const querySnapshot = await getDocs(q);
+    const entries = [];
+
+    querySnapshot.forEach((doc) => {
+      entries.push({
+        id: doc.id,
+        ...doc.data(),
+      });
+    });
+
+    return entries;
+  } catch (error) {
+    console.error("Error fetching all time entries:", error);
+    throw error;
+  }
+};
+
+// Get today's time entries for a user
+export const getTodayTimeEntries = async (userId, organizationID) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    return await getTimeEntries(userId, organizationID, today, today);
+  } catch (error) {
+    console.error("Error fetching today's time entries:", error);
+    throw error;
+  }
+};
+
+// Calculate total hours for time entries
+export const calculateTotalHours = (timeEntries) => {
+  let totalMilliseconds = 0;
+
+  timeEntries.forEach(entry => {
+    if (entry.clockInTime && entry.clockOutTime) {
+      const clockIn = entry.clockInTime.toDate ? entry.clockInTime.toDate() : new Date(entry.clockInTime);
+      const clockOut = entry.clockOutTime.toDate ? entry.clockOutTime.toDate() : new Date(entry.clockOutTime);
+      totalMilliseconds += clockOut.getTime() - clockIn.getTime();
+    }
+  });
+
+  // Convert to hours
+  return totalMilliseconds / (1000 * 60 * 60);
+};
+
+// Format duration in hours and minutes
+export const formatDuration = (hours) => {
+  const wholeHours = Math.floor(hours);
+  const minutes = Math.round((hours - wholeHours) * 60);
+  
+  if (wholeHours === 0) {
+    return `${minutes}m`;
+  } else if (minutes === 0) {
+    return `${wholeHours}h`;
+  } else {
+    return `${wholeHours}h ${minutes}m`;
+  }
+};
+
+// Check for time overlap with existing entries
+export const checkTimeOverlap = async (userId, organizationID, startTime, endTime, excludeEntryId = null) => {
+  try {
+    const date = startTime.toISOString().split('T')[0];
+    
+    // Query for time entries on the same date
+    const q = query(
+      collection(firestore, "timeEntries"),
+      where("userId", "==", userId),
+      where("organizationID", "==", organizationID),
+      where("date", "==", date),
+      where("status", "==", "clocked-out")
+    );
+    
+    const snapshot = await getDocs(q);
+    const overlappingEntries = [];
+    
+    snapshot.forEach((doc) => {
+      const entry = { id: doc.id, ...doc.data() };
+      
+      // Skip the entry we're excluding (for updates)
+      if (excludeEntryId && entry.id === excludeEntryId) {
+        return;
+      }
+      
+      // Convert timestamps to Date objects
+      const entryStart = entry.clockInTime.toDate ? entry.clockInTime.toDate() : new Date(entry.clockInTime);
+      const entryEnd = entry.clockOutTime.toDate ? entry.clockOutTime.toDate() : new Date(entry.clockOutTime);
+      
+      // Check for overlap: (start1 < end2) && (start2 < end1)
+      if (startTime < entryEnd && entryStart < endTime) {
+        overlappingEntries.push({
+          ...entry,
+          clockInTime: entryStart,
+          clockOutTime: entryEnd
+        });
+      }
+    });
+    
+    return overlappingEntries;
+  } catch (error) {
+    console.error("Error checking time overlap:", error);
+    throw error;
+  }
+};
+
+// Manual time entry creation (admin function)
+export const createManualTimeEntry = async (timeEntryData) => {
+  try {
+    // Check for time overlaps before creating
+    if (timeEntryData.clockInTime && timeEntryData.clockOutTime) {
+      const overlaps = await checkTimeOverlap(
+        timeEntryData.userId,
+        timeEntryData.organizationID,
+        timeEntryData.clockInTime,
+        timeEntryData.clockOutTime
+      );
+      
+      if (overlaps.length > 0) {
+        const overlapDetails = overlaps.map(entry => 
+          `${entry.clockInTime.toLocaleTimeString()} - ${entry.clockOutTime.toLocaleTimeString()}`
+        ).join(', ');
+        throw new Error(`Time overlap detected with existing entries: ${overlapDetails}`);
+      }
+    }
+
+    const docRef = await addDoc(collection(firestore, "timeEntries"), {
+      ...timeEntryData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    
+    console.log("Manual time entry created:", docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error("Error creating manual time entry:", error);
+    throw error;
+  }
+};
+
+// Update time entry (admin function)
+export const updateTimeEntry = async (entryId, updateData) => {
+  try {
+    await updateDoc(doc(firestore, "timeEntries", entryId), {
+      ...updateData,
+      updatedAt: serverTimestamp(),
+    });
+    
+    console.log("Time entry updated:", entryId);
+  } catch (error) {
+    console.error("Error updating time entry:", error);
+    throw error;
+  }
+};
+
+// Delete time entry (admin function)
+export const deleteTimeEntry = async (entryId) => {
+  try {
+    await deleteDoc(doc(firestore, "timeEntries", entryId));
+    console.log("Time entry deleted:", entryId);
+  } catch (error) {
+    console.error("Error deleting time entry:", error);
+    throw error;
+  }
+};
+
+// Session and School Hour Tracking Statistics
+
+// Get total hours worked for a specific session
+export const getSessionHours = async (sessionId, organizationID) => {
+  try {
+    const q = query(
+      collection(firestore, "timeEntries"),
+      where("sessionId", "==", sessionId),
+      where("organizationID", "==", organizationID),
+      where("status", "==", "clocked-out")
+    );
+
+    const querySnapshot = await getDocs(q);
+    const entries = [];
+
+    querySnapshot.forEach((doc) => {
+      entries.push({
+        id: doc.id,
+        ...doc.data(),
+      });
+    });
+
+    const totalHours = calculateTotalHours(entries);
+    
+    return {
+      sessionId,
+      totalHours,
+      totalEntries: entries.length,
+      entries
+    };
+  } catch (error) {
+    console.error("Error getting session hours:", error);
+    throw error;
+  }
+};
+
+// Get total hours worked at a specific school
+export const getSchoolHours = async (schoolId, organizationID, startDate = null, endDate = null) => {
+  try {
+    // First, get all sessions for this school
+    const sessionsQuery = query(
+      collection(firestore, "sessions"),
+      where("schoolId", "==", schoolId),
+      where("organizationID", "==", organizationID)
+    );
+    
+    const sessionsSnapshot = await getDocs(sessionsQuery);
+    const sessionIds = [];
+    const sessions = {};
+    
+    sessionsSnapshot.forEach((doc) => {
+      const sessionData = { id: doc.id, ...doc.data() };
+      sessionIds.push(doc.id);
+      sessions[doc.id] = sessionData;
+    });
+
+    if (sessionIds.length === 0) {
+      return {
+        schoolId,
+        totalHours: 0,
+        totalEntries: 0,
+        sessionBreakdown: [],
+        entries: []
+      };
+    }
+
+    // Get all time entries for these sessions
+    let timeEntriesQuery = query(
+      collection(firestore, "timeEntries"),
+      where("organizationID", "==", organizationID),
+      where("status", "==", "clocked-out")
+    );
+
+    if (startDate && endDate) {
+      timeEntriesQuery = query(
+        timeEntriesQuery,
+        where("date", ">=", startDate),
+        where("date", "<=", endDate)
+      );
+    }
+
+    const timeEntriesSnapshot = await getDocs(timeEntriesQuery);
+    const schoolEntries = [];
+
+    timeEntriesSnapshot.forEach((doc) => {
+      const entry = { id: doc.id, ...doc.data() };
+      if (entry.sessionId && sessionIds.includes(entry.sessionId)) {
+        schoolEntries.push(entry);
+      }
+    });
+
+    // Calculate session breakdown
+    const sessionBreakdown = {};
+    schoolEntries.forEach(entry => {
+      const session = sessions[entry.sessionId];
+      if (session) {
+        const sessionType = session.sessionType || 'Unknown';
+        if (!sessionBreakdown[sessionType]) {
+          sessionBreakdown[sessionType] = {
+            sessionType,
+            hours: 0,
+            count: 0,
+            entries: []
+          };
+        }
+        sessionBreakdown[sessionType].hours += calculateTotalHours([entry]);
+        sessionBreakdown[sessionType].count += 1;
+        sessionBreakdown[sessionType].entries.push(entry);
+      }
+    });
+
+    const totalHours = calculateTotalHours(schoolEntries);
+    
+    return {
+      schoolId,
+      totalHours,
+      totalEntries: schoolEntries.length,
+      sessionBreakdown: Object.values(sessionBreakdown),
+      entries: schoolEntries
+    };
+  } catch (error) {
+    console.error("Error getting school hours:", error);
+    throw error;
+  }
+};
+
+// Get session-level statistics for a user
+export const getUserSessionStats = async (userId, organizationID, startDate = null, endDate = null) => {
+  try {
+    let q = query(
+      collection(firestore, "timeEntries"),
+      where("userId", "==", userId),
+      where("organizationID", "==", organizationID),
+      where("status", "==", "clocked-out")
+    );
+
+    if (startDate && endDate) {
+      q = query(q, where("date", ">=", startDate), where("date", "<=", endDate));
+    }
+
+    const querySnapshot = await getDocs(q);
+    const entries = [];
+
+    querySnapshot.forEach((doc) => {
+      entries.push({
+        id: doc.id,
+        ...doc.data(),
+      });
+    });
+
+    // Group entries by session
+    const sessionStats = {};
+    
+    for (const entry of entries) {
+      if (entry.sessionId) {
+        if (!sessionStats[entry.sessionId]) {
+          sessionStats[entry.sessionId] = {
+            sessionId: entry.sessionId,
+            hours: 0,
+            entries: [],
+            sessionData: null
+          };
+        }
+        sessionStats[entry.sessionId].hours += calculateTotalHours([entry]);
+        sessionStats[entry.sessionId].entries.push(entry);
+      }
+    }
+
+    // Get session details for each session
+    const sessionStatsWithDetails = [];
+    for (const sessionId of Object.keys(sessionStats)) {
+      try {
+        const sessionDoc = await getDoc(doc(firestore, "sessions", sessionId));
+        if (sessionDoc.exists()) {
+          const sessionData = sessionDoc.data();
+          sessionStatsWithDetails.push({
+            ...sessionStats[sessionId],
+            sessionData: {
+              schoolName: sessionData.schoolName,
+              sessionType: sessionData.sessionType,
+              date: sessionData.date,
+              startTime: sessionData.startTime,
+              endTime: sessionData.endTime
+            }
+          });
+        }
+      } catch (error) {
+        console.warn(`Could not fetch session ${sessionId}:`, error);
+      }
+    }
+
+    // Sort by total hours (highest first)
+    sessionStatsWithDetails.sort((a, b) => b.hours - a.hours);
+
+    return {
+      userId,
+      totalSessions: sessionStatsWithDetails.length,
+      totalHours: calculateTotalHours(entries),
+      sessionStats: sessionStatsWithDetails
+    };
+  } catch (error) {
+    console.error("Error getting user session stats:", error);
+    throw error;
+  }
+};
+
+// Get school-level statistics for a user
+export const getUserSchoolStats = async (userId, organizationID, startDate = null, endDate = null) => {
+  try {
+    let q = query(
+      collection(firestore, "timeEntries"),
+      where("userId", "==", userId),
+      where("organizationID", "==", organizationID),
+      where("status", "==", "clocked-out")
+    );
+
+    if (startDate && endDate) {
+      q = query(q, where("date", ">=", startDate), where("date", "<=", endDate));
+    }
+
+    const querySnapshot = await getDocs(q);
+    const entries = [];
+
+    querySnapshot.forEach((doc) => {
+      entries.push({
+        id: doc.id,
+        ...doc.data(),
+      });
+    });
+
+    // Group entries by school (via session)
+    const schoolStats = {};
+    
+    for (const entry of entries) {
+      if (entry.sessionId) {
+        try {
+          const sessionDoc = await getDoc(doc(firestore, "sessions", entry.sessionId));
+          if (sessionDoc.exists()) {
+            const sessionData = sessionDoc.data();
+            const schoolId = sessionData.schoolId;
+            const schoolName = sessionData.schoolName;
+            
+            if (!schoolStats[schoolId]) {
+              schoolStats[schoolId] = {
+                schoolId,
+                schoolName,
+                hours: 0,
+                entries: [],
+                sessionCount: new Set()
+              };
+            }
+            
+            schoolStats[schoolId].hours += calculateTotalHours([entry]);
+            schoolStats[schoolId].entries.push(entry);
+            schoolStats[schoolId].sessionCount.add(entry.sessionId);
+          }
+        } catch (error) {
+          console.warn(`Could not fetch session ${entry.sessionId}:`, error);
+        }
+      }
+    }
+
+    // Convert Set to count and sort by hours
+    const schoolStatsArray = Object.values(schoolStats).map(school => ({
+      ...school,
+      sessionCount: school.sessionCount.size
+    })).sort((a, b) => b.hours - a.hours);
+
+    return {
+      userId,
+      totalSchools: schoolStatsArray.length,
+      totalHours: calculateTotalHours(entries),
+      schoolStats: schoolStatsArray
+    };
+  } catch (error) {
+    console.error("Error getting user school stats:", error);
+    throw error;
+  }
+};

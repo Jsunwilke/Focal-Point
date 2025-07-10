@@ -1,6 +1,7 @@
 // src/pages/Dashboard.js
 import React from "react";
 import { useAuth } from "../contexts/AuthContext";
+import TimeTrackingWidget from "../components/dashboard/TimeTrackingWidget";
 import "./Dashboard.css";
 
 const Dashboard = () => {
@@ -16,6 +17,9 @@ const Dashboard = () => {
       </div>
 
       <div className="dashboard__content">
+        {/* Time Tracking Widget */}
+        <TimeTrackingWidget />
+
         <div className="dashboard__welcome-card">
           <h2 className="dashboard__welcome-title">
             Welcome to iconik, {userProfile?.firstName}!

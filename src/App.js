@@ -15,6 +15,7 @@ import DailyReports from "./pages/DailyReports";
 import Sports from "./pages/Sports";
 import Schedule from "./pages/Schedule";
 import Settings from "./pages/Settings";
+import TimeTracking from "./pages/TimeTracking";
 import TemplatesList from "./pages/TemplatesList";
 import TemplateBuilder from "./pages/TemplateBuilder";
 import "./App.css";
@@ -93,6 +94,7 @@ const AppContent = () => {
                     <Routes>
                       <Route path="/" element={<Dashboard />} />
                       <Route path="/schedule" element={<Schedule />} />
+                      <Route path="/time-tracking" element={<TimeTracking />} />
                       <Route path="/team" element={<TeamManagement />} />
                       <Route path="/schools" element={<SchoolManagement />} />
                       <Route path="/sports" element={<Sports />} />

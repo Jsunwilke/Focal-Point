@@ -37,7 +37,8 @@
       "Bash(sudo mkdir:*)",
       "Bash(ssh-keygen:*)",
       "Bash(cat:*)",
-      "Bash(git remote set-url:*)"
+      "Bash(git remote set-url:*)",
+      "Bash(npx eslint:*)"
     ],
     "deny": []
   }

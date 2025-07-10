@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Calendar,
+  Clock,
   School,
   Users,
   BarChart3,
@@ -32,6 +33,13 @@ const Sidebar = () => {
       icon: Calendar,
       path: "/schedule",
       enabled: true, // Now enabled
+    },
+    {
+      id: "time-tracking",
+      label: "Time Tracking",
+      icon: Clock,
+      path: "/time-tracking",
+      enabled: true,
     },
     {
       id: "schools",

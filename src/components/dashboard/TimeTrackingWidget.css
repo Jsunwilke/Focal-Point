@@ -1,0 +1,268 @@
+/* src/components/dashboard/TimeTrackingWidget.css */
+
+.time-tracking-widget {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 24px;
+  margin-bottom: 24px;
+  border: 1px solid var(--border-color, #e1e5e9);
+}
+
+.widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.widget-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text-primary, #2d3748);
+}
+
+.widget-expand-btn {
+  background: none;
+  border: none;
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--text-secondary, #718096);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.widget-expand-btn:hover {
+  background: var(--bg-secondary, #f7fafc);
+  color: var(--primary-color, #3b82f6);
+}
+
+.widget-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Current Status */
+.current-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: var(--bg-secondary, #f7fafc);
+  border-radius: 8px;
+  border: 1px solid var(--border-light, #e2e8f0);
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-tertiary, #a0aec0);
+  transition: all 0.2s ease;
+}
+
+.status-dot.active {
+  background: var(--success-color, #10b981);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.elapsed-time {
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--primary-color, #3b82f6);
+  font-family: 'Courier New', monospace;
+}
+
+/* Session Selection */
+.session-selection {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--bg-tertiary, #edf2f7);
+  border-radius: 8px;
+  border: 1px solid var(--border-light, #e2e8f0);
+}
+
+.session-selection label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #718096);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.session-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-light, #e2e8f0);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-primary, #2d3748);
+  background: white;
+  transition: border-color 0.2s ease;
+}
+
+.session-select:focus {
+  outline: none;
+  border-color: var(--primary-color, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.session-select option {
+  padding: 8px;
+  font-size: 13px;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  justify-content: center;
+}
+
+.clock-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+  justify-content: center;
+}
+
+.clock-in-btn {
+  background: var(--success-color, #10b981);
+  color: white;
+}
+
+.clock-in-btn:hover:not(:disabled) {
+  background: var(--success-hover, #059669);
+  transform: translateY(-1px);
+}
+
+.clock-out-btn {
+  background: var(--danger-color, #ef4444);
+  color: white;
+}
+
+.clock-out-btn:hover:not(:disabled) {
+  background: var(--danger-hover, #dc2626);
+  transform: translateY(-1px);
+}
+
+.clock-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Today's Hours */
+.today-hours {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--primary-light, #eff6ff);
+  border-radius: 6px;
+  border-left: 4px solid var(--primary-color, #3b82f6);
+}
+
+.hours-label {
+  font-size: 14px;
+  color: var(--text-secondary, #718096);
+  font-weight: 500;
+}
+
+.hours-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--primary-color, #3b82f6);
+  font-family: 'Courier New', monospace;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .time-tracking-widget {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  
+  .current-status {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+  
+  .elapsed-time {
+    font-size: 16px;
+  }
+  
+  .clock-btn {
+    padding: 10px 20px;
+    font-size: 13px;
+  }
+  
+  .today-hours {
+    flex-direction: column;
+    gap: 4px;
+    text-align: center;
+  }
+  
+  .session-selection {
+    margin-bottom: 12px;
+    padding: 10px;
+  }
+  
+  .session-selection label {
+    font-size: 11px;
+  }
+  
+  .session-select {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+}
+
+/* Status colors for different states */
+.status-indicator.clocked-in {
+  color: var(--success-color, #10b981);
+}
+
+.status-indicator.clocked-out {
+  color: var(--text-secondary, #718096);
+}
+
+/* Loading state */
+.clock-btn:disabled {
+  background: var(--bg-disabled, #e2e8f0);
+  color: var(--text-disabled, #a0aec0);
+}
