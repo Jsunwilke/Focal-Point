@@ -27,7 +27,10 @@
       "Bash(firebase deploy:*)",
       "Bash(timeout 15s npm start)",
       "Bash(cp:*)",
-      "Bash(timeout 10s npm start)"
+      "Bash(timeout 10s npm start)",
+      "Bash(PORT=3001 BROWSER=none npm start)",
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" PORT=3001 npm start)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }
