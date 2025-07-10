@@ -175,6 +175,7 @@ const Schedule = () => {
                 photographerId: photographer.id,
                 photographerName: photographer.name,
                 sessionType: session.sessionType || "session",
+                sessionTypes: session.sessionTypes || [session.sessionType || "session"],
                 status: session.status || "scheduled",
                 schoolId: session.schoolId,
                 schoolName: session.schoolName || session.location || "",
@@ -195,6 +196,7 @@ const Schedule = () => {
                   photographerId: session.photographer?.id || null,
                   photographerName: session.photographer?.name || null,
                   sessionType: session.sessionType || "session",
+                  sessionTypes: session.sessionTypes || [session.sessionType || "session"],
                   status: session.status || "scheduled",
                   schoolId: session.schoolId,
                   schoolName: session.schoolName || session.location || "",
@@ -209,7 +211,7 @@ const Schedule = () => {
         // Debug: Log processed sessions
         console.log("Processed sessions for calendar:", sessionData.map(s => ({
           id: s.id,
-          sessionType: s.sessionType,
+          sessionTypes: s.sessionTypes,
           schoolId: s.schoolId,
           schoolName: s.schoolName,
           photographerId: s.photographerId

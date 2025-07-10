@@ -30,7 +30,14 @@
       "Bash(timeout 10s npm start)",
       "Bash(PORT=3001 BROWSER=none npm start)",
       "Bash(NODE_OPTIONS=\"--max-old-space-size=4096\" PORT=3001 npm start)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git config:*)",
+      "Bash(git push:*)",
+      "Bash(sudo mkdir:*)",
+      "Bash(ssh-keygen:*)",
+      "Bash(cat:*)",
+      "Bash(git remote set-url:*)"
     ],
     "deny": []
   }
