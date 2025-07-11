@@ -1,6 +1,7 @@
-// src/pages/Schedule.js - With Real-time Firestore Listeners
+// src/pages/Schedule.js - With Real-time Firestore Listeners and Secure Logging
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import secureLogger from "../utils/secureLogger";
 import {
   getTeamMembers,
   updateSession,
@@ -63,23 +64,92 @@ const subMonths = (date, months) => {
   return addMonths(date, -months);
 };
 
-// Helper functions for saving/loading photographer preferences
+// Secure storage utility functions
+const generateStorageKey = (base) => {
+  // Create a simple hash-based key to obfuscate storage keys
+  let hash = 0;
+  for (let i = 0; i < base.length; i++) {
+    const char = base.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return `fp_${Math.abs(hash).toString(36)}`;
+};
+
+const simpleEncrypt = (text, key) => {
+  try {
+    let result = '';
+    for (let i = 0; i < text.length; i++) {
+      const charCode = text.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+      result += String.fromCharCode(charCode);
+    }
+    return btoa(result); // Base64 encode
+  } catch (error) {
+    secureLogger.error('Encryption error:', error);
+    return text; // Fallback to plaintext
+  }
+};
+
+const simpleDecrypt = (encodedText, key) => {
+  try {
+    const text = atob(encodedText); // Base64 decode
+    let result = '';
+    for (let i = 0; i < text.length; i++) {
+      const charCode = text.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+      result += String.fromCharCode(charCode);
+    }
+    return result;
+  } catch (error) {
+    secureLogger.error('Decryption error:', error);
+    return null;
+  }
+};
+
+// Helper functions for saving/loading photographer preferences with encryption
 const savePhotographerPreferences = (organizationId, photographerIds) => {
   try {
-    const key = `schedule-photographers-${organizationId}`;
-    localStorage.setItem(key, JSON.stringify(Array.from(photographerIds)));
+    const key = generateStorageKey(`schedule-photographers-${organizationId}`);
+    const data = JSON.stringify(Array.from(photographerIds));
+    const encryptionKey = `${organizationId}-preferences`;
+    const encryptedData = simpleEncrypt(data, encryptionKey);
+    
+    // Set expiration (30 days)
+    const expirationTime = Date.now() + (30 * 24 * 60 * 60 * 1000);
+    const storageObject = {
+      data: encryptedData,
+      expires: expirationTime
+    };
+    
+    localStorage.setItem(key, JSON.stringify(storageObject));
   } catch (error) {
-    console.error("Error saving photographer preferences:", error);
+    secureLogger.error("Error saving photographer preferences:", error);
   }
 };
 
 const loadPhotographerPreferences = (organizationId) => {
   try {
-    const key = `schedule-photographers-${organizationId}`;
+    const key = generateStorageKey(`schedule-photographers-${organizationId}`);
     const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : null;
+    
+    if (!saved) return null;
+    
+    const storageObject = JSON.parse(saved);
+    
+    // Check if data has expired
+    if (Date.now() > storageObject.expires) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    
+    const encryptionKey = `${organizationId}-preferences`;
+    const decryptedData = simpleDecrypt(storageObject.data, encryptionKey);
+    
+    return decryptedData ? JSON.parse(decryptedData) : null;
   } catch (error) {
-    console.error("Error loading photographer preferences:", error);
+    secureLogger.error("Error loading photographer preferences:", error);
+    // Clean up corrupted data
+    const key = generateStorageKey(`schedule-photographers-${organizationId}`);
+    localStorage.removeItem(key);
     return null;
   }
 };
@@ -108,7 +178,6 @@ const Schedule = () => {
   useEffect(() => {
     if (!organization?.id) return;
 
-    console.log("Setting up real-time listener for sessions...");
 
     const sessionsQuery = query(
       collection(firestore, "sessions"),
@@ -118,18 +187,6 @@ const Schedule = () => {
     const unsubscribe = onSnapshot(
       sessionsQuery,
       (snapshot) => {
-        console.log("Sessions updated from Firestore:", snapshot.docs.length);
-        
-        // Debug: Log each raw session from Firestore
-        snapshot.docs.forEach(doc => {
-          const data = doc.data();
-          console.log(`Raw Firestore session ${doc.id}:`, {
-            sessionType: data.sessionType,
-            schoolId: data.schoolId,
-            schoolName: data.schoolName,
-            startTime: data.startTime
-          });
-        });
 
         const sessionsData = [];
         snapshot.forEach((doc) => {
@@ -208,27 +265,18 @@ const Schedule = () => {
           })
           .flat();
 
-        // Debug: Log processed sessions
-        console.log("Processed sessions for calendar:", sessionData.map(s => ({
-          id: s.id,
-          sessionTypes: s.sessionTypes,
-          schoolId: s.schoolId,
-          schoolName: s.schoolName,
-          photographerId: s.photographerId
-        })));
         
         setSessions(sessionData);
         setLoading(false);
       },
       (error) => {
-        console.error("Error in sessions listener:", error);
+        secureLogger.error("Error in sessions listener:", error);
         setLoading(false);
       }
     );
 
     // Cleanup listener on unmount
     return () => {
-      console.log("Cleaning up sessions listener");
       unsubscribe();
     };
   }, [organization?.id]);
@@ -237,7 +285,6 @@ const Schedule = () => {
   useEffect(() => {
     if (!organization?.id) return;
 
-    console.log("Setting up real-time listener for team members...");
 
     const teamQuery = query(
       collection(firestore, "users"),
@@ -247,10 +294,6 @@ const Schedule = () => {
     const unsubscribe = onSnapshot(
       teamQuery,
       (snapshot) => {
-        console.log(
-          "Team members updated from Firestore:",
-          snapshot.docs.length
-        );
 
         const members = [];
         snapshot.forEach((doc) => {
@@ -278,7 +321,7 @@ const Schedule = () => {
         const activeMembers = sortedMembers.filter((member) => member.isActive);
         const savedPreferences = loadPhotographerPreferences(organization.id);
 
-        if (savedPreferences && savedPreferences.length > 0) {
+        if (savedPreferences && Array.isArray(savedPreferences) && savedPreferences.length > 0) {
           // Use saved preferences, but only include photographers that still exist and are active
           const validSavedIds = savedPreferences.filter((id) =>
             activeMembers.some((member) => member.id === id)
@@ -292,13 +335,12 @@ const Schedule = () => {
         }
       },
       (error) => {
-        console.error("Error in team members listener:", error);
+        secureLogger.error("Error in team members listener:", error);
       }
     );
 
     // Cleanup listener on unmount
     return () => {
-      console.log("Cleaning up team members listener");
       unsubscribe();
     };
   }, [organization?.id]);
@@ -309,14 +351,13 @@ const Schedule = () => {
       if (!organization?.id) return;
 
       try {
-        console.log("Loading schools for organization:", organization.id);
         const schoolsData = await getSchools(organization.id);
         setSchools(schoolsData);
         
         // Initialize visible schools to show all schools by default
         setVisibleSchools(new Set(schoolsData.map(school => school.id)));
       } catch (error) {
-        console.error("Error loading schools:", error);
+        secureLogger.error("Error loading schools:", error);
       }
     };
 
@@ -327,10 +368,6 @@ const Schedule = () => {
   const handleUpdateSession = async (sessionId, updatedSessionData) => {
     setUpdating(true);
     try {
-      console.log("handleUpdateSession called with:", {
-        sessionId,
-        updatedSessionData,
-      });
 
       // Find the new photographer details
       const newPhotographer = teamMembers.find(
@@ -344,15 +381,9 @@ const Schedule = () => {
       // Get the original photographer ID from the dragged session
       const originalPhotographerId = updatedSessionData.originalPhotographerId;
 
-      console.log("Photographer assignment change:", {
-        from: originalPhotographerId,
-        to: updatedSessionData.photographerId,
-        sessionId: sessionId,
-      });
 
       // If only the date changed (same photographer), update the date for all photographers
       if (originalPhotographerId === updatedSessionData.photographerId) {
-        console.log("Date only change - updating date for entire session");
         const updateData = {
           date: updatedSessionData.date,
         };
@@ -360,11 +391,9 @@ const Schedule = () => {
         await updateSession(sessionId, updateData);
         // Note: Real-time listener will automatically update the UI
       } else {
-        console.log("Photographer change - updating photographers array");
 
         // Get the full session data first to preserve all photographer notes
         const fullSessionData = await getSession(sessionId);
-        console.log("Full session data for preserving notes:", fullSessionData);
 
         // Build the updated photographers array while preserving notes
         const updatedPhotographers = [];
@@ -389,10 +418,6 @@ const Schedule = () => {
           // Fallback: reconstruct from calendar entries but try to preserve any existing notes
           const currentSessionEntries = sessions.filter(
             (s) => s.sessionId === sessionId
-          );
-          console.log(
-            "Current session entries for fallback:",
-            currentSessionEntries
           );
 
           currentSessionEntries.forEach((entry) => {
@@ -428,10 +453,6 @@ const Schedule = () => {
           notes: existingNewPhotographerData?.notes || "", // Keep their existing notes if they had any
         });
 
-        console.log(
-          "Updated photographers array with preserved notes:",
-          updatedPhotographers
-        );
 
         const updateData = {
           date: updatedSessionData.date,
@@ -442,7 +463,7 @@ const Schedule = () => {
         // Note: Real-time listener will automatically update the UI
       }
     } catch (error) {
-      console.error("Error updating session:", error);
+      secureLogger.error("Error updating session:", error);
       throw error;
     } finally {
       setUpdating(false);
@@ -507,7 +528,6 @@ const Schedule = () => {
 
   // Handle session click to open details modal (not edit modal)
   const handleSessionClick = (session) => {
-    console.log("Session clicked, opening details modal:", session);
     setSelectedSession(session); // Use the individual calendar entry for details
     setShowDetailsModal(true);
   };
@@ -517,7 +537,6 @@ const Schedule = () => {
     try {
       // Get the full session data for editing
       const sessionId = selectedSession.sessionId || selectedSession.id;
-      console.log("Opening edit modal for session:", sessionId);
 
       const fullSessionData = await getSession(sessionId);
 
@@ -525,12 +544,12 @@ const Schedule = () => {
         setSelectedSession(fullSessionData); // Set full session data for editing
         setShowEditModal(true);
       } else {
-        console.error("Could not fetch full session data for editing");
+        secureLogger.error("Could not fetch full session data for editing");
         setSelectedSession(selectedSession); // Fallback
         setShowEditModal(true);
       }
     } catch (error) {
-      console.error("Error loading session data for editing:", error);
+      secureLogger.error("Error loading session data for editing:", error);
       setSelectedSession(selectedSession); // Fallback
       setShowEditModal(true);
     }

@@ -274,12 +274,6 @@ const WeekView = ({
         originalPhotographerId: draggedSession.photographerId, // Pass the ORIGINAL photographer ID
       };
 
-      console.log("WeekView sending update:", {
-        actualSessionId,
-        updatedSession,
-        originalPhotographerId: draggedSession.photographerId,
-        newPhotographerId: newPhotographerId,
-      });
 
       await onUpdateSession(actualSessionId, updatedSession);
 
@@ -323,8 +317,6 @@ const WeekView = ({
   const getGlobalSessionOrderForDay = (day) => {
     const dayFormatted = formatLocalDate(day);
     
-    // Debug logging for session order issues
-    console.log(`WeekView - Getting sessions for ${dayFormatted}`);
     
     // Get ALL sessions for this day across all photographers
     const allDaySessions = sessions.filter((session) => {
@@ -346,8 +338,6 @@ const WeekView = ({
       // Create unique key based on session properties to properly deduplicate multi-photographer sessions
       const key = `${session.date}-${session.startTime}-${session.schoolId}-${session.sessionType || 'default'}`;
       
-      // Debug: Log session details
-      console.log(`WeekView - Processing session: ${session.schoolName}, schoolId: ${session.schoolId}, key: ${key}`);
       
       if (!uniqueSessions[key]) {
         // Store the session with all photographer information
@@ -385,15 +375,6 @@ const WeekView = ({
       return 0;
     });
     
-    // Debug logging
-    console.log(`WeekView - Found ${sortedSessions.length} unique sessions for ${dayFormatted}:`, 
-      sortedSessions.map(s => ({ 
-        schoolName: s.schoolName, 
-        sessionType: s.sessionType, 
-        startTime: s.startTime,
-        key: `${s.date}-${s.startTime}-${s.schoolId}-${s.sessionType || 'default'}`
-      }))
-    );
     
     return sortedSessions;
   };

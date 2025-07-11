@@ -6,6 +6,8 @@ import TimeSelect from "../shared/TimeSelect";
 import { createSession, getSchools } from "../../firebase/firestore";
 import { getOrganizationSessionTypes, getSessionTypeColor } from "../../utils/sessionTypes";
 
+import secureLogger from "../../utils/secureLogger";
+
 const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization }) => {
   const [loading, setLoading] = useState(false);
   const [schools, setSchools] = useState([]);
@@ -14,7 +16,7 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization }) => {
     date: "",
     startTime: "09:00",
     endTime: "15:00",
-    sessionTypes: ["other"], // Default to "Other" session type array
+    sessionTypes: [], // No session types selected by default
     photographerIds: [], // Changed to array for multiple photographers
     photographerNotes: {}, // New field for photographer-specific notes
     notes: "",
@@ -30,7 +32,7 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization }) => {
           const schoolsData = await getSchools(organization.id);
           setSchools(schoolsData);
         } catch (error) {
-          console.error("Error loading schools:", error);
+          secureLogger.error("Error loading schools:", error);
         }
       }
     };
@@ -67,11 +69,8 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization }) => {
       
       let newTypes;
       if (isSelected) {
-        // Remove the session type, but ensure at least one remains
+        // Remove the session type
         newTypes = currentTypes.filter(id => id !== sessionTypeId);
-        if (newTypes.length === 0) {
-          newTypes = ['other']; // Always keep at least "other"
-        }
       } else {
         // Add the session type
         newTypes = [...currentTypes, sessionTypeId];
@@ -191,7 +190,6 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization }) => {
         status: formData.status,
       };
 
-      console.log("CreateSessionModal - Session data:", sessionData);
 
       await createSession(organization.id, sessionData);
 
@@ -201,7 +199,7 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization }) => {
         date: "",
         startTime: "09:00",
         endTime: "15:00",
-        sessionTypes: ["other"],
+        sessionTypes: [],
         photographerIds: [],
         photographerNotes: {},
         notes: "",
@@ -213,7 +211,7 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization }) => {
       // Refresh the page to show new session
       window.location.reload();
     } catch (error) {
-      console.error("Error creating session:", error);
+      secureLogger.error("Error creating session:", error);
       setErrors({ general: "Failed to create session. Please try again." });
     } finally {
       setLoading(false);
