@@ -233,6 +233,7 @@ const Schedule = () => {
                 photographerName: photographer.name,
                 sessionType: session.sessionType || "session",
                 sessionTypes: session.sessionTypes || [session.sessionType || "session"],
+                customSessionType: session.customSessionType, // Include custom session type
                 status: session.status || "scheduled",
                 schoolId: session.schoolId,
                 schoolName: session.schoolName || session.location || "",
@@ -254,6 +255,7 @@ const Schedule = () => {
                   photographerName: session.photographer?.name || null,
                   sessionType: session.sessionType || "session",
                   sessionTypes: session.sessionTypes || [session.sessionType || "session"],
+                  customSessionType: session.customSessionType, // Include custom session type
                   status: session.status || "scheduled",
                   schoolId: session.schoolId,
                   schoolName: session.schoolName || session.location || "",
@@ -906,6 +908,7 @@ const Schedule = () => {
           onClose={() => setShowCreateModal(false)}
           teamMembers={teamMembers}
           organization={organization}
+          userProfile={userProfile}
         />
       )}
 

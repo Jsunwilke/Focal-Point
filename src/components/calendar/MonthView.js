@@ -69,9 +69,6 @@ const MonthView = ({
 
   // Get global session order for consistent colors across views
   const getGlobalSessionOrderForDay = (day) => {
-    // Debug logging for session order issues
-    console.log(`MonthView - Getting sessions for ${day.toDateString()}`);
-    
     // Get ALL sessions for this day across all photographers
     const allDaySessions = sessions.filter((session) => {
       let sessionDate;
@@ -89,9 +86,6 @@ const MonthView = ({
     allDaySessions.forEach((session) => {
       // Create unique key based on session properties to properly deduplicate multi-photographer sessions
       const key = `${session.date}-${session.startTime}-${session.schoolId}-${session.sessionType || 'default'}`;
-      
-      // Debug: Log session details
-      console.log(`MonthView - Processing session: ${session.schoolName}, schoolId: ${session.schoolId}, key: ${key}`);
       
       if (!uniqueSessions[key]) {
         // Store the session with all photographer information
@@ -128,16 +122,6 @@ const MonthView = ({
       }
       return 0;
     });
-    
-    // Debug logging
-    console.log(`MonthView - Found ${sortedSessions.length} unique sessions for ${day.toDateString()}:`, 
-      sortedSessions.map(s => ({ 
-        schoolName: s.schoolName, 
-        sessionType: s.sessionType, 
-        startTime: s.startTime,
-        key: `${s.date}-${s.startTime}-${s.schoolId}-${s.sessionType || 'default'}`
-      }))
-    );
     
     return sortedSessions;
   };
@@ -323,25 +307,33 @@ const MonthView = ({
                           
                           return (
                             <>
-                              {visibleTypes.map((type, index) => (
-                                <div
-                                  key={`${type}-${index}`}
-                                  className="month-session__badge"
-                                  style={{
-                                    fontSize: "0.5rem",
-                                    backgroundColor: colors[index],
-                                    color: "white",
-                                    padding: "0.05rem 0.2rem",
-                                    borderRadius: "0.2rem",
-                                    textTransform: "capitalize",
-                                    fontWeight: "500",
-                                    display: "inline-block",
-                                    lineHeight: "1.2"
-                                  }}
-                                >
-                                  {names[index]}
-                                </div>
-                              ))}
+                              {visibleTypes.map((type, index) => {
+                                // Use custom session type if "other" is selected and custom type exists
+                                let displayName = names[index];
+                                if (type === 'other' && session.customSessionType) {
+                                  displayName = session.customSessionType;
+                                }
+                                
+                                return (
+                                  <div
+                                    key={`${type}-${index}`}
+                                    className="month-session__badge"
+                                    style={{
+                                      fontSize: "0.5rem",
+                                      backgroundColor: colors[index],
+                                      color: "white",
+                                      padding: "0.05rem 0.2rem",
+                                      borderRadius: "0.2rem",
+                                      textTransform: "capitalize",
+                                      fontWeight: "500",
+                                      display: "inline-block",
+                                      lineHeight: "1.2"
+                                    }}
+                                  >
+                                    {displayName}
+                                  </div>
+                                );
+                              })}
                               {hasMore && (
                                 <div
                                   style={{

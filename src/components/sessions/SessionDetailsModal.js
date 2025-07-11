@@ -10,10 +10,10 @@ import {
   Users,
   FileText,
   Edit3,
-  Tag,
 } from "lucide-react";
-import { getSession } from "../../firebase/firestore";
+import { getSession, getSchools } from "../../firebase/firestore";
 import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
+import secureLogger from "../../utils/secureLogger";
 
 const SessionDetailsModal = ({
   isOpen,
@@ -25,6 +25,7 @@ const SessionDetailsModal = ({
   onEditSession, // Callback to open the edit modal
 }) => {
   const [fullSessionData, setFullSessionData] = useState(null);
+  const [schoolDetails, setSchoolDetails] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Load full session data when modal opens
@@ -36,8 +37,16 @@ const SessionDetailsModal = ({
           const sessionId = session.sessionId || session.id;
           const fullData = await getSession(sessionId);
           setFullSessionData(fullData || session);
+
+          // Load school details if we have a school ID
+          const schoolId = (fullData || session)?.schoolId;
+          if (schoolId && organization?.id) {
+            const schools = await getSchools(organization.id);
+            const school = schools.find(s => s.id === schoolId);
+            setSchoolDetails(school);
+          }
         } catch (error) {
-          console.error("Error loading session data:", error);
+          secureLogger.error("Error loading session data:", error);
           setFullSessionData(session); // Fallback to the clicked session
         } finally {
           setLoading(false);
@@ -248,22 +257,30 @@ const SessionDetailsModal = ({
                       const colors = getSessionTypeColors(sessionTypes, organization);
                       const names = getSessionTypeNames(sessionTypes, organization);
                       
-                      return sessionTypes.map((type, index) => (
-                        <span
-                          key={`${type}-${index}`}
-                          style={{
-                            backgroundColor: colors[index],
-                            color: "white",
-                            padding: "0.3rem 0.8rem",
-                            borderRadius: "1rem",
-                            fontSize: "0.75rem",
-                            fontWeight: "500",
-                            textTransform: "capitalize",
-                          }}
-                        >
-                          {names[index]}
-                        </span>
-                      ));
+                      return sessionTypes.map((type, index) => {
+                        // Use custom session type if "other" is selected and custom type exists
+                        let displayName = names[index];
+                        if (type === 'other' && (fullSessionData?.customSessionType || session.customSessionType)) {
+                          displayName = fullSessionData?.customSessionType || session.customSessionType;
+                        }
+                        
+                        return (
+                          <span
+                            key={`${type}-${index}`}
+                            style={{
+                              backgroundColor: colors[index],
+                              color: "white",
+                              padding: "0.3rem 0.8rem",
+                              borderRadius: "1rem",
+                              fontSize: "0.75rem",
+                              fontWeight: "500",
+                              textTransform: "capitalize",
+                            }}
+                          >
+                            {displayName}
+                          </span>
+                        );
+                      });
                     })()}
                     <span
                       style={{
@@ -335,53 +352,40 @@ const SessionDetailsModal = ({
                 </div>
               </div>
 
-              {/* Location and Sport */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "1rem",
-                  marginBottom: "1.5rem",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                      marginBottom: "0.5rem",
-                      color: "#6c757d",
-                      fontSize: "0.875rem",
-                      fontWeight: "500",
-                    }}
-                  >
-                    <MapPin size={16} />
-                    SCHOOL
-                  </div>
-                  <div style={{ fontSize: "1rem", fontWeight: "500" }}>
-                    {session.schoolName || "Not specified"}
-                  </div>
+              {/* Location */}
+              <div style={{ marginBottom: "1.5rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    marginBottom: "0.5rem",
+                    color: "#6c757d",
+                    fontSize: "0.875rem",
+                    fontWeight: "500",
+                  }}
+                >
+                  <MapPin size={16} />
+                  SCHOOL
                 </div>
-                <div>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                      marginBottom: "0.5rem",
-                      color: "#6c757d",
-                      fontSize: "0.875rem",
-                      fontWeight: "500",
-                    }}
-                  >
-                    <Tag size={16} />
-                    SESSION TYPE
-                  </div>
-                  <div style={{ fontSize: "1rem", fontWeight: "500" }}>
-                    {session.sessionType || "Not specified"}
-                  </div>
+                <div style={{ fontSize: "1rem", fontWeight: "500", marginBottom: "0.25rem" }}>
+                  {session.schoolName || "Not specified"}
                 </div>
+                {schoolDetails && (schoolDetails.street || schoolDetails.city || schoolDetails.state) && (
+                  <div style={{ fontSize: "0.875rem", color: "#6c757d", lineHeight: "1.4" }}>
+                    {schoolDetails.street && (
+                      <div>{schoolDetails.street}</div>
+                    )}
+                    {(schoolDetails.city || schoolDetails.state || schoolDetails.zipCode) && (
+                      <div>
+                        {schoolDetails.city && schoolDetails.city}
+                        {schoolDetails.city && schoolDetails.state && ", "}
+                        {schoolDetails.state && schoolDetails.state}
+                        {schoolDetails.zipCode && ` ${schoolDetails.zipCode}`}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* All Assigned Photographers */}
@@ -494,6 +498,26 @@ const SessionDetailsModal = ({
                   </div>
                 </div>
               )}
+
+              {/* Creator Information - Subtle */}
+              <div style={{ marginBottom: "1rem", paddingTop: "0.5rem", borderTop: "1px solid #f1f3f4" }}>
+                <div style={{ 
+                  fontSize: "0.75rem", 
+                  color: "#9ca3af", 
+                  fontWeight: "400"
+                }}>
+                  Created by {fullSessionData?.createdBy?.name || 
+                             userProfile?.displayName || 
+                             `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || 
+                             userProfile?.email || 
+                             'Unknown User'}
+                  {fullSessionData?.createdAt && (
+                    <span style={{ marginLeft: "0.5rem" }}>
+                      • {new Date(fullSessionData.createdAt.toDate ? fullSessionData.createdAt.toDate() : fullSessionData.createdAt).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+              </div>
             </>
           )}
         </div>

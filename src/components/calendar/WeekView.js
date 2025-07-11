@@ -692,25 +692,33 @@ const WeekView = ({
                             const colors = getSessionTypeColors(sessionTypes, organization);
                             const names = getSessionTypeNames(sessionTypes, organization);
                             
-                            return sessionTypes.map((type, index) => (
-                              <div
-                                key={`${type}-${index}`}
-                                className="session-block__badge"
-                                style={{
-                                  fontSize: "8px",
-                                  backgroundColor: colors[index],
-                                  color: "white",
-                                  padding: "1px 4px",
-                                  borderRadius: "6px",
-                                  textTransform: "capitalize",
-                                  fontWeight: "500",
-                                  display: "inline-block",
-                                  lineHeight: "1.2"
-                                }}
-                              >
-                                {names[index]}
-                              </div>
-                            ));
+                            return sessionTypes.map((type, index) => {
+                              // Use custom session type if "other" is selected and custom type exists
+                              let displayName = names[index];
+                              if (type === 'other' && session.customSessionType) {
+                                displayName = session.customSessionType;
+                              }
+                              
+                              return (
+                                <div
+                                  key={`${type}-${index}`}
+                                  className="session-block__badge"
+                                  style={{
+                                    fontSize: "8px",
+                                    backgroundColor: colors[index],
+                                    color: "white",
+                                    padding: "1px 4px",
+                                    borderRadius: "6px",
+                                    textTransform: "capitalize",
+                                    fontWeight: "500",
+                                    display: "inline-block",
+                                    lineHeight: "1.2"
+                                  }}
+                                >
+                                  {displayName}
+                                </div>
+                              );
+                            });
                           })()}
                         </div>
                       )}

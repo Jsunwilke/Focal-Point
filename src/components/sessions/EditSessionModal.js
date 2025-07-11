@@ -25,6 +25,7 @@ const EditSessionModal = ({
     startTime: "09:00",
     endTime: "15:00",
     sessionTypes: ["other"],
+    customSessionType: "", // Custom session type when "other" is selected
     photographerIds: [],
     notes: "",
     photographerNotes: {}, // New field for photographer-specific notes
@@ -108,6 +109,7 @@ const EditSessionModal = ({
         startTime: session.startTime || "09:00",
         endTime: session.endTime || "17:00",
         sessionTypes: normalizeSessionTypes(session.sessionTypes || session.sessionType || session.type || "other"),
+        customSessionType: session.customSessionType || "", // Load existing custom session type
         photographerIds: photographerIds,
         notes: session.notes || "",
         photographerNotes: photographerNotes,
@@ -141,11 +143,14 @@ const EditSessionModal = ({
       const isSelected = currentTypes.includes(sessionTypeId);
       
       let newTypes;
+      let newCustomType = prev.customSessionType;
+      
       if (isSelected) {
-        // Remove the session type, but ensure at least one remains
+        // Remove the session type
         newTypes = currentTypes.filter(id => id !== sessionTypeId);
-        if (newTypes.length === 0) {
-          newTypes = ['other']; // Always keep at least "other"
+        // Clear custom type if "other" is being deselected
+        if (sessionTypeId === 'other') {
+          newCustomType = "";
         }
       } else {
         // Add the session type
@@ -154,15 +159,17 @@ const EditSessionModal = ({
       
       return {
         ...prev,
-        sessionTypes: newTypes
+        sessionTypes: newTypes,
+        customSessionType: newCustomType
       };
     });
 
-    // Clear error when user makes selection
+    // Clear errors when user makes selection
     if (errors.sessionTypes) {
       setErrors((prev) => ({
         ...prev,
         sessionTypes: "",
+        customSessionType: "",
       }));
     }
   };
@@ -220,6 +227,11 @@ const EditSessionModal = ({
       newErrors.sessionTypes = "At least one session type is required";
     }
 
+    // Validate custom session type if "other" is selected
+    if (formData.sessionTypes.includes('other') && !formData.customSessionType.trim()) {
+      newErrors.customSessionType = "Please specify a custom session type";
+    }
+
     // Validate time range
     if (formData.startTime && formData.endTime) {
       const start = new Date(`2000-01-01 ${formData.startTime}`);
@@ -260,6 +272,7 @@ const EditSessionModal = ({
         startTime: formData.startTime,
         endTime: formData.endTime,
         sessionTypes: formData.sessionTypes,
+        customSessionType: formData.customSessionType.trim() || null, // Include custom session type
         photographers: selectedPhotographers,
         notes: formData.notes,
         status: formData.status,
@@ -493,6 +506,31 @@ const EditSessionModal = ({
                       {errors.sessionTypes}
                     </div>
                   )}
+
+                  {/* Custom Session Type Input - appears when "other" is selected */}
+                  {formData.sessionTypes.includes('other') && (
+                    <div style={{ marginTop: '0.75rem' }}>
+                      <label 
+                        className="form-label"
+                        style={{ fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem', display: 'block' }}
+                      >
+                        Custom Session Type <span style={{ color: "#dc3545" }}>*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.customSessionType}
+                        onChange={(e) => setFormData(prev => ({ ...prev, customSessionType: e.target.value }))}
+                        placeholder="Enter custom session type (e.g., Team Photos, Award Ceremony)"
+                        className={`form-control ${errors.customSessionType ? "is-invalid" : ""}`}
+                        style={{ fontSize: '0.875rem' }}
+                      />
+                      {errors.customSessionType && (
+                        <div className="invalid-feedback" style={{ fontSize: '0.75rem' }}>
+                          {errors.customSessionType}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   
                   {/* Selected Types Preview */}
                   {formData.sessionTypes.length > 0 && (
@@ -503,7 +541,14 @@ const EditSessionModal = ({
                       <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
                         {formData.sessionTypes.map(typeId => {
                           const type = sessionTypes.find(t => t.value === typeId);
-                          return type ? (
+                          if (!type) return null;
+                          
+                          // Show custom type if "other" is selected and custom type is provided
+                          const displayLabel = typeId === 'other' && formData.customSessionType 
+                            ? formData.customSessionType 
+                            : type.label;
+                          
+                          return (
                             <span key={typeId} style={{
                               backgroundColor: getSessionTypeColor(typeId, organization),
                               color: 'white',
@@ -512,9 +557,9 @@ const EditSessionModal = ({
                               fontSize: '0.75rem',
                               fontWeight: '500'
                             }}>
-                              {type.label}
+                              {displayLabel}
                             </span>
-                          ) : null;
+                          );
                         })}
                       </div>
                     </div>
