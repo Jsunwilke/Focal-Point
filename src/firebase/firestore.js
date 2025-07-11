@@ -841,7 +841,8 @@ export const setDefaultTemplate = async (organizationID, shootType, templateId) 
 export const clockIn = async (userId, organizationID, sessionId = null, notes = null) => {
   try {
     const now = new Date();
-    const today = now.toISOString().split('T')[0]; // YYYY-MM-DD format
+    // Use local timezone to get today's date consistently
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     
     // Check if user is already clocked in
     const existingEntry = await getCurrentTimeEntry(userId, organizationID);
@@ -993,8 +994,10 @@ export const getAllTimeEntries = async (organizationID, startDate = null, endDat
 // Get today's time entries for a user
 export const getTodayTimeEntries = async (userId, organizationID) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    return await getTimeEntries(userId, organizationID, today, today);
+    // Use local timezone to get today's date consistently
+    const today = new Date();
+    const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    return await getTimeEntries(userId, organizationID, todayString, todayString);
   } catch (error) {
     console.error("Error fetching today's time entries:", error);
     throw error;
@@ -1031,10 +1034,11 @@ export const formatDuration = (hours) => {
   }
 };
 
-// Check for time overlap with existing entries
+// Check for time overlap with existing entries (sanitized to prevent data exposure)
 export const checkTimeOverlap = async (userId, organizationID, startTime, endTime, excludeEntryId = null) => {
   try {
-    const date = startTime.toISOString().split('T')[0];
+    // Extract date from startTime using local timezone to avoid UTC conversion issues
+    const date = `${startTime.getFullYear()}-${String(startTime.getMonth() + 1).padStart(2, '0')}-${String(startTime.getDate()).padStart(2, '0')}`;
     
     // Query for time entries on the same date
     const q = query(
@@ -1046,7 +1050,7 @@ export const checkTimeOverlap = async (userId, organizationID, startTime, endTim
     );
     
     const snapshot = await getDocs(q);
-    const overlappingEntries = [];
+    let overlapCount = 0;
     
     snapshot.forEach((doc) => {
       const entry = { id: doc.id, ...doc.data() };
@@ -1062,15 +1066,15 @@ export const checkTimeOverlap = async (userId, organizationID, startTime, endTim
       
       // Check for overlap: (start1 < end2) && (start2 < end1)
       if (startTime < entryEnd && entryStart < endTime) {
-        overlappingEntries.push({
-          ...entry,
-          clockInTime: entryStart,
-          clockOutTime: entryEnd
-        });
+        overlapCount++;
       }
     });
     
-    return overlappingEntries;
+    // Return sanitized response without exposing specific time data
+    return {
+      hasOverlap: overlapCount > 0,
+      conflictCount: overlapCount
+    };
   } catch (error) {
     console.error("Error checking time overlap:", error);
     throw error;
@@ -1082,18 +1086,15 @@ export const createManualTimeEntry = async (timeEntryData) => {
   try {
     // Check for time overlaps before creating
     if (timeEntryData.clockInTime && timeEntryData.clockOutTime) {
-      const overlaps = await checkTimeOverlap(
+      const overlapResult = await checkTimeOverlap(
         timeEntryData.userId,
         timeEntryData.organizationID,
         timeEntryData.clockInTime,
         timeEntryData.clockOutTime
       );
       
-      if (overlaps.length > 0) {
-        const overlapDetails = overlaps.map(entry => 
-          `${entry.clockInTime.toLocaleTimeString()} - ${entry.clockOutTime.toLocaleTimeString()}`
-        ).join(', ');
-        throw new Error(`Time overlap detected with existing entries: ${overlapDetails}`);
+      if (overlapResult.hasOverlap) {
+        throw new Error(`Time overlap detected with ${overlapResult.conflictCount} existing time ${overlapResult.conflictCount === 1 ? 'entry' : 'entries'}. Please adjust your times.`);
       }
     }
 

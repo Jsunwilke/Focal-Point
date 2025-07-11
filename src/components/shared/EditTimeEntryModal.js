@@ -1,4 +1,4 @@
-// src/components/shared/ManualTimeEntryModal.js
+// src/components/shared/EditTimeEntryModal.js
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { 
@@ -12,20 +12,21 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import {
-  createManualTimeEntry,
-  getSessions
+  updateTimeEntry,
+  getSessions,
+  checkTimeOverlap
 } from '../../firebase/firestore';
-import './ManualTimeEntryModal.css';
+import './EditTimeEntryModal.css';
 
-const ManualTimeEntryModal = ({ isOpen, onClose, onSuccess }) => {
+const EditTimeEntryModal = ({ isOpen, onClose, onSuccess, timeEntry }) => {
   const { user, organization } = useAuth();
   const { addToast } = useToast();
   
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: '',
     sessionId: '',
-    clockInTime: '09:00',
-    clockOutTime: '17:00',
+    clockInTime: '',
+    clockOutTime: '',
     notes: ''
   });
   
@@ -33,23 +34,24 @@ const ManualTimeEntryModal = ({ isOpen, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [overlapWarning, setOverlapWarning] = useState(null);
-  const [allowOverlap, setAllowOverlap] = useState(false);
 
-  // Reset form when modal opens
+  // Initialize form data when modal opens or timeEntry changes
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && timeEntry) {
+      const clockInDate = timeEntry.clockInTime?.toDate ? timeEntry.clockInTime.toDate() : new Date(timeEntry.clockInTime);
+      const clockOutDate = timeEntry.clockOutTime?.toDate ? timeEntry.clockOutTime.toDate() : new Date(timeEntry.clockOutTime);
+      
       setFormData({
-        date: new Date().toISOString().split('T')[0],
-        sessionId: '',
-        clockInTime: '09:00',
-        clockOutTime: '17:00',
-        notes: ''
+        date: timeEntry.date,
+        sessionId: timeEntry.sessionId || '',
+        clockInTime: clockInDate.toTimeString().slice(0, 5), // HH:MM format
+        clockOutTime: clockOutDate.toTimeString().slice(0, 5), // HH:MM format
+        notes: timeEntry.notes || ''
       });
       setErrors({});
       setOverlapWarning(null);
-      setAllowOverlap(false);
     }
-  }, [isOpen]);
+  }, [isOpen, timeEntry]);
 
   // Load sessions when date changes
   useEffect(() => {
@@ -93,7 +95,14 @@ const ManualTimeEntryModal = ({ isOpen, onClose, onSuccess }) => {
       today.setHours(23, 59, 59, 999); // End of today
       
       if (selectedDate > today) {
-        newErrors.date = 'Cannot create entries for future dates';
+        newErrors.date = 'Cannot edit entries for future dates';
+      }
+      
+      // Check 30-day edit restriction
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      if (selectedDate < thirtyDaysAgo) {
+        newErrors.date = 'Cannot edit entries older than 30 days';
       }
     }
 
@@ -165,110 +174,105 @@ const ManualTimeEntryModal = ({ isOpen, onClose, onSuccess }) => {
 
     setLoading(true);
     try {
-      // Create manual time entry data
+      // Check for time overlaps with other entries (excluding current entry)
       const clockInDateTime = new Date(`${formData.date}T${formData.clockInTime}`);
       const clockOutDateTime = new Date(`${formData.date}T${formData.clockOutTime}`);
       
-      const timeEntryData = {
-        userId: user.uid,
-        organizationID: organization.id,
+      const overlapResult = await checkTimeOverlap(
+        user.uid,
+        organization.id,
+        clockInDateTime,
+        clockOutDateTime,
+        timeEntry.id // Exclude current entry from overlap check
+      );
+      
+      if (overlapResult.hasOverlap) {
+        setOverlapWarning(`Time overlap detected with ${overlapResult.conflictCount} existing time ${overlapResult.conflictCount === 1 ? 'entry' : 'entries'}. Please adjust your times.`);
+        setLoading(false);
+        return;
+      }
+
+      // Create update data
+      const updateData = {
         clockInTime: clockInDateTime,
         clockOutTime: clockOutDateTime,
         date: formData.date,
-        status: 'clocked-out',
         notes: formData.notes || null
       };
 
       if (formData.sessionId) {
-        timeEntryData.sessionId = formData.sessionId;
+        updateData.sessionId = formData.sessionId;
+      } else {
+        updateData.sessionId = null;
       }
 
-      await createManualTimeEntry(timeEntryData);
+      await updateTimeEntry(timeEntry.id, updateData);
       
       // Safe toast call with fallback
       if (addToast && typeof addToast === 'function') {
-        addToast('Manual time entry created successfully!', 'success');
+        addToast('Time entry updated successfully!', 'success');
       } else {
-        console.log('Manual time entry created successfully!');
+        console.log('Time entry updated successfully!');
       }
       
       onSuccess?.();
       onClose();
       
     } catch (error) {
-      console.error('Error creating manual time entry:', error);
-      
-      // Check if it's an overlap error
-      if (error.message && error.message.includes('Time overlap detected')) {
-        setOverlapWarning(error.message);
-        setLoading(false);
-        return;
-      }
+      console.error('Error updating time entry:', error);
       
       // Safe toast call with fallback
       if (addToast && typeof addToast === 'function') {
-        addToast(error.message || 'Failed to create time entry', 'error');
+        addToast(error.message || 'Failed to update time entry', 'error');
       } else {
-        console.error('Failed to create time entry:', error.message);
+        console.error('Failed to update time entry:', error.message);
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleForceCreate = async () => {
+  const handleForceUpdate = async () => {
     setLoading(true);
     setOverlapWarning(null);
     
     try {
-      // Create manual time entry data
       const clockInDateTime = new Date(`${formData.date}T${formData.clockInTime}`);
       const clockOutDateTime = new Date(`${formData.date}T${formData.clockOutTime}`);
       
-      const timeEntryData = {
-        userId: user.uid,
-        organizationID: organization.id,
+      const updateData = {
         clockInTime: clockInDateTime,
         clockOutTime: clockOutDateTime,
         date: formData.date,
-        status: 'clocked-out',
         notes: formData.notes || null
       };
 
       if (formData.sessionId) {
-        timeEntryData.sessionId = formData.sessionId;
+        updateData.sessionId = formData.sessionId;
+      } else {
+        updateData.sessionId = null;
       }
 
-      // Create entry directly without overlap check
-      const { addDoc, collection, serverTimestamp } = await import('firebase/firestore');
-      const { firestore } = await import('../../firebase/config');
-      
-      const docRef = await addDoc(collection(firestore, "timeEntries"), {
-        ...timeEntryData,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      
-      console.log("Manual time entry created (forced):", docRef.id);
+      await updateTimeEntry(timeEntry.id, updateData);
       
       // Safe toast call with fallback
       if (addToast && typeof addToast === 'function') {
-        addToast('Manual time entry created successfully!', 'success');
+        addToast('Time entry updated successfully!', 'success');
       } else {
-        console.log('Manual time entry created successfully!');
+        console.log('Time entry updated successfully!');
       }
       
       onSuccess?.();
       onClose();
       
     } catch (error) {
-      console.error('Error force creating manual time entry:', error);
+      console.error('Error force updating time entry:', error);
       
       // Safe toast call with fallback
       if (addToast && typeof addToast === 'function') {
-        addToast(error.message || 'Failed to create time entry', 'error');
+        addToast(error.message || 'Failed to update time entry', 'error');
       } else {
-        console.error('Failed to create time entry:', error.message);
+        console.error('Failed to update time entry:', error.message);
       }
     } finally {
       setLoading(false);
@@ -309,7 +313,7 @@ const ManualTimeEntryModal = ({ isOpen, onClose, onSuccess }) => {
     return '';
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !timeEntry) return null;
 
   return ReactDOM.createPortal(
     <div 
@@ -329,7 +333,7 @@ const ManualTimeEntryModal = ({ isOpen, onClose, onSuccess }) => {
       onClick={onClose}
     >
       <div 
-        className="manual-time-entry-modal"
+        className="edit-time-entry-modal"
         style={{
           position: 'relative',
           margin: 0,
@@ -341,7 +345,7 @@ const ManualTimeEntryModal = ({ isOpen, onClose, onSuccess }) => {
         <div className="modal-header">
           <div className="modal-title">
             <Clock size={24} />
-            <span>Manual Time Entry</span>
+            <span>Edit Time Entry</span>
           </div>
           <button className="modal-close-btn" onClick={onClose}>
             <X size={20} />
@@ -473,10 +477,10 @@ const ManualTimeEntryModal = ({ isOpen, onClose, onSuccess }) => {
                     <button
                       type="button"
                       className="warning-btn primary"
-                      onClick={handleForceCreate}
+                      onClick={handleForceUpdate}
                       disabled={loading}
                     >
-                      Create Anyway
+                      Update Anyway
                     </button>
                   </div>
                 </div>
@@ -515,7 +519,7 @@ const ManualTimeEntryModal = ({ isOpen, onClose, onSuccess }) => {
                 disabled={loading}
               >
                 <Save size={16} />
-                {loading ? 'Creating...' : 'Create Entry'}
+                {loading ? 'Updating...' : 'Update Entry'}
               </button>
             </div>
           )}
@@ -526,4 +530,4 @@ const ManualTimeEntryModal = ({ isOpen, onClose, onSuccess }) => {
   );
 };
 
-export default ManualTimeEntryModal;
+export default EditTimeEntryModal;

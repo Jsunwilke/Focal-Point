@@ -10,7 +10,9 @@ import {
   Users,
   BarChart3,
   User,
-  Plus
+  Plus,
+  Edit2,
+  Trash2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -22,12 +24,15 @@ import {
   getAllTimeEntries,
   getTodayTimeEntries,
   calculateTotalHours,
-  formatDuration
+  formatDuration,
+  updateTimeEntry,
+  deleteTimeEntry
 } from '../firebase/firestore';
 import { getSessions, getTeamMembers } from '../firebase/firestore';
 import SessionStatistics from '../components/stats/SessionStatistics';
 import SchoolStatistics from '../components/stats/SchoolStatistics';
 import ManualTimeEntryModal from '../components/shared/ManualTimeEntryModal';
+import EditTimeEntryModal from '../components/shared/EditTimeEntryModal';
 import './TimeTracking.css';
 
 const TimeTracking = () => {
@@ -47,6 +52,9 @@ const TimeTracking = () => {
   const [view, setView] = useState('personal'); // personal or team
   const [statsView, setStatsView] = useState('none'); // none, sessions, schools
   const [showManualEntryModal, setShowManualEntryModal] = useState(false);
+  const [editingEntry, setEditingEntry] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [deletingEntry, setDeletingEntry] = useState(null);
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager';
 
@@ -194,15 +202,16 @@ const TimeTracking = () => {
     const today = new Date();
     switch (dateRange) {
       case 'today':
-        return today.toISOString().split('T')[0];
+        // Use local timezone to get today's date
+        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       case 'week':
         const startOfWeek = new Date(today);
         startOfWeek.setDate(today.getDate() - today.getDay());
-        return startOfWeek.toISOString().split('T')[0];
+        return `${startOfWeek.getFullYear()}-${String(startOfWeek.getMonth() + 1).padStart(2, '0')}-${String(startOfWeek.getDate()).padStart(2, '0')}`;
       case 'month':
-        return new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
       default:
-        return today.toISOString().split('T')[0];
+        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     }
   };
 
@@ -210,20 +219,82 @@ const TimeTracking = () => {
     const today = new Date();
     switch (dateRange) {
       case 'today':
-        return today.toISOString().split('T')[0];
+        // Use local timezone to get today's date
+        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       case 'week':
         const endOfWeek = new Date(today);
         endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
-        return endOfWeek.toISOString().split('T')[0];
+        return `${endOfWeek.getFullYear()}-${String(endOfWeek.getMonth() + 1).padStart(2, '0')}-${String(endOfWeek.getDate()).padStart(2, '0')}`;
       case 'month':
-        return new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+        const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        return `${lastDayOfMonth.getFullYear()}-${String(lastDayOfMonth.getMonth() + 1).padStart(2, '0')}-${String(lastDayOfMonth.getDate()).padStart(2, '0')}`;
       default:
-        return today.toISOString().split('T')[0];
+        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     }
   };
 
   const handleManualEntrySuccess = () => {
     // Reload time data after successful manual entry
+    loadTimeData();
+  };
+
+  const canEditEntry = (entry) => {
+    // Can only edit own completed entries within 30 days
+    if (entry.userId !== user.uid || entry.status !== 'clocked-out') {
+      return false;
+    }
+    
+    // Check if entry is within 30 days
+    const entryDate = new Date(entry.date);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    return entryDate >= thirtyDaysAgo;
+  };
+
+  const canDeleteEntry = (entry) => {
+    // Can only delete own entries
+    return entry.userId === user.uid;
+  };
+
+  const handleEditEntry = (entry) => {
+    if (!canEditEntry(entry)) {
+      if (entry.userId !== user.uid) {
+        addToast('You can only edit your own time entries', 'error');
+      } else if (entry.status !== 'clocked-out') {
+        addToast('You can only edit completed time entries', 'error');
+      } else {
+        addToast('You can only edit time entries from the last 30 days', 'error');
+      }
+      return;
+    }
+    setEditingEntry(entry);
+    setShowEditModal(true);
+  };
+
+  const handleDeleteEntry = async (entry) => {
+    if (!canDeleteEntry(entry)) {
+      addToast('You can only delete your own time entries', 'error');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to delete this time entry?')) {
+      return;
+    }
+
+    try {
+      await deleteTimeEntry(entry.id);
+      addToast('Time entry deleted successfully!', 'success');
+      loadTimeData();
+    } catch (error) {
+      console.error('Error deleting time entry:', error);
+      addToast(error.message || 'Failed to delete time entry', 'error');
+    }
+  };
+
+  const handleEditSuccess = () => {
+    setShowEditModal(false);
+    setEditingEntry(null);
     loadTimeData();
   };
 
@@ -234,7 +305,9 @@ const TimeTracking = () => {
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
+    // Parse date string in local timezone to avoid UTC offset issues
+    const [year, month, day] = dateString.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     return date.toLocaleDateString([], { 
       weekday: 'short', 
       month: 'short', 
@@ -489,6 +562,7 @@ const TimeTracking = () => {
                   <div className="col-duration">Duration</div>
                   <div className="col-session">Session</div>
                   <div className="col-status">Status</div>
+                  {view === 'personal' && <div className="col-actions">Actions</div>}
                 </div>
                 
                 <div className="table-body">
@@ -521,6 +595,30 @@ const TimeTracking = () => {
                           {entry.status === 'clocked-in' ? 'Active' : 'Completed'}
                         </span>
                       </div>
+                      {view === 'personal' && (
+                        <div className="col-actions">
+                          <div className="action-buttons">
+                            {canEditEntry(entry) && (
+                              <button
+                                className="action-btn edit-btn"
+                                onClick={() => handleEditEntry(entry)}
+                                title="Edit entry"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                            )}
+                            {canDeleteEntry(entry) && (
+                              <button
+                                className="action-btn delete-btn"
+                                onClick={() => handleDeleteEntry(entry)}
+                                title="Delete entry"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -582,6 +680,14 @@ const TimeTracking = () => {
         isOpen={showManualEntryModal}
         onClose={() => setShowManualEntryModal(false)}
         onSuccess={handleManualEntrySuccess}
+      />
+
+      {/* Edit Time Entry Modal */}
+      <EditTimeEntryModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSuccess={handleEditSuccess}
+        timeEntry={editingEntry}
       />
     </div>
   );

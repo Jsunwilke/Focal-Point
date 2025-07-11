@@ -403,7 +403,7 @@
 
 .table-header {
   display: grid;
-  grid-template-columns: 100px 1fr 120px 100px 1fr 80px;
+  grid-template-columns: 100px 1fr 120px 100px 1fr 80px 100px;
   gap: 16px;
   padding: 16px 24px;
   background: var(--bg-secondary, #f7fafc);
@@ -426,7 +426,7 @@
 
 .table-row {
   display: grid;
-  grid-template-columns: 100px 1fr 120px 100px 1fr 80px;
+  grid-template-columns: 100px 1fr 120px 100px 1fr 80px 100px;
   gap: 16px;
   padding: 16px 24px;
   border-bottom: 1px solid var(--border-light, #e2e8f0);
@@ -500,6 +500,47 @@
   color: var(--text-secondary, #718096);
 }
 
+/* Action Buttons */
+.col-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--bg-secondary, #f7fafc);
+  color: var(--text-secondary, #718096);
+}
+
+.action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.edit-btn:hover {
+  background: var(--primary-light, #eff6ff);
+  color: var(--primary-color, #3b82f6);
+}
+
+.delete-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger-color, #ef4444);
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .time-tracking-page {
@@ -548,6 +589,11 @@
   .table-header.team-view,
   .table-row.team-view {
     grid-template-columns: 1fr;
+  }
+  
+  .action-buttons {
+    justify-content: flex-start;
+    margin-top: 8px;
   }
   
   .entries-table {
