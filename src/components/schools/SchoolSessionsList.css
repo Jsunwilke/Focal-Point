@@ -1,0 +1,148 @@
+/* src/components/schools/SchoolSessionsList.css */
+
+.school-sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.school-sessions-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-secondary, #6c757d);
+}
+
+.school-sessions-empty__icon {
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.school-sessions-empty__text {
+  margin: 0;
+  font-size: 14px;
+}
+
+.school-session-item {
+  border: 1px solid var(--border-color, #e1e5e9);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--bg-secondary, #ffffff);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.school-session-item:hover {
+  border-color: var(--primary-color, #007bff);
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.1);
+}
+
+.school-session-item__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.school-session-item__date {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: var(--text-primary, #212529);
+  font-size: 14px;
+}
+
+.school-session-item__date svg {
+  color: var(--primary-color, #007bff);
+}
+
+.school-session-item__status {
+  display: flex;
+  align-items: center;
+}
+
+.session-status-icon {
+  opacity: 0.7;
+}
+
+.session-status-icon--completed {
+  color: var(--success-color, #28a745);
+}
+
+.session-status-icon--in-progress {
+  color: var(--warning-color, #ffc107);
+}
+
+.session-status-icon--scheduled {
+  color: var(--info-color, #17a2b8);
+}
+
+.school-session-item__details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.school-session-item__time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary, #6c757d);
+}
+
+.school-session-item__time svg {
+  opacity: 0.7;
+}
+
+.school-session-item__types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.school-session-type-tag {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.school-session-item__photographers {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary, #6c757d);
+}
+
+.school-session-item__photographers svg {
+  opacity: 0.7;
+}
+
+.school-session-photographers-text {
+  flex: 1;
+  line-height: 1.3;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .school-session-item {
+    padding: 12px;
+  }
+  
+  .school-session-item__header {
+    margin-bottom: 8px;
+  }
+  
+  .school-session-item__details {
+    gap: 6px;
+  }
+}

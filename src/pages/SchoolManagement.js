@@ -14,11 +14,13 @@ import {
   ChevronDown,
   ArrowUpDown,
   Filter,
+  Calendar,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { getSchools, createSchool, updateSchool } from "../firebase/firestore";
 import Button from "../components/shared/Button";
 import AddSchoolModal from "../components/schools/AddSchoolModal";
+import SchoolSessionsModal from "../components/schools/SchoolSessionsModal";
 import "./SchoolManagement.css";
 
 const SchoolManagement = () => {
@@ -30,6 +32,8 @@ const SchoolManagement = () => {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingSchool, setEditingSchool] = useState(null);
+  const [showSessionsModal, setShowSessionsModal] = useState(false);
+  const [selectedSchool, setSelectedSchool] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -134,6 +138,16 @@ const SchoolManagement = () => {
       setError("Failed to update school");
       console.error("Error updating school:", err);
     }
+  };
+
+  const handleViewSessions = (school) => {
+    setSelectedSchool(school);
+    setShowSessionsModal(true);
+  };
+
+  const handleCloseSessionsModal = () => {
+    setShowSessionsModal(false);
+    setSelectedSchool(null);
   };
 
   const handleSearchChange = (e) => {
@@ -358,7 +372,15 @@ const SchoolManagement = () => {
                     <div className="school-card__menu">
                       <button
                         className="school-card__menu-btn"
+                        onClick={() => handleViewSessions(school)}
+                        title="View Sessions"
+                      >
+                        <Calendar size={16} />
+                      </button>
+                      <button
+                        className="school-card__menu-btn"
                         onClick={() => setEditingSchool(school)}
+                        title="Edit School"
                       >
                         <Edit size={16} />
                       </button>
@@ -435,6 +457,13 @@ const SchoolManagement = () => {
           onClose={() => setEditingSchool(null)}
           onAdd={handleUpdateSchool}
           isEditing={true}
+        />
+      )}
+
+      {showSessionsModal && selectedSchool && (
+        <SchoolSessionsModal
+          school={selectedSchool}
+          onClose={handleCloseSessionsModal}
         />
       )}
     </div>

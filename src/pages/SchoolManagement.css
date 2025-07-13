@@ -355,6 +355,8 @@
 
 .school-card__menu {
   flex-shrink: 0;
+  display: flex;
+  gap: var(--spacing-xs);
 }
 
 .school-card__menu-btn {
@@ -365,11 +367,18 @@
   padding: var(--spacing-xs);
   border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .school-card__menu-btn:hover {
   background-color: var(--background-muted);
   color: var(--text-primary);
+}
+
+.school-card__menu-btn[title="View Sessions"]:hover {
+  color: var(--primary-color);
 }
 
 .school-card__details {

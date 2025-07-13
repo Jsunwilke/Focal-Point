@@ -455,6 +455,33 @@ export const getSessions = async (organizationID) => {
   }
 };
 
+// Get sessions for a specific school
+export const getSessionsForSchool = async (schoolId, organizationID) => {
+  try {
+    const q = query(
+      collection(firestore, "sessions"),
+      where("schoolId", "==", schoolId),
+      where("organizationID", "==", organizationID),
+      orderBy("date", "desc")
+    );
+
+    const querySnapshot = await getDocs(q);
+    const sessions = [];
+
+    querySnapshot.forEach((doc) => {
+      sessions.push({
+        id: doc.id,
+        ...doc.data(),
+      });
+    });
+
+    return sessions;
+  } catch (error) {
+    console.error("Error fetching sessions for school:", error);
+    throw error;
+  }
+};
+
 export const createSession = async (organizationID, sessionData) => {
   try {
     const sessionRef = await addDoc(collection(firestore, "sessions"), {
