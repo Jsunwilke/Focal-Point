@@ -12,6 +12,7 @@ const WeekView = ({
   organization,
   onUpdateSession,
   onSessionClick, // New prop for handling session clicks
+  onTimeOffClick, // New prop for handling time off clicks
 }) => {
   const [draggedSession, setDraggedSession] = useState(null);
   const [dragOver, setDragOver] = useState({
@@ -565,6 +566,51 @@ const WeekView = ({
   };
 
   const getSessionBlockStyle = (session, orderIndex) => {
+    // Check if this is a time off entry
+    if (session.isTimeOff) {
+      const baseTimeOffStyle = {
+        color: "#666",
+        padding: "var(--spacing-xs, 4px)",
+        borderRadius: "var(--radius-sm, 4px)",
+        marginBottom: "var(--spacing-xs, 4px)",
+        fontSize: "var(--font-size-xs, 12px)",
+        cursor: "pointer",
+        transition: "all 0.15s ease",
+        userSelect: "none",
+        opacity: 0.8,
+      };
+
+      // Different styling for pending vs approved status
+      if (session.status === 'pending') {
+        // Pending requests: dotted border, no fill
+        return {
+          ...baseTimeOffStyle,
+          backgroundColor: "transparent",
+          border: "2px dashed #007bff",
+          color: "#007bff",
+          fontWeight: "500",
+        };
+      } else if (session.status === 'approved') {
+        // Approved requests: filled with pattern
+        if (session.isPartialDay) {
+          return {
+            ...baseTimeOffStyle,
+            backgroundColor: "#fff4e6",
+            background: "repeating-linear-gradient(45deg, #fff4e6, #fff4e6 8px, #ffe0b3 8px, #ffe0b3 16px)",
+            border: "1px solid #ff9800",
+            color: "#e65100"
+          };
+        } else {
+          return {
+            ...baseTimeOffStyle,
+            backgroundColor: "#e0e0e0",
+            background: "repeating-linear-gradient(45deg, #e0e0e0, #e0e0e0 10px, #d0d0d0 10px, #d0d0d0 20px)",
+            border: "1px solid #bbb",
+          };
+        }
+      }
+    }
+
     const baseStyle = {
       backgroundColor: getSessionColorByOrder(orderIndex),
       color: "white",
@@ -954,18 +1000,22 @@ const WeekView = ({
                       <div
                         key={session.id}
                         className="session-block"
-                        draggable="true"
-                        onDragStart={(e) => handleDragStart(e, session)}
-                        onDragEnd={handleDragEnd}
+                        draggable={!session.isTimeOff}
+                        onDragStart={(e) => !session.isTimeOff && handleDragStart(e, session)}
+                        onDragEnd={!session.isTimeOff ? handleDragEnd : undefined}
                         onClick={() => {
-                          if (onSessionClick) {
+                          if (session.isTimeOff && onTimeOffClick) {
+                            onTimeOffClick(session);
+                          } else if (onSessionClick && !session.isTimeOff) {
                             onSessionClick(session);
                           }
                         }}
                         style={{
                           ...getSessionBlockStyle(session, globalOrderIndex),
-                          backgroundColor: getSessionColorByOrder(globalOrderIndex),
-                          color: "white"
+                          ...(session.isTimeOff ? {} : {
+                            backgroundColor: getSessionColorByOrder(globalOrderIndex),
+                            color: "white"
+                          })
                         }}
                       >
                       <div

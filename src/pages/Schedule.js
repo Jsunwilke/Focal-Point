@@ -15,6 +15,10 @@ import CreateSessionModal from "../components/sessions/CreateSessionModal";
 import EditSessionModal from "../components/sessions/EditSessionModal";
 import SessionDetailsModal from "../components/sessions/SessionDetailsModal";
 import StatsModal from "../components/stats/StatsModal";
+import TimeOffRequestModal from "../components/timeoff/TimeOffRequestModal";
+import TimeOffApprovalModal from "../components/timeoff/TimeOffApprovalModal";
+import TimeOffDetailsModal from "../components/timeoff/TimeOffDetailsModal";
+import { getTimeOffRequests, getApprovedTimeOffForDateRange } from "../firebase/timeOffRequests";
 import {
   ChevronLeft,
   ChevronRight,
@@ -24,6 +28,8 @@ import {
   Users,
   Map,
   X,
+  Calendar,
+  Shield,
 } from "lucide-react";
 import "./Schedule.css";
 
@@ -180,6 +186,11 @@ const Schedule = () => {
   const [visibleSchools, setVisibleSchools] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [showTimeOffModal, setShowTimeOffModal] = useState(false);
+  const [showTimeOffApprovalModal, setShowTimeOffApprovalModal] = useState(false);
+  const [showTimeOffDetailsModal, setShowTimeOffDetailsModal] = useState(false);
+  const [selectedTimeOffEntry, setSelectedTimeOffEntry] = useState(null);
+  const [pendingTimeOffCount, setPendingTimeOffCount] = useState(0);
 
   // Real-time listener for sessions
   useEffect(() => {
@@ -357,6 +368,92 @@ const Schedule = () => {
       unsubscribe();
     };
   }, [organization?.id]);
+
+  // Real-time listener for time off requests
+  const [allTimeOffRequests, setAllTimeOffRequests] = useState([]);
+  
+  useEffect(() => {
+    if (!organization?.id) return;
+
+    const timeOffQuery = query(
+      collection(firestore, "timeOffRequests"),
+      where("organizationID", "==", organization.id)
+    );
+
+    const unsubscribe = onSnapshot(
+      timeOffQuery,
+      (querySnapshot) => {
+        try {
+          const requests = [];
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            requests.push({
+              id: doc.id,
+              ...data,
+            });
+          });
+
+          setAllTimeOffRequests(requests);
+          
+          // Update pending count for badge
+          const pendingCount = requests.filter(r => r.status === 'pending').length;
+          setPendingTimeOffCount(pendingCount);
+          
+          secureLogger.debug("Time off requests updated:", requests.length);
+        } catch (error) {
+          secureLogger.error("Error processing time off snapshot:", error);
+        }
+      },
+      (error) => {
+        secureLogger.error("Time off requests listener error:", error);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [organization?.id]);
+
+  // Filter time off requests for current date range and include both pending and approved
+  const visibleTimeOffRequests = React.useMemo(() => {
+    if (!allTimeOffRequests.length) return [];
+
+    // Calculate date range inline
+    let start, end;
+    if (viewMode === "week") {
+      start = startOfWeek(currentDate, 0);
+      end = endOfWeek(currentDate, 0);
+    } else {
+      start = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        1
+      );
+      end = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 1,
+        0
+      );
+    }
+
+    return allTimeOffRequests.filter(request => {
+      // Include both pending and approved requests (but not denied or cancelled)
+      if (!['pending', 'approved'].includes(request.status)) return false;
+
+      const startDate = request.startDate.toDate ? request.startDate.toDate() : new Date(request.startDate);
+      const endDate = request.endDate.toDate ? request.endDate.toDate() : new Date(request.endDate);
+      
+      // Check if request overlaps with current date range
+      return startDate <= end && endDate >= start;
+    });
+  }, [allTimeOffRequests, currentDate, viewMode]);
+
+  const handleTimeOffStatusChange = () => {
+    // Real-time listener will automatically update the data
+  };
+
+  // Check if user is admin/manager
+  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager' || userProfile?.role === 'owner';
 
   // Load schools when organization changes
   useEffect(() => {
@@ -543,6 +640,12 @@ const Schedule = () => {
   const handleSessionClick = (session) => {
     setSelectedSession(session); // Use the individual calendar entry for details
     setShowDetailsModal(true);
+  };
+
+  // Handle time off click to open details modal
+  const handleTimeOffClick = (timeOffEntry) => {
+    setSelectedTimeOffEntry(timeOffEntry);
+    setShowTimeOffDetailsModal(true);
   };
 
   // Handle edit session button click from details modal
@@ -740,6 +843,61 @@ const Schedule = () => {
     }
   };
 
+  // Helper function to format time for display
+  const formatTime = (time) => {
+    if (!time) return '';
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${ampm}`;
+  };
+
+  // Convert time off requests to calendar format
+  const timeOffCalendarEntries = visibleTimeOffRequests.map(request => {
+    const startDate = request.startDate.toDate ? request.startDate.toDate() : new Date(request.startDate);
+    const endDate = request.endDate.toDate ? request.endDate.toDate() : new Date(request.endDate);
+    
+    // Create entries for each day of time off
+    const entries = [];
+    const currentDate = new Date(startDate);
+    
+    while (currentDate <= endDate) {
+      const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+      
+      // Use actual times for partial day, default times for full day
+      const displayStartTime = request.isPartialDay && request.startTime ? request.startTime : '09:00';
+      const displayEndTime = request.isPartialDay && request.endTime ? request.endTime : '17:00';
+      
+      // Create appropriate title based on partial day or full day
+      const title = request.isPartialDay 
+        ? `Time Off: ${request.reason} (${formatTime(displayStartTime)} - ${formatTime(displayEndTime)})`
+        : `Time Off: ${request.reason}`;
+      
+      entries.push({
+        id: `timeoff-${request.id}-${dateStr}`,
+        sessionId: request.id,
+        title: title,
+        date: dateStr,
+        startTime: displayStartTime,
+        endTime: displayEndTime,
+        photographerId: request.photographerId,
+        photographerName: request.photographerName,
+        sessionType: 'timeoff',
+        sessionTypes: ['timeoff'],
+        status: request.status,
+        isTimeOff: true,
+        isPartialDay: request.isPartialDay || false,
+        reason: request.reason,
+        notes: request.notes
+      });
+      
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return entries;
+  }).flat();
+
   // Filter sessions based on schedule type, visible photographers, and visible schools
   const filteredSessions = sessions.filter((session) => {
     // First filter by schedule type (my vs full)
@@ -767,6 +925,17 @@ const Schedule = () => {
     return passesScheduleFilter && passesPhotographerFilter && passesSchoolFilter;
   });
 
+  // Filter time off entries based on schedule type only (time off should always be visible for scheduling context)
+  const filteredTimeOff = timeOffCalendarEntries.filter((entry) => {
+    const passesScheduleFilter =
+      scheduleType === "my" ? entry.photographerId === userProfile?.id : true;
+    
+    return passesScheduleFilter;
+  });
+
+  // Combine sessions and time off for calendar display
+  const allCalendarEntries = [...filteredSessions, ...filteredTimeOff];
+
   // Filter team members for display in calendar
   const filteredTeamMembers = teamMembers.filter((member) => {
     const isActiveAndVisible =
@@ -781,9 +950,9 @@ const Schedule = () => {
 
   // Calculate stats
   const calculateStats = () => {
-    const relevantSessions = filteredSessions.filter((session) => {
+    const relevantSessions = allCalendarEntries.filter((session) => {
       const sessionDate = new Date(session.date);
-      return sessionDate >= dateRange.start && sessionDate <= dateRange.end;
+      return sessionDate >= dateRange.start && sessionDate <= dateRange.end && !session.isTimeOff;
     });
 
     const totalHours = relevantSessions.reduce((sum, session) => {
@@ -971,6 +1140,30 @@ const Schedule = () => {
             <Filter size={16} />
             <span>Stats</span>
           </button>
+          
+          {/* Time Off Button */}
+          <button
+            className="schedule__time-off-btn"
+            onClick={() => setShowTimeOffModal(true)}
+          >
+            <Calendar size={16} />
+            <span>Request Time Off</span>
+          </button>
+          
+          {/* Admin Time Off Approval Button */}
+          {isAdmin && (
+            <button
+              className={`schedule__approval-btn ${pendingTimeOffCount > 0 ? 'has-pending' : ''}`}
+              onClick={() => setShowTimeOffApprovalModal(true)}
+            >
+              <Shield size={16} />
+              <span>Time Off</span>
+              {pendingTimeOffCount > 0 && (
+                <span className="badge">{pendingTimeOffCount}</span>
+              )}
+            </button>
+          )}
+          
           <button
             className="schedule__create-btn"
             onClick={() => setShowCreateModal(true)}
@@ -1008,13 +1201,14 @@ const Schedule = () => {
           viewMode={viewMode}
           currentDate={currentDate}
           dateRange={dateRange}
-          sessions={filteredSessions}
+          sessions={allCalendarEntries}
           teamMembers={filteredTeamMembers}
           scheduleType={scheduleType}
           userProfile={userProfile}
           organization={organization}
           onUpdateSession={handleUpdateSession}
           onSessionClick={handleSessionClick}
+          onTimeOffClick={handleTimeOffClick}
         />
       </div>
 
@@ -1437,6 +1631,41 @@ const Schedule = () => {
           teamMembers={teamMembers}
           schools={schools}
           userProfile={userProfile}
+        />
+      )}
+
+      {/* Time Off Request Modal */}
+      {showTimeOffModal && (
+        <TimeOffRequestModal
+          isOpen={showTimeOffModal}
+          onClose={() => setShowTimeOffModal(false)}
+          userProfile={userProfile}
+          organization={organization}
+        />
+      )}
+
+      {/* Time Off Approval Modal (Admin only) */}
+      {showTimeOffApprovalModal && isAdmin && (
+        <TimeOffApprovalModal
+          isOpen={showTimeOffApprovalModal}
+          onClose={() => setShowTimeOffApprovalModal(false)}
+          userProfile={userProfile}
+          organization={organization}
+          onStatusChange={handleTimeOffStatusChange}
+        />
+      )}
+
+      {/* Time Off Details Modal */}
+      {showTimeOffDetailsModal && (
+        <TimeOffDetailsModal
+          isOpen={showTimeOffDetailsModal}
+          onClose={() => {
+            setShowTimeOffDetailsModal(false);
+            setSelectedTimeOffEntry(null);
+          }}
+          timeOffEntry={selectedTimeOffEntry}
+          userProfile={userProfile}
+          onStatusChange={handleTimeOffStatusChange}
         />
       )}
 

@@ -14,6 +14,7 @@ const CalendarView = ({
   organization,
   onUpdateSession,
   onSessionClick, // New prop for handling session clicks
+  onTimeOffClick, // New prop for handling time off clicks
 }) => {
   const renderView = () => {
     switch (viewMode) {
@@ -29,6 +30,7 @@ const CalendarView = ({
             organization={organization}
             onUpdateSession={onUpdateSession}
             onSessionClick={onSessionClick} // Pass the click handler
+            onTimeOffClick={onTimeOffClick} // Pass the time off click handler
           />
         );
       case "month":

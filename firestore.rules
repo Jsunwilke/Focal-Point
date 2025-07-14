@@ -375,6 +375,65 @@ service cloud.firestore {
                        );
     }
 
+    // Time Off Requests collection
+    match /timeOffRequests/{requestId} {
+      // Users can read time off requests from their organization
+      allow read: if request.auth != null && 
+                     belongsToSameOrg(request.auth.uid, resource.data.organizationID);
+      
+      // Users can create their own time off requests
+      allow create: if request.auth != null && 
+                       request.auth.uid == request.resource.data.photographerId &&
+                       belongsToSameOrg(request.auth.uid, request.resource.data.organizationID) &&
+                       // Validate required fields
+                       request.resource.data.keys().hasAll(['organizationID', 'photographerId', 'photographerName', 'startDate', 'endDate', 'reason', 'status']) &&
+                       // Validate data types
+                       request.resource.data.organizationID is string &&
+                       request.resource.data.photographerId is string &&
+                       request.resource.data.photographerName is string &&
+                       request.resource.data.startDate is timestamp &&
+                       request.resource.data.endDate is timestamp &&
+                       request.resource.data.reason is string &&
+                       request.resource.data.status == 'pending' &&
+                       // Validate optional fields
+                       (!('notes' in request.resource.data) || request.resource.data.notes is string);
+      
+      // Users can update their own pending requests (to cancel or edit)
+      // Admins/Managers can update any request (to approve/deny)
+      allow update: if request.auth != null && 
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
+                       (
+                         // Users can update their own pending requests
+                         (request.auth.uid == resource.data.photographerId && 
+                          resource.data.status == 'pending' &&
+                          // Prevent changing core fields
+                          request.resource.data.photographerId == resource.data.photographerId &&
+                          request.resource.data.organizationID == resource.data.organizationID) ||
+                         // Admins/Managers can approve/deny
+                         (isAdminOrManager(request.auth.uid) &&
+                          // Validate approval fields
+                          (request.resource.data.status == 'approved' && 
+                           request.resource.data.keys().hasAll(['approvedBy', 'approverName', 'approvedAt']) &&
+                           request.resource.data.approvedBy is string &&
+                           request.resource.data.approverName is string &&
+                           request.resource.data.approvedAt is timestamp) ||
+                          // Validate denial fields
+                          (request.resource.data.status == 'denied' && 
+                           request.resource.data.keys().hasAll(['deniedBy', 'denierName', 'deniedAt', 'denialReason']) &&
+                           request.resource.data.deniedBy is string &&
+                           request.resource.data.denierName is string &&
+                           request.resource.data.deniedAt is timestamp &&
+                           request.resource.data.denialReason is string) ||
+                          // Allow cancelled status
+                          request.resource.data.status == 'cancelled')
+                       );
+      
+      // Only admins can delete time off requests
+      allow delete: if request.auth != null && 
+                       isAdmin(request.auth.uid) &&
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationID);
+    }
+
 
     // Deny all other documents
     match /{document=**} {
