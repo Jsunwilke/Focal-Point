@@ -105,7 +105,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Sessions collection
+    // Sessions collection - NEW
     match /sessions/{sessionId} {
       // Users can read sessions from their organization
       allow read: if request.auth != null && 
@@ -120,11 +120,9 @@ service cloud.firestore {
                        belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
                        (isAdminOrManager(request.auth.uid) ||
                         // Check if user is one of the assigned photographers
-                        (resource.data.keys().hasAny(['photographers']) && 
-                         request.auth.uid in resource.data.photographers.map(['id'])) ||
+                        request.auth.uid in resource.data.photographers.map(['id']) ||
                         // Legacy support for single photographer format
-                        (resource.data.keys().hasAny(['photographer']) && 
-                         request.auth.uid == resource.data.photographer.id));
+                        request.auth.uid == resource.data.photographer.id);
       
       // Admins/Managers can update any session in their organization
       allow update: if request.auth != null && 
@@ -149,9 +147,8 @@ service cloud.firestore {
       
       // Users can update their own reports
       allow update: if request.auth != null && 
-                       belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
-                       (resource.data.keys().hasAny(['yourName']) && 
-                        resource.data.yourName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName);
+                       resource.data.yourName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName &&
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationID);
       
       // Admins/Managers can update any report in their organization
       allow update: if request.auth != null && 
@@ -162,7 +159,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Schools collection
+    // Schools collection (renamed from dropdownData)
     match /schools/{schoolId} {
       // Users can read schools from their organization
       allow read: if request.auth != null && 
@@ -196,9 +193,8 @@ service cloud.firestore {
       
       // Users assigned to the job can update it
       allow update: if request.auth != null && 
-                       belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
-                       (resource.data.keys().hasAny(['photographer']) && 
-                        resource.data.photographer == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName);
+                       resource.data.photographer == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName &&
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationID);
       
       // Admins/Managers can update any sports job in their organization
       allow update: if request.auth != null && 
@@ -257,7 +253,7 @@ service cloud.firestore {
     match /records/{recordId} {
       // Users can read records from their organization (if organizationID exists)
       allow read: if request.auth != null && 
-                     (!resource.data.keys().hasAny(['organizationID']) || 
+                     (resource.data.organizationID == null || 
                       belongsToSameOrg(request.auth.uid, resource.data.organizationID));
       
       // Users can create records
@@ -265,8 +261,7 @@ service cloud.firestore {
       
       // Users can update their own records or admins can update any
       allow update: if request.auth != null && 
-                       (resource.data.keys().hasAny(['createdBy']) && 
-                        request.auth.uid == resource.data.createdBy ||
+                       (request.auth.uid == resource.data.createdBy ||
                         isAdmin(request.auth.uid));
       
       // Admins can delete records
@@ -291,11 +286,11 @@ service cloud.firestore {
                        request.resource.data.fields is list &&
                        request.resource.data.isActive is bool &&
                        // Validate shootType if present
-                       (!request.resource.data.keys().hasAny(['shootType']) || request.resource.data.shootType is string) &&
+                       (!('shootType' in request.resource.data) || request.resource.data.shootType is string) &&
                        // Validate version if present
-                       (!request.resource.data.keys().hasAny(['version']) || request.resource.data.version is int) &&
+                       (!('version' in request.resource.data) || request.resource.data.version is int) &&
                        // Validate isDefault if present
-                       (!request.resource.data.keys().hasAny(['isDefault']) || request.resource.data.isDefault is bool);
+                       (!('isDefault' in request.resource.data) || request.resource.data.isDefault is bool);
       
       // Admins/Managers can update templates
       allow update: if request.auth != null && 
@@ -336,9 +331,9 @@ service cloud.firestore {
                        request.resource.data.date is string &&
                        request.resource.data.status in ['clocked-in', 'clocked-out'] &&
                        // Validate optional fields
-                       (!request.resource.data.keys().hasAny(['sessionId']) || request.resource.data.sessionId is string) &&
-                       (!request.resource.data.keys().hasAny(['clockOutTime']) || request.resource.data.clockOutTime is timestamp) &&
-                       (!request.resource.data.keys().hasAny(['notes']) || request.resource.data.notes is string);
+                       (!('sessionId' in request.resource.data) || request.resource.data.sessionId is string) &&
+                       (!('clockOutTime' in request.resource.data) || request.resource.data.clockOutTime is timestamp) &&
+                       (!('notes' in request.resource.data) || request.resource.data.notes is string);
       
       // Users can update their own time entries (for clock out and editing completed entries)
       allow update: if request.auth != null && 
@@ -361,8 +356,8 @@ service cloud.firestore {
                           request.resource.data.clockInTime is timestamp &&
                           request.resource.data.clockOutTime is timestamp &&
                           request.resource.data.date is string &&
-                          (!request.resource.data.keys().hasAny(['notes']) || request.resource.data.notes is string) &&
-                          (!request.resource.data.keys().hasAny(['sessionId']) || request.resource.data.sessionId is string))
+                          (!('notes' in request.resource.data) || request.resource.data.notes is string) &&
+                          (!('sessionId' in request.resource.data) || request.resource.data.sessionId is string))
                        );
       
       // Admins/Managers can create and update any time entries in their organization
@@ -402,7 +397,7 @@ service cloud.firestore {
                        request.resource.data.reason is string &&
                        request.resource.data.status == 'pending' &&
                        // Validate optional fields
-                       (!request.resource.data.keys().hasAny(['notes']) || request.resource.data.notes is string);
+                       (!('notes' in request.resource.data) || request.resource.data.notes is string);
       
       // Users can update their own pending requests (to cancel or edit)
       // Admins/Managers can update any request (to approve/deny)
@@ -418,7 +413,7 @@ service cloud.firestore {
                          // Admins/Managers can approve/deny
                          (isAdminOrManager(request.auth.uid) &&
                           // Validate approval fields
-                          ((request.resource.data.status == 'approved' && 
+                          (request.resource.data.status == 'approved' && 
                            request.resource.data.keys().hasAll(['approvedBy', 'approverName', 'approvedAt']) &&
                            request.resource.data.approvedBy is string &&
                            request.resource.data.approverName is string &&
@@ -431,7 +426,7 @@ service cloud.firestore {
                            request.resource.data.deniedAt is timestamp &&
                            request.resource.data.denialReason is string) ||
                           // Allow cancelled status
-                          request.resource.data.status == 'cancelled'))
+                          request.resource.data.status == 'cancelled')
                        );
       
       // Only admins can delete time off requests
@@ -458,11 +453,11 @@ service cloud.firestore {
                        request.resource.data.steps is list &&
                        request.resource.data.isActive is bool &&
                        // Validate optional fields
-                       (!request.resource.data.keys().hasAny(['description']) || request.resource.data.description is string) &&
-                       (!request.resource.data.keys().hasAny(['sessionTypes']) || request.resource.data.sessionTypes is list) &&
-                       (!request.resource.data.keys().hasAny(['estimatedDays']) || request.resource.data.estimatedDays is number) &&
-                       (!request.resource.data.keys().hasAny(['isDefault']) || request.resource.data.isDefault is bool) &&
-                       (!request.resource.data.keys().hasAny(['version']) || request.resource.data.version is number);
+                       (!('description' in request.resource.data) || request.resource.data.description is string) &&
+                       (!('sessionTypes' in request.resource.data) || request.resource.data.sessionTypes is list) &&
+                       (!('estimatedDays' in request.resource.data) || request.resource.data.estimatedDays is number) &&
+                       (!('isDefault' in request.resource.data) || request.resource.data.isDefault is bool) &&
+                       (!('version' in request.resource.data) || request.resource.data.version is number);
       
       // Admins/Managers can update workflow templates
       allow update: if request.auth != null && 
@@ -495,31 +490,27 @@ service cloud.firestore {
                        request.resource.data.templateId is string &&
                        request.resource.data.stepProgress is map &&
                        // Validate optional fields
-                       (!request.resource.data.keys().hasAny(['status']) || request.resource.data.status in ['active', 'completed', 'on_hold', 'cancelled', 'deleted']) &&
-                       (!request.resource.data.keys().hasAny(['templateName']) || request.resource.data.templateName is string) &&
-                       (!request.resource.data.keys().hasAny(['templateVersion']) || request.resource.data.templateVersion is number) &&
-                       (!request.resource.data.keys().hasAny(['currentStep']) || request.resource.data.currentStep is string);
+                       (!('status' in request.resource.data) || request.resource.data.status in ['active', 'completed', 'on_hold', 'cancelled', 'deleted']) &&
+                       (!('templateName' in request.resource.data) || request.resource.data.templateName is string) &&
+                       (!('templateVersion' in request.resource.data) || request.resource.data.templateVersion is number) &&
+                       (!('currentStep' in request.resource.data) || request.resource.data.currentStep is string);
       
-      // Granular step-level permissions for workflow updates
+      // Users can update workflows if they are admins/managers in the organization
+      // Note: For now, we allow all authenticated org members to update workflows
+      // In production, you may want to add more granular step-level permissions
       allow update: if request.auth != null && 
                        belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
                        // Prevent changing core fields
                        request.resource.data.sessionId == resource.data.sessionId &&
                        request.resource.data.organizationID == resource.data.organizationID &&
-                       request.resource.data.templateId == resource.data.templateId &&
-                       (
-                         // Admins/Managers can update any workflow
-                         isAdminOrManager(request.auth.uid) ||
-                         // Regular users can update workflows (simplified for now)
-                         // TODO: Add granular step-level permissions in future iteration
-                         true
-                       );
+                       request.resource.data.templateId == resource.data.templateId;
       
       // Admins can delete workflows
       allow delete: if request.auth != null && 
                        isAdmin(request.auth.uid) &&
                        belongsToSameOrg(request.auth.uid, resource.data.organizationID);
     }
+
 
     // Deny all other documents
     match /{document=**} {

@@ -491,7 +491,85 @@ export const createSession = async (organizationID, sessionData) => {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    return sessionRef.id;
+    
+    const sessionId = sessionRef.id;
+    
+    // Auto-create workflow for this new session
+    try {
+      const primarySessionType = sessionData.sessionTypes?.[0] || 
+                                 sessionData.sessionType || 
+                                 'other';
+      
+      console.log("🔄 SESSION CREATED - Starting workflow creation process");
+      console.log("📋 Session ID:", sessionId);
+      console.log("🏢 Organization ID:", organizationID);
+      console.log("🎯 Primary Session Type:", primarySessionType);
+      console.log("📝 Full Session Data:", sessionData);
+      
+      // Also store in localStorage for debugging
+      localStorage.setItem('lastSessionCreated', JSON.stringify({
+        sessionId,
+        organizationID,
+        primarySessionType,
+        timestamp: new Date().toISOString()
+      }));
+      
+      const workflowId = await autoCreateWorkflowForSession(
+        sessionId, 
+        organizationID, 
+        primarySessionType
+      );
+      
+      if (workflowId) {
+        console.log("✅ SUCCESS: Workflow created with ID:", workflowId);
+        
+        // Store success in localStorage
+        localStorage.setItem('lastWorkflowResult', JSON.stringify({
+          success: true,
+          workflowId,
+          sessionId,
+          timestamp: new Date().toISOString()
+        }));
+        
+        // Double-check that the workflow was actually created in Firestore
+        try {
+          const workflowDoc = await getDoc(doc(firestore, "workflows", workflowId));
+          if (workflowDoc.exists()) {
+            console.log("✅ VERIFIED: Workflow exists in Firestore with data:", workflowDoc.data());
+          } else {
+            console.error("❌ ERROR: Workflow ID returned but document doesn't exist in Firestore!");
+            localStorage.setItem('lastWorkflowResult', JSON.stringify({
+              success: false,
+              error: 'Workflow ID returned but document does not exist',
+              sessionId,
+              timestamp: new Date().toISOString()
+            }));
+          }
+        } catch (verifyError) {
+          console.error("❌ ERROR: Failed to verify workflow creation:", verifyError);
+          localStorage.setItem('lastWorkflowResult', JSON.stringify({
+            success: false,
+            error: verifyError.message,
+            sessionId,
+            timestamp: new Date().toISOString()
+          }));
+        }
+      } else {
+        console.log("❌ FAILED: No workflow was created");
+        localStorage.setItem('lastWorkflowResult', JSON.stringify({
+          success: false,
+          error: 'No workflow ID returned',
+          sessionId,
+          timestamp: new Date().toISOString()
+        }));
+      }
+    } catch (workflowError) {
+      console.error("💥 ERROR: Failed to create workflow for new session:", sessionId);
+      console.error("Error details:", workflowError);
+      // Don't fail the session creation if workflow creation fails
+    }
+    
+    return sessionId;
   } catch (error) {
     console.error("Error creating session:", error);
     throw error;
@@ -502,6 +580,10 @@ export const updateSession = async (sessionId, updateData) => {
   try {
     const sessionRef = doc(firestore, "sessions", sessionId);
 
+    // Get current session data to check for status changes
+    const currentSessionDoc = await getDoc(sessionRef);
+    const currentSession = currentSessionDoc.exists() ? currentSessionDoc.data() : null;
+
     // Add timestamp to track when the update occurred
     const dataWithTimestamp = {
       ...updateData,
@@ -509,6 +591,8 @@ export const updateSession = async (sessionId, updateData) => {
     };
 
     await updateDoc(sessionRef, dataWithTimestamp);
+
+    // Note: Workflow creation now happens when session is created, not when completed
 
     console.log("Session updated successfully:", sessionId);
     return true;
@@ -1441,6 +1525,540 @@ export const getUserSchoolStats = async (userId, organizationID, startDate = nul
     };
   } catch (error) {
     console.error("Error getting user school stats:", error);
+    throw error;
+  }
+};
+
+// ===========================
+// WORKFLOW MANAGEMENT FUNCTIONS
+// ===========================
+
+// Workflow Templates Functions
+export const getWorkflowTemplates = async (organizationID, sessionType = null) => {
+  try {
+    let q = query(
+      collection(firestore, "workflowTemplates"),
+      where("organizationID", "==", organizationID),
+      where("isActive", "==", true)
+    );
+
+    if (sessionType) {
+      q = query(q, where("sessionTypes", "array-contains", sessionType));
+    }
+
+    const querySnapshot = await getDocs(q);
+    const templates = [];
+
+    querySnapshot.forEach((doc) => {
+      templates.push({
+        id: doc.id,
+        ...doc.data(),
+      });
+    });
+
+    return templates;
+  } catch (error) {
+    console.error("Error fetching workflow templates:", error);
+    throw error;
+  }
+};
+
+export const createWorkflowTemplate = async (templateData) => {
+  try {
+    const templateRef = await addDoc(collection(firestore, "workflowTemplates"), {
+      ...templateData,
+      isActive: true,
+      version: 1,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return templateRef.id;
+  } catch (error) {
+    console.error("Error creating workflow template:", error);
+    throw error;
+  }
+};
+
+export const updateWorkflowTemplate = async (templateId, templateData) => {
+  try {
+    await updateDoc(doc(firestore, "workflowTemplates", templateId), {
+      ...templateData,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Error updating workflow template:", error);
+    throw error;
+  }
+};
+
+export const deleteWorkflowTemplate = async (templateId) => {
+  try {
+    await updateDoc(doc(firestore, "workflowTemplates", templateId), {
+      isActive: false,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Error deleting workflow template:", error);
+    throw error;
+  }
+};
+
+export const getWorkflowTemplate = async (templateId) => {
+  try {
+    const templateDoc = await getDoc(doc(firestore, "workflowTemplates", templateId));
+    if (templateDoc.exists()) {
+      return { id: templateDoc.id, ...templateDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching workflow template:", error);
+    throw error;
+  }
+};
+
+// Workflow Instances Functions
+export const createWorkflowInstance = async (workflowData) => {
+  try {
+    const workflowRef = await addDoc(collection(firestore, "workflows"), {
+      ...workflowData,
+      status: "active",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return workflowRef.id;
+  } catch (error) {
+    console.error("Error creating workflow instance:", error);
+    throw error;
+  }
+};
+
+export const getWorkflowsForSession = async (sessionId, organizationID = null) => {
+  try {
+    // Query workflows for a specific session
+    // Include organizationID filter for security compliance
+    let q;
+    if (organizationID) {
+      q = query(
+        collection(firestore, "workflows"),
+        where("sessionId", "==", sessionId),
+        where("organizationID", "==", organizationID)
+      );
+    } else {
+      // Fallback to sessionId only query (may fail with permissions)
+      q = query(
+        collection(firestore, "workflows"),
+        where("sessionId", "==", sessionId)
+      );
+    }
+
+    const querySnapshot = await getDocs(q);
+    const workflows = [];
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      // Filter out deleted workflows on client side
+      if (data.status !== "deleted") {
+        workflows.push({
+          id: doc.id,
+          ...data,
+        });
+      }
+    });
+
+    return workflows;
+  } catch (error) {
+    console.error("Error fetching workflows for session:", error);
+    throw error;
+  }
+};
+
+export const getWorkflowsForOrganization = async (organizationID, status = null) => {
+  try {
+    // Simplified query to avoid needing composite indexes initially
+    let q = query(
+      collection(firestore, "workflows"),
+      where("organizationID", "==", organizationID)
+    );
+
+    const querySnapshot = await getDocs(q);
+    const workflows = [];
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      // Filter out deleted workflows and apply status filter in client
+      if (data.status !== "deleted" && (!status || data.status === status)) {
+        workflows.push({
+          id: doc.id,
+          ...data,
+        });
+      }
+    });
+
+    // Sort by status and updatedAt on client side
+    workflows.sort((a, b) => {
+      if (a.status !== b.status) {
+        const statusOrder = { 'active': 0, 'on_hold': 1, 'completed': 2, 'cancelled': 3 };
+        return (statusOrder[a.status] || 999) - (statusOrder[b.status] || 999);
+      }
+      
+      const aTime = a.updatedAt?.toDate?.() || new Date(a.updatedAt || 0);
+      const bTime = b.updatedAt?.toDate?.() || new Date(b.updatedAt || 0);
+      return bTime.getTime() - aTime.getTime();
+    });
+
+    return workflows;
+  } catch (error) {
+    console.error("Error fetching workflows for organization:", error);
+    throw error;
+  }
+};
+
+export const updateWorkflowStep = async (workflowId, stepId, stepData) => {
+  try {
+    const workflowRef = doc(firestore, "workflows", workflowId);
+    const workflowDoc = await getDoc(workflowRef);
+    
+    if (!workflowDoc.exists()) {
+      throw new Error("Workflow not found");
+    }
+
+    const workflow = workflowDoc.data();
+    const updatedStepProgress = {
+      ...workflow.stepProgress,
+      [stepId]: {
+        ...workflow.stepProgress[stepId],
+        ...stepData,
+        updatedAt: serverTimestamp(),
+      }
+    };
+
+    await updateDoc(workflowRef, {
+      stepProgress: updatedStepProgress,
+      updatedAt: serverTimestamp(),
+    });
+
+    return true;
+  } catch (error) {
+    console.error("Error updating workflow step:", error);
+    throw error;
+  }
+};
+
+export const completeWorkflowStep = async (workflowId, stepId, completionData = {}) => {
+  try {
+    const workflowRef = doc(firestore, "workflows", workflowId);
+    const workflowDoc = await getDoc(workflowRef);
+    
+    if (!workflowDoc.exists()) {
+      throw new Error("Workflow not found");
+    }
+
+    const workflow = workflowDoc.data();
+    const updatedStepProgress = {
+      ...workflow.stepProgress,
+      [stepId]: {
+        ...workflow.stepProgress[stepId],
+        status: "completed",
+        completedAt: serverTimestamp(),
+        completedBy: completionData.userId,
+        notes: completionData.notes || workflow.stepProgress[stepId]?.notes || "",
+        files: completionData.files || workflow.stepProgress[stepId]?.files || [],
+        updatedAt: serverTimestamp(),
+      }
+    };
+
+    // Check if this is the last step and mark workflow as completed if so
+    const template = await getWorkflowTemplate(workflow.templateId);
+    const allStepsCompleted = template?.steps?.every(step => 
+      updatedStepProgress[step.id]?.status === "completed"
+    );
+
+    const updateData = {
+      stepProgress: updatedStepProgress,
+      updatedAt: serverTimestamp(),
+    };
+
+    if (allStepsCompleted) {
+      updateData.status = "completed";
+      updateData.completedAt = serverTimestamp();
+    }
+
+    await updateDoc(workflowRef, updateData);
+
+    return true;
+  } catch (error) {
+    console.error("Error completing workflow step:", error);
+    throw error;
+  }
+};
+
+export const assignWorkflowStep = async (workflowId, stepId, assigneeId) => {
+  try {
+    const workflowRef = doc(firestore, "workflows", workflowId);
+    const workflowDoc = await getDoc(workflowRef);
+    
+    if (!workflowDoc.exists()) {
+      throw new Error("Workflow not found");
+    }
+
+    const workflow = workflowDoc.data();
+    const updatedStepProgress = {
+      ...workflow.stepProgress,
+      [stepId]: {
+        ...workflow.stepProgress[stepId],
+        assignedTo: assigneeId,
+        assignedAt: serverTimestamp(),
+        status: workflow.stepProgress[stepId]?.status || "pending",
+        updatedAt: serverTimestamp(),
+      }
+    };
+
+    await updateDoc(workflowRef, {
+      stepProgress: updatedStepProgress,
+      updatedAt: serverTimestamp(),
+    });
+
+    return true;
+  } catch (error) {
+    console.error("Error assigning workflow step:", error);
+    throw error;
+  }
+};
+
+export const getWorkflowsForUser = async (userId, organizationID, status = null) => {
+  try {
+    // Get all workflows for the organization first
+    const allWorkflows = await getWorkflowsForOrganization(organizationID, status);
+    
+    console.log("🔍 getWorkflowsForUser: Found", allWorkflows.length, "total workflows for organization");
+    
+    // For now, return all workflows for the organization
+    // Later we can add more sophisticated filtering based on user roles/permissions
+    // But users should be able to see workflow progress even if not assigned to specific steps
+    const userWorkflows = allWorkflows.filter(workflow => {
+      if (!workflow.stepProgress) return false;
+      
+      // Include workflows where:
+      // 1. User has steps assigned to them, OR
+      // 2. Workflow has no assigned steps yet (newly created), OR  
+      // 3. User has permission to view all workflows (admin/manager)
+      const hasAssignedSteps = Object.values(workflow.stepProgress).some(step => 
+        step.assignedTo === userId
+      );
+      
+      const hasUnassignedSteps = Object.values(workflow.stepProgress).some(step => 
+        !step.assignedTo || step.assignedTo === null
+      );
+      
+      return hasAssignedSteps || hasUnassignedSteps;
+    });
+
+    console.log("🎯 getWorkflowsForUser: Filtered to", userWorkflows.length, "workflows for user");
+    
+    return userWorkflows;
+  } catch (error) {
+    console.error("Error fetching workflows for user:", error);
+    throw error;
+  }
+};
+
+// Initialize default workflow templates for an organization
+export const initializeDefaultWorkflowTemplates = async (organizationID) => {
+  try {
+    // Check if templates already exist
+    const existingTemplates = await getWorkflowTemplates(organizationID);
+    if (existingTemplates.length > 0) {
+      console.log("Workflow templates already exist for organization:", organizationID);
+      return existingTemplates;
+    }
+
+    console.log("Creating default workflow templates for organization:", organizationID);
+    
+    // Import default templates
+    const { getAllDefaultTemplates, createTemplateForOrganization } = await import('../utils/workflowTemplates');
+    const defaultTemplates = getAllDefaultTemplates();
+    
+    const createdTemplates = [];
+    
+    for (const template of defaultTemplates) {
+      try {
+        const templateData = createTemplateForOrganization(
+          organizationID,
+          template.name.toLowerCase().replace(/\s+/g, '_'),
+          {
+            ...template,
+            isDefault: true // Make the first template for each type default
+          }
+        );
+        
+        const templateId = await createWorkflowTemplate(templateData);
+        createdTemplates.push({ id: templateId, ...templateData });
+        
+        console.log("Created default template:", template.name);
+      } catch (error) {
+        console.warn("Failed to create template:", template.name, error);
+      }
+    }
+    
+    return createdTemplates;
+  } catch (error) {
+    console.error("Error initializing default workflow templates:", error);
+    return [];
+  }
+};
+
+// Auto-create workflow when session is created
+export const autoCreateWorkflowForSession = async (sessionId, organizationID, sessionType) => {
+  try {
+    // Check if workflow already exists for this session
+    const existingWorkflows = await getWorkflowsForSession(sessionId, organizationID);
+    if (existingWorkflows.length > 0) {
+      console.log("Workflow already exists for session:", sessionId);
+      return existingWorkflows[0].id;
+    }
+
+    // Get session data to calculate step due dates
+    const sessionData = await getSession(sessionId);
+    if (!sessionData) {
+      console.log("Session not found:", sessionId);
+      return null;
+    }
+
+    // Use fuzzy matching to determine the best workflow template
+    console.log("🧠 Starting intelligent template matching...");
+    const { getRecommendedWorkflowTemplate, getWorkflowMappingExplanation } = await import('../utils/workflowTemplates');
+    
+    const recommendedTemplateKey = getRecommendedWorkflowTemplate(sessionType);
+    const mappingInfo = getWorkflowMappingExplanation(sessionType);
+    
+    console.log(`🎯 MAPPING RESULT: "${sessionType}" → "${mappingInfo.templateName}" (${mappingInfo.reason})`);
+    console.log("🔑 Recommended template key:", recommendedTemplateKey);
+    
+    // Get all templates for the organization first
+    console.log("📊 Fetching workflow templates for organization...");
+    let allTemplates = await getWorkflowTemplates(organizationID);
+    console.log(`📋 Found ${allTemplates.length} total templates in organization`);
+    
+    if (allTemplates.length > 0) {
+      console.log("📄 Available templates:");
+      allTemplates.forEach((template, index) => {
+        console.log(`  ${index + 1}. "${template.name}" - Session Types: [${template.sessionTypes?.join(', ') || 'none'}]`);
+      });
+    }
+    
+    // If no templates exist, initialize default ones
+    if (allTemplates.length === 0) {
+      console.log("🏗️ No workflow templates found, initializing defaults...");
+      await initializeDefaultWorkflowTemplates(organizationID);
+      allTemplates = await getWorkflowTemplates(organizationID);
+      console.log(`✨ After initialization: Found ${allTemplates.length} templates`);
+    }
+    
+    // Find the best matching template based on fuzzy mapping
+    console.log("🔍 Starting template selection process...");
+    let defaultTemplate = null;
+    
+    // First try to find a template that supports the recommended template type
+    console.log(`🎯 Step 1: Looking for templates with session type "${recommendedTemplateKey}"`);
+    defaultTemplate = allTemplates.find(template => 
+      template.sessionTypes && template.sessionTypes.includes(recommendedTemplateKey)
+    );
+    
+    if (defaultTemplate) {
+      console.log(`✅ FOUND: Template "${defaultTemplate.name}" matches recommended type "${recommendedTemplateKey}"`);
+    } else {
+      console.log(`❌ No template found for recommended type "${recommendedTemplateKey}"`);
+      
+      // Fallback: try to find templates that match the original sessionType exactly
+      console.log(`🎯 Step 2: Looking for exact match with session type "${sessionType}"`);
+      defaultTemplate = allTemplates.find(template => 
+        template.sessionTypes && template.sessionTypes.includes(sessionType)
+      );
+      
+      if (defaultTemplate) {
+        console.log(`✅ FOUND: Template "${defaultTemplate.name}" has exact match for session type "${sessionType}"`);
+      } else {
+        console.log(`❌ No exact match found for session type "${sessionType}"`);
+        
+        // Last resort: use any available template, preferring default ones
+        console.log("🎯 Step 3: Using fallback template selection");
+        defaultTemplate = allTemplates.find(t => t.isDefault);
+        if (defaultTemplate) {
+          console.log(`✅ FOUND: Using default template "${defaultTemplate.name}"`);
+        } else {
+          defaultTemplate = allTemplates[0];
+          if (defaultTemplate) {
+            console.log(`✅ FOUND: Using first available template "${defaultTemplate.name}"`);
+          }
+        }
+      }
+    }
+    
+    if (!defaultTemplate) {
+      console.error("💥 CRITICAL ERROR: No workflow template found at all!");
+      console.error("This shouldn't happen if default templates were initialized properly");
+      return null;
+    }
+
+    console.log(`🏗️ Creating workflow instance using template: "${defaultTemplate.name}"`);
+    console.log(`📅 Session date: ${sessionData.date}`);
+
+    // Parse session date to calculate step due dates
+    const sessionDate = new Date(sessionData.date);
+    
+    // Initialize step progress for all steps in template with calculated due dates
+    console.log(`📋 Initializing ${defaultTemplate.steps.length} workflow steps...`);
+    const stepProgress = {};
+    defaultTemplate.steps.forEach((step, index) => {
+      // Calculate due date based on session date and step's dueOffsetDays
+      let dueDate = null;
+      if (step.dueOffsetDays !== undefined) {
+        dueDate = new Date(sessionDate);
+        dueDate.setDate(dueDate.getDate() + step.dueOffsetDays);
+      }
+      
+      stepProgress[step.id] = {
+        status: "pending",
+        assignedTo: null,
+        startTime: null,
+        completedAt: null,
+        dueDate: dueDate,
+        notes: "",
+        files: [],
+        createdAt: serverTimestamp(),
+      };
+      
+      console.log(`  ${index + 1}. "${step.title}" - Due: ${dueDate ? dueDate.toLocaleDateString() : 'Not set'}`);
+    });
+
+    // Create workflow instance
+    const workflowData = {
+      sessionId,
+      organizationID,
+      templateId: defaultTemplate.id,
+      templateName: defaultTemplate.name,
+      templateVersion: defaultTemplate.version,
+      currentStep: defaultTemplate.steps[0]?.id || null,
+      stepProgress,
+      status: "active",
+      sessionDate: sessionData.date,
+    };
+
+    console.log("🚀 Creating workflow instance in Firestore...");
+    const workflowId = await createWorkflowInstance(workflowData);
+    
+    if (workflowId) {
+      console.log(`🎉 SUCCESS: Workflow created!`);
+      console.log(`📋 Workflow ID: ${workflowId}`);
+      console.log(`📄 Template Used: "${defaultTemplate.name}"`);
+      console.log(`🎯 Session Type: "${sessionType}"`);
+    } else {
+      console.error("💥 FAILED: createWorkflowInstance returned null/undefined");
+    }
+    
+    return workflowId;
+  } catch (error) {
+    console.error("Error auto-creating workflow for session:", error);
     throw error;
   }
 };

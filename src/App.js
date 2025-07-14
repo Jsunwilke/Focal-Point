@@ -2,6 +2,8 @@
 import React, { useState } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { WorkflowProvider } from "./contexts/WorkflowContext";
+import { ToastProvider } from "./contexts/ToastContext";
 import LoginPage from "./components/auth/LoginPage";
 import StudioSignup from "./components/auth/StudioSignup";
 import InvitationAcceptance from "./components/auth/InvitationAcceptance";
@@ -19,6 +21,7 @@ import TimeTracking from "./pages/TimeTracking";
 import PayrollTimesheets from "./pages/PayrollTimesheets";
 import TemplatesList from "./pages/TemplatesList";
 import TemplateBuilder from "./pages/TemplateBuilder";
+import WorkflowDashboard from "./components/workflow/WorkflowDashboard";
 import "./App.css";
 
 const AppContent = () => {
@@ -96,6 +99,7 @@ const AppContent = () => {
                       <Route path="/" element={<Dashboard />} />
                       <Route path="/schedule" element={<Schedule />} />
                       <Route path="/time-tracking" element={<TimeTracking />} />
+                      <Route path="/workflows" element={<WorkflowDashboard />} />
                       <Route path="/payroll-timesheets" element={<PayrollTimesheets />} />
                       <Route path="/team" element={<TeamManagement />} />
                       <Route path="/schools" element={<SchoolManagement />} />
@@ -118,9 +122,13 @@ const AppContent = () => {
 const App = () => {
   return (
     <AuthProvider>
-      <div className="app">
-        <AppContent />
-      </div>
+      <ToastProvider>
+        <WorkflowProvider>
+          <div className="app">
+            <AppContent />
+          </div>
+        </WorkflowProvider>
+      </ToastProvider>
     </AuthProvider>
   );
 };

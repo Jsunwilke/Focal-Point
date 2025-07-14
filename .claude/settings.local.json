@@ -38,7 +38,17 @@
       "Bash(ssh-keygen:*)",
       "Bash(cat:*)",
       "Bash(git remote set-url:*)",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "WebFetch(domain:monday.com)",
+      "WebFetch(domain:asana.com)",
+      "WebFetch(domain:www.notion.so)",
+      "WebFetch(domain:help.asana.com)",
+      "WebFetch(domain:www.notion.com)",
+      "WebFetch(domain:clickup.com)",
+      "WebFetch(domain:zapier.com)",
+      "WebFetch(domain:www.airtable.com)",
+      "Bash(firebase firestore:rules:*)",
+      "Bash(sed:*)"
     ],
     "deny": []
   }

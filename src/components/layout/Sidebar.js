@@ -13,6 +13,7 @@ import {
   Trophy,
   FileText,
   Receipt,
+  Workflow,
 } from "lucide-react";
 import "./Sidebar.css";
 
@@ -45,6 +46,13 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
       label: "Time Tracking",
       icon: Clock,
       path: "/time-tracking",
+      enabled: true,
+    },
+    {
+      id: "workflows",
+      label: "Workflows",
+      icon: Workflow,
+      path: "/workflows",
       enabled: true,
     },
     {

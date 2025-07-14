@@ -214,7 +214,14 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
       };
 
 
+      console.log("🚀 MODAL: About to call createSession with data:", {
+        organizationId: organization.id,
+        sessionData
+      });
+      
       await createSession(organization.id, sessionData);
+      
+      console.log("✅ MODAL: createSession completed successfully");
 
       // Reset form and close modal
       setFormData({
@@ -232,8 +239,9 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
       setErrors({});
       onClose();
 
-      // Refresh the page to show new session
-      window.location.reload();
+      // Instead of refreshing the entire page, just trigger a re-fetch of data
+      // The parent component should handle refreshing sessions data
+      console.log("✅ MODAL: Session created successfully, modal closed");
     } catch (error) {
       secureLogger.error("Error creating session:", error);
       setErrors({ general: "Failed to create session. Please try again." });
