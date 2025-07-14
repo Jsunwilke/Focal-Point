@@ -115,6 +115,7 @@ func clockIn(userId: String, organizationID: String, sessionId: String? = nil, n
         if let sessionId = sessionId {
             timeEntryData["sessionId"] = sessionId
         }
+        
         if let notes = notes, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             timeEntryData["notes"] = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         }

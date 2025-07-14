@@ -1,6 +1,7 @@
 // src/components/layout/Sidebar.js
 import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   LayoutDashboard,
   Calendar,
@@ -11,12 +12,17 @@ import {
   Settings,
   Trophy,
   FileText,
+  Receipt,
 } from "lucide-react";
 import "./Sidebar.css";
 
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { userProfile } = useAuth();
+
+  // Check if user has admin/manager permissions
+  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager';
 
   // Navigation items with Lucide icons
   const navigationItems = [
@@ -40,6 +46,14 @@ const Sidebar = () => {
       icon: Clock,
       path: "/time-tracking",
       enabled: true,
+    },
+    {
+      id: "payroll",
+      label: "Payroll",
+      icon: Receipt,
+      path: "/payroll-timesheets",
+      enabled: true,
+      adminOnly: true,
     },
     {
       id: "schools",
@@ -107,7 +121,9 @@ const Sidebar = () => {
 
       <nav className="sidebar__nav">
         <ul className="sidebar__nav-list">
-          {navigationItems.map((item) => {
+          {navigationItems
+            .filter(item => !item.adminOnly || isAdmin)
+            .map((item) => {
             const IconComponent = item.icon;
             return (
               <li key={item.id} className="sidebar__nav-item">

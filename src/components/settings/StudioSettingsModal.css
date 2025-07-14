@@ -587,4 +587,311 @@ select.form-input:focus {
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-xs);
   }
+
+  /* Pay period responsive styles */
+  .pay-period-type-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-field-group {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-toggle-label {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+  }
+}
+
+/* ==============================================
+   Pay Period Configuration Styles
+   ============================================== */
+
+/* Main pay period form container */
+.pay-period-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+/* Toggle switch styling */
+.form-toggle-group {
+  margin-bottom: var(--spacing-sm);
+}
+
+.form-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  cursor: pointer;
+  user-select: none;
+}
+
+.form-toggle-input {
+  display: none;
+}
+
+.form-toggle-slider {
+  position: relative;
+  width: 3rem;
+  height: 1.5rem;
+  background-color: var(--border-color, #dee2e6);
+  border-radius: 1rem;
+  transition: background-color 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.form-toggle-slider::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 1rem;
+  height: 1rem;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.form-toggle-input:checked + .form-toggle-slider {
+  background-color: var(--primary-color, #007bff);
+}
+
+.form-toggle-input:checked + .form-toggle-slider::before {
+  transform: translateX(1.5rem);
+}
+
+.form-toggle-text {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+/* Pay period type selection grid */
+.pay-period-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-sm);
+}
+
+.pay-period-type-option {
+  cursor: pointer;
+  user-select: none;
+}
+
+.pay-period-type-radio {
+  display: none;
+}
+
+.pay-period-type-card {
+  padding: var(--spacing-md);
+  border: 2px solid var(--border-color, #dee2e6);
+  border-radius: var(--radius-md);
+  background-color: var(--background-secondary, #f8f9fa);
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.pay-period-type-radio:checked + .pay-period-type-card {
+  border-color: var(--primary-color, #007bff);
+  background-color: var(--primary-light, #e3f2fd);
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.15);
+}
+
+.pay-period-type-card:hover {
+  border-color: var(--primary-color, #007bff);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.pay-period-type-title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.pay-period-type-description {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Form field groups */
+.form-field-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.form-field-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.form-select {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: var(--radius-sm);
+  background-color: var(--background-secondary, #ffffff);
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5rem;
+  padding-right: 2.5rem;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: var(--primary-color, #007bff);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+/* Error handling */
+.form-errors {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-md);
+  color: var(--error-color, #dc3545);
+}
+
+.form-errors svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.form-errors-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.form-error-item {
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+/* Pay period preview */
+.pay-period-preview {
+  padding: var(--spacing-md);
+  background-color: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: var(--radius-md);
+}
+
+.pay-period-preview-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.pay-period-preview-icon {
+  color: var(--success-color, #28a745);
+}
+
+.pay-period-preview-title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.pay-period-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.pay-period-preview-item {
+  padding: var(--spacing-sm);
+  background-color: white;
+  border-radius: var(--radius-sm);
+  border: 1px solid #e0f2fe;
+}
+
+.pay-period-preview-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.pay-period-preview-dates {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+
+/* Information callout */
+.form-info {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--info-color, #17a2b8);
+}
+
+.form-info svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--info-color, #17a2b8);
+}
+
+.form-info-content {
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.form-info-content p {
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.form-info-content p:last-child {
+  margin-bottom: 0;
+}
+
+.form-info-content strong {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Additional responsive styles for smaller screens */
+@media (max-width: 480px) {
+  .pay-period-form {
+    gap: var(--spacing-md);
+  }
+  
+  .pay-period-type-card {
+    padding: var(--spacing-sm);
+  }
+  
+  .form-info,
+  .form-errors,
+  .pay-period-preview {
+    padding: var(--spacing-sm);
+  }
 }

@@ -16,6 +16,7 @@ import {
   Tag,
   Plus,
   Trash2,
+  Calendar,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { updateOrganization } from "../../firebase/firestore";
@@ -26,6 +27,7 @@ import {
   validateSessionType,
   getDefaultSessionTypesForNewOrg 
 } from "../../utils/sessionTypes";
+import PayPeriodForm from "./PayPeriodForm";
 import "../shared/Modal.css";
 import "./StudioSettingsModal.css";
 
@@ -78,6 +80,13 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
       bufferTime: 15,
     },
     sessionTypes: [],
+    payPeriodSettings: {
+      isActive: false,
+      type: 'bi-weekly',
+      config: {
+        startDate: new Date().toISOString().split('T')[0]
+      }
+    },
   });
 
   const [loading, setLoading] = useState(false);
@@ -168,6 +177,13 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
           bufferTime: organization.preferences?.bufferTime || 15,
         },
         sessionTypes: organization.sessionTypes || getDefaultSessionTypesForNewOrg(),
+        payPeriodSettings: organization.payPeriodSettings || {
+          isActive: false,
+          type: 'bi-weekly',
+          config: {
+            startDate: new Date().toISOString().split('T')[0]
+          }
+        },
       });
       console.log("Initialized session types:", organization.sessionTypes || getDefaultSessionTypesForNewOrg());
     }
@@ -308,6 +324,13 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
     return Object.keys(newErrors).length === 0;
   };
 
+  const handlePayPeriodChange = (payPeriodSettings) => {
+    setFormData(prev => ({
+      ...prev,
+      payPeriodSettings
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -387,6 +410,7 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
     { id: "hours", label: "Hours", icon: Clock },
     { id: "pricing", label: "Pricing", icon: DollarSign },
     { id: "sessiontypes", label: "Session Types", icon: Tag },
+    { id: "payperiods", label: "Pay Periods", icon: Calendar },
     { id: "policies", label: "Policies", icon: SettingsIcon },
   ];
 
@@ -1009,6 +1033,26 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
                       ))}
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "payperiods" && (
+              <div className="tab-content">
+                <div className="form-section">
+                  <h3 className="form-section__title">
+                    <Calendar size={16} />
+                    Pay Period Configuration
+                  </h3>
+                  <p className="form-section__description">
+                    Configure how pay periods are calculated for timesheet reports and payroll processing.
+                  </p>
+
+                  <PayPeriodForm
+                    value={formData.payPeriodSettings}
+                    onChange={handlePayPeriodChange}
+                    errors={errors}
+                  />
                 </div>
               </div>
             )}
