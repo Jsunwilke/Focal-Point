@@ -405,7 +405,6 @@ const WeekView = ({
 
   const headerStyle = {
     display: "grid",
-    gridTemplateColumns: "200px repeat(7, 1fr)",
     backgroundColor: "var(--background-secondary, #f8f9fa)",
     borderBottom: "1px solid var(--border-color, #dee2e6)",
     position: "sticky",
@@ -449,7 +448,6 @@ const WeekView = ({
 
   const rowStyle = {
     display: "grid",
-    gridTemplateColumns: "200px repeat(7, 1fr)",
     minHeight: "80px",
     borderBottom: "1px solid var(--border-color, #dee2e6)",
   };
@@ -464,7 +462,6 @@ const WeekView = ({
     position: "sticky",
     left: 0,
     zIndex: 5,
-    width: "200px",
     boxSizing: "border-box",
   };
 

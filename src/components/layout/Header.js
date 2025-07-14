@@ -1,13 +1,13 @@
 // src/components/layout/Header.js
 import React, { useState } from "react";
-import { ChevronDown, LogOut, User, Settings } from "lucide-react";
+import { ChevronDown, LogOut, User, Settings, Menu } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import Button from "../shared/Button";
 import ProfileSettingsModal from "../settings/ProfileSettingsModal";
 import StudioSettingsModal from "../settings/StudioSettingsModal";
 import "./Header.css";
 
-const Header = () => {
+const Header = ({ onMenuToggle, isMobile }) => {
   const { userProfile, organization, signout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
@@ -70,17 +70,28 @@ const Header = () => {
       <header className="header">
         <div className="header__content">
           <div className="header__left">
-            <h2 className="header__greeting">
-              Welcome back, {userProfile?.firstName || "User"}
-            </h2>
-            <p className="header__date">
-              {new Date().toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </p>
+            {isMobile && (
+              <button 
+                className="header__menu-toggle"
+                onClick={onMenuToggle}
+                aria-label="Toggle menu"
+              >
+                <Menu size={24} />
+              </button>
+            )}
+            <div className="header__text">
+              <h2 className="header__greeting">
+                Welcome back, {userProfile?.firstName || "User"}
+              </h2>
+              <p className="header__date">
+                {new Date().toLocaleDateString("en-US", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </p>
+            </div>
           </div>
 
           <div className="header__right">

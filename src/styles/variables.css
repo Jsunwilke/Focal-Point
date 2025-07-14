@@ -63,6 +63,12 @@
   --sidebar-width: 16rem;
   --header-height: 4rem;
 
+  /* Responsive Breakpoints */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+
   /* Transitions */
   --transition-fast: 150ms ease-in-out;
   --transition-normal: 200ms ease-in-out;

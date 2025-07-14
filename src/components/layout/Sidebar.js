@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import "./Sidebar.css";
 
-const Sidebar = () => {
+const Sidebar = ({ isOpen, onClose, isMobile }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { userProfile } = useAuth();
@@ -102,6 +102,10 @@ const Sidebar = () => {
   const handleNavigation = (item) => {
     if (item.enabled) {
       navigate(item.path);
+      // Close mobile menu after navigation
+      if (isMobile && onClose) {
+        onClose();
+      }
     }
   };
 
@@ -113,7 +117,7 @@ const Sidebar = () => {
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isMobile ? 'sidebar--mobile' : ''} ${isMobile && isOpen ? 'sidebar--open' : ''}`}>
       <div className="sidebar__header">
         <h1 className="sidebar__logo">iconik</h1>
         <p className="sidebar__subtitle">Studio Management</p>

@@ -1418,4 +1418,40 @@
   .table-controls-right {
     justify-content: center;
   }
+
+  /* Mobile table handling */
+  .employee-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-row,
+  .table-header-row {
+    min-width: 600px;
+  }
+
+  .payroll-summary-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .summary-card {
+    padding: var(--spacing-md);
+  }
+
+  .summary-card-value {
+    font-size: var(--font-size-xl);
+  }
+
+  /* Hide less important columns on very small screens */
+  @media (max-width: 480px) {
+    .table-cell--center:nth-child(5),
+    .table-cell--center:nth-child(6) {
+      display: none;
+    }
+
+    .table-row,
+    .table-header-row {
+      grid-template-columns: 50px 2fr 100px 120px 100px;
+    }
+  }
 }

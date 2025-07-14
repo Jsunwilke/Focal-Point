@@ -24,6 +24,7 @@ import {
   Map,
   X,
 } from "lucide-react";
+import "./Schedule.css";
 
 // Date utility functions
 const startOfWeek = (date, weekStartsOn = 0) => {
@@ -915,90 +916,34 @@ const Schedule = () => {
       {/* Team Filter Dropdown */}
       {showTeamFilter && (
         <div
-          style={{
-            position: "fixed",
-            top: "0",
-            left: "0",
-            right: "0",
-            bottom: "0",
-            zIndex: 9999,
-          }}
+          className="schedule__filter-dropdown"
           onClick={() => setShowTeamFilter(false)}
         >
           <div
-            style={{
-              position: "absolute",
-              top: "120px",
-              right: "20px",
-              backgroundColor: "white",
-              border: "1px solid #dee2e6",
-              borderRadius: "8px",
-              boxShadow: "0 10px 25px rgba(0, 0, 0, 0.15)",
-              minWidth: "300px",
-              maxHeight: "400px",
-              overflow: "hidden",
-              zIndex: 10000,
-            }}
+            className="schedule__filter-dropdown-content"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Filter Header */}
-            <div
-              style={{
-                padding: "1rem",
-                borderBottom: "1px solid #dee2e6",
-                backgroundColor: "#f8f9fa",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: "0.5rem",
-                }}
-              >
-                <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: "600" }}>
-                  Filter Team Members
-                </h4>
+            <div className="schedule__filter-header">
+              <div className="schedule__filter-title">
+                <h4>Filter Team Members</h4>
                 <button
+                  className="schedule__filter-close"
                   onClick={() => setShowTeamFilter(false)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: "0.25rem",
-                    color: "#6c757d",
-                  }}
                 >
                   <X size={16} />
                 </button>
               </div>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
+              <div className="schedule__filter-actions">
                 <button
+                  className="schedule__filter-btn-small schedule__filter-btn-small--primary"
                   onClick={handleShowAllPhotographers}
-                  style={{
-                    padding: "0.25rem 0.5rem",
-                    fontSize: "0.75rem",
-                    backgroundColor: "#007bff",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
                 >
                   Show All
                 </button>
                 <button
+                  className="schedule__filter-btn-small schedule__filter-btn-small--secondary"
                   onClick={handleHideAllPhotographers}
-                  style={{
-                    padding: "0.25rem 0.5rem",
-                    fontSize: "0.75rem",
-                    backgroundColor: "#6c757d",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
                 >
                   Hide All
                 </button>
@@ -1006,72 +951,35 @@ const Schedule = () => {
             </div>
 
             {/* Filter List */}
-            <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+            <div className="schedule__filter-list">
               {teamMembers
                 .filter((member) => member.isActive)
                 .map((member) => (
                   <div
                     key={member.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      padding: "0.75rem 1rem",
-                      borderBottom: "1px solid #f1f3f4",
-                      cursor: "pointer",
-                      backgroundColor: visiblePhotographers.has(member.id)
-                        ? "#f8f9fa"
-                        : "white",
-                      transition: "background-color 0.2s",
-                    }}
+                    className={`schedule__filter-item ${
+                      visiblePhotographers.has(member.id) 
+                        ? "schedule__filter-item--selected" 
+                        : ""
+                    }`}
                     onClick={() => handlePhotographerFilterToggle(member.id)}
                   >
                     <div
-                      style={{
-                        width: "18px",
-                        height: "18px",
-                        border: "2px solid #dee2e6",
-                        borderRadius: "3px",
-                        marginRight: "0.75rem",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: visiblePhotographers.has(member.id)
-                          ? "#007bff"
-                          : "white",
-                        borderColor: visiblePhotographers.has(member.id)
-                          ? "#007bff"
-                          : "#dee2e6",
-                      }}
-                    >
-                      {visiblePhotographers.has(member.id) && (
-                        <div
-                          style={{
-                            width: "10px",
-                            height: "10px",
-                            backgroundColor: "white",
-                            borderRadius: "1px",
-                          }}
-                        />
-                      )}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: "500", fontSize: "0.875rem" }}>
+                      className={`schedule__filter-checkbox ${
+                        visiblePhotographers.has(member.id)
+                          ? "schedule__filter-checkbox--checked"
+                          : ""
+                      }`}
+                    />
+                    <div className="schedule__filter-info">
+                      <div className="schedule__filter-name">
                         {member.firstName} {member.lastName}
                       </div>
-                      <div style={{ fontSize: "0.75rem", color: "#6c757d" }}>
+                      <div className="schedule__filter-email">
                         {member.email}
                       </div>
                     </div>
-                    {/* Show session count for this photographer */}
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#6c757d",
-                        backgroundColor: "#f1f3f4",
-                        padding: "0.25rem 0.5rem",
-                        borderRadius: "12px",
-                      }}
-                    >
+                    <div className="schedule__filter-count">
                       {
                         sessions.filter((s) => s.photographerId === member.id)
                           .length
@@ -1088,90 +996,34 @@ const Schedule = () => {
       {/* School Filter Dropdown */}
       {showSchoolFilter && (
         <div
-          style={{
-            position: "fixed",
-            top: "0",
-            left: "0",
-            right: "0",
-            bottom: "0",
-            zIndex: 9999,
-          }}
+          className="schedule__filter-dropdown"
           onClick={() => setShowSchoolFilter(false)}
         >
           <div
-            style={{
-              position: "absolute",
-              top: "120px",
-              right: "20px",
-              backgroundColor: "white",
-              border: "1px solid #dee2e6",
-              borderRadius: "8px",
-              boxShadow: "0 10px 25px rgba(0, 0, 0, 0.15)",
-              minWidth: "300px",
-              maxHeight: "400px",
-              overflow: "hidden",
-              zIndex: 10000,
-            }}
+            className="schedule__filter-dropdown-content"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Filter Header */}
-            <div
-              style={{
-                padding: "1rem",
-                borderBottom: "1px solid #dee2e6",
-                backgroundColor: "#f8f9fa",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: "0.5rem",
-                }}
-              >
-                <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: "600" }}>
-                  Filter Schools
-                </h4>
+            <div className="schedule__filter-header">
+              <div className="schedule__filter-title">
+                <h4>Filter Schools</h4>
                 <button
+                  className="schedule__filter-close"
                   onClick={() => setShowSchoolFilter(false)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: "0.25rem",
-                    color: "#6c757d",
-                  }}
                 >
                   <X size={16} />
                 </button>
               </div>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
+              <div className="schedule__filter-actions">
                 <button
+                  className="schedule__filter-btn-small schedule__filter-btn-small--primary"
                   onClick={handleShowAllSchools}
-                  style={{
-                    padding: "0.25rem 0.5rem",
-                    fontSize: "0.75rem",
-                    backgroundColor: "#007bff",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
                 >
                   Show All
                 </button>
                 <button
+                  className="schedule__filter-btn-small schedule__filter-btn-small--secondary"
                   onClick={handleHideAllSchools}
-                  style={{
-                    padding: "0.25rem 0.5rem",
-                    fontSize: "0.75rem",
-                    backgroundColor: "#6c757d",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
                 >
                   Hide All
                 </button>
@@ -1179,69 +1031,32 @@ const Schedule = () => {
             </div>
 
             {/* Filter List */}
-            <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+            <div className="schedule__filter-list">
               {schools
                 .sort((a, b) => (a.value || "").localeCompare(b.value || ""))
                 .map((school) => (
                   <div
                     key={school.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      padding: "0.75rem 1rem",
-                      borderBottom: "1px solid #f1f3f4",
-                      cursor: "pointer",
-                      backgroundColor: visibleSchools.has(school.id)
-                        ? "#f8f9fa"
-                        : "white",
-                      transition: "background-color 0.2s",
-                    }}
+                    className={`schedule__filter-item ${
+                      visibleSchools.has(school.id) 
+                        ? "schedule__filter-item--selected" 
+                        : ""
+                    }`}
                     onClick={() => handleSchoolFilterToggle(school.id)}
                   >
                     <div
-                      style={{
-                        width: "18px",
-                        height: "18px",
-                        border: "2px solid #dee2e6",
-                        borderRadius: "3px",
-                        marginRight: "0.75rem",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: visibleSchools.has(school.id)
-                          ? "#007bff"
-                          : "white",
-                        borderColor: visibleSchools.has(school.id)
-                          ? "#007bff"
-                          : "#dee2e6",
-                      }}
-                    >
-                      {visibleSchools.has(school.id) && (
-                        <div
-                          style={{
-                            width: "10px",
-                            height: "10px",
-                            backgroundColor: "white",
-                            borderRadius: "1px",
-                          }}
-                        />
-                      )}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: "500", fontSize: "0.875rem" }}>
+                      className={`schedule__filter-checkbox ${
+                        visibleSchools.has(school.id)
+                          ? "schedule__filter-checkbox--checked"
+                          : ""
+                      }`}
+                    />
+                    <div className="schedule__filter-info">
+                      <div className="schedule__filter-name">
                         {school.value}
                       </div>
                     </div>
-                    {/* Show session count for this school */}
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#6c757d",
-                        backgroundColor: "#f1f3f4",
-                        padding: "0.25rem 0.5rem",
-                        borderRadius: "12px",
-                      }}
-                    >
+                    <div className="schedule__filter-count">
                       {sessions.filter((s) => s.schoolId === school.id).length}{" "}
                       sessions
                     </div>
