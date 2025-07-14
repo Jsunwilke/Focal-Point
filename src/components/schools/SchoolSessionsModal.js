@@ -2,19 +2,25 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { X, Calendar, Search, School } from 'lucide-react';
-import { getSessionsForSchool, getTeamMembers } from '../../firebase/firestore';
+import { getSessionsForSchool, getTeamMembers, createSession } from '../../firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import SchoolSessionsList from './SchoolSessionsList';
+import SessionDetailsModal from '../sessions/SessionDetailsModal';
 import '../shared/Modal.css';
 import './SchoolSessionsModal.css';
 
 const SchoolSessionsModal = ({ school, onClose }) => {
-  const { organization } = useAuth();
+  const { organization, userProfile } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSession, setSelectedSession] = useState(null);
+  const [showSessionDetails, setShowSessionDetails] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [modalMessage, setModalMessage] = useState('');
 
   useEffect(() => {
     const loadData = async () => {
@@ -76,6 +82,58 @@ const SchoolSessionsModal = ({ school, onClose }) => {
   };
 
   const stats = getSessionStats();
+
+  // Handle session click to show details
+  const handleSessionClick = (session) => {
+    setSelectedSession(session);
+    setShowSessionDetails(true);
+  };
+
+  // Close session details modal
+  const handleCloseSessionDetails = () => {
+    setShowSessionDetails(false);
+    setSelectedSession(null);
+  };
+
+  // Handle duplicate to next year
+  const handleRescheduleToNextYear = async (sessionData) => {
+    try {
+      setLoading(true);
+      
+      // Create a new session for next year (excluding the id and timestamps)
+      const { id, createdAt, updatedAt, ...sessionDataWithoutId } = sessionData;
+      
+      const newSessionData = {
+        ...sessionDataWithoutId,
+        // Remove photographer assignments as requested
+        photographers: [],
+        photographerId: null,
+        photographer: null,
+        // Add a note about the duplication
+        notes: sessionData.notes ? 
+          `${sessionData.notes}\n\nDuplicated from previous year on ${new Date().toLocaleDateString()}` : 
+          `Duplicated from previous year on ${new Date().toLocaleDateString()}`
+      };
+      
+      // Create the new session
+      await createSession(organization.id, newSessionData);
+
+      // Reload sessions to show the updated data
+      const sessionsData = await getSessionsForSchool(school.id, organization.id);
+      setSessions(sessionsData);
+      
+      // Show success message
+      setModalMessage('Session successfully duplicated to next year!');
+      setShowSuccessModal(true);
+      
+    } catch (error) {
+      console.error('Error duplicating session:', error);
+      setModalMessage('Failed to duplicate session. Please try again.');
+      setShowErrorModal(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const modalContent = (
     <div
@@ -187,6 +245,7 @@ const SchoolSessionsModal = ({ school, onClose }) => {
                 sessions={filteredSessions}
                 organization={organization}
                 teamMembers={teamMembers}
+                onSessionClick={handleSessionClick}
               />
             </>
           )}
@@ -195,7 +254,185 @@ const SchoolSessionsModal = ({ school, onClose }) => {
     </div>
   );
 
-  return ReactDOM.createPortal(modalContent, document.body);
+  // Success Modal
+  const successModal = showSuccessModal && (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10003,
+        padding: '20px',
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          setShowSuccessModal(false);
+        }
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: 'white',
+          borderRadius: '8px',
+          padding: '24px',
+          maxWidth: '400px',
+          width: '100%',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+          textAlign: 'center',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ 
+          width: '48px', 
+          height: '48px', 
+          backgroundColor: '#d4edda', 
+          borderRadius: '50%', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          margin: '0 auto 16px',
+          color: '#155724',
+          fontSize: '24px',
+          fontWeight: 'bold'
+        }}>
+          ✓
+        </div>
+        <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600', color: '#155724' }}>
+          Success!
+        </h3>
+        <p style={{ margin: '0 0 24px 0', lineHeight: '1.5', color: '#6c757d' }}>
+          {modalMessage}
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowSuccessModal(false)}
+          style={{
+            padding: '8px 24px',
+            border: 'none',
+            backgroundColor: '#28a745',
+            color: 'white',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: '500',
+          }}
+        >
+          OK
+        </button>
+      </div>
+    </div>
+  );
+
+  // Error Modal
+  const errorModal = showErrorModal && (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10003,
+        padding: '20px',
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          setShowErrorModal(false);
+        }
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: 'white',
+          borderRadius: '8px',
+          padding: '24px',
+          maxWidth: '400px',
+          width: '100%',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+          textAlign: 'center',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ 
+          width: '48px', 
+          height: '48px', 
+          backgroundColor: '#f8d7da', 
+          borderRadius: '50%', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          margin: '0 auto 16px',
+          color: '#721c24',
+          fontSize: '24px',
+          fontWeight: 'bold'
+        }}>
+          ✕
+        </div>
+        <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600', color: '#721c24' }}>
+          Error
+        </h3>
+        <p style={{ margin: '0 0 24px 0', lineHeight: '1.5', color: '#6c757d' }}>
+          {modalMessage}
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowErrorModal(false)}
+          style={{
+            padding: '8px 24px',
+            border: 'none',
+            backgroundColor: '#dc3545',
+            color: 'white',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: '500',
+          }}
+        >
+          OK
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {ReactDOM.createPortal(modalContent, document.body)}
+      
+      {/* Session Details Modal */}
+      {showSessionDetails && selectedSession && (
+        <SessionDetailsModal
+          isOpen={showSessionDetails}
+          onClose={handleCloseSessionDetails}
+          session={selectedSession}
+          teamMembers={teamMembers}
+          userProfile={userProfile}
+          organization={organization}
+          onEditSession={() => {
+            // For now, just close the modal - edit functionality can be added later
+            handleCloseSessionDetails();
+          }}
+          // Pass reschedule handler for school context
+          onRescheduleToNextYear={handleRescheduleToNextYear}
+          // Flag to show this is in school management context
+          showRescheduleOption={true}
+        />
+      )}
+
+      {/* Success and Error Modals */}
+      {successModal && ReactDOM.createPortal(successModal, document.body)}
+      {errorModal && ReactDOM.createPortal(errorModal, document.body)}
+    </>
+  );
 };
 
 export default SchoolSessionsModal;

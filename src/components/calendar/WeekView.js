@@ -58,6 +58,14 @@ const WeekView = ({
       const dayFormatted = formatLocalDate(day);
       const sessionFormatted = formatLocalDate(sessionDate);
 
+      // Handle unassigned sessions
+      if (photographerId === 'unassigned') {
+        return (
+          (!session.photographerId && (!session.photographers || session.photographers.length === 0)) &&
+          sessionFormatted === dayFormatted
+        );
+      }
+
       return (
         session.photographerId === photographerId &&
         sessionFormatted === dayFormatted
@@ -113,6 +121,28 @@ const WeekView = ({
 
   // Get user avatar component
   const getUserAvatar = (member) => {
+    // Special handling for unassigned member
+    if (member.id === 'unassigned') {
+      return (
+        <div
+          style={{
+            width: "2rem",
+            height: "2rem",
+            borderRadius: "50%",
+            backgroundColor: "#dc3545",
+            color: "white",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "var(--font-size-xs, 12px)",
+            fontWeight: "var(--font-weight-semibold, 600)",
+          }}
+        >
+          ?
+        </div>
+      );
+    }
+
     if (member.photoURL) {
       return (
         <img
@@ -150,14 +180,46 @@ const WeekView = ({
     );
   };
 
+  // Get unassigned sessions (sessions without photographers or with empty photographers array)
+  const getUnassignedSessions = () => {
+    const unassigned = sessions.filter((session) => {
+      // Check if session has no photographers assigned
+      return !session.photographerId && (!session.photographers || session.photographers.length === 0);
+    });
+    console.log('WeekView - Unassigned sessions found:', unassigned);
+    return unassigned;
+  };
+
   // Filter team members based on schedule type
   const displayMembers =
     scheduleType === "my"
       ? teamMembers.filter((member) => member.id === userProfile?.id)
       : teamMembers.filter((member) => member.isActive);
 
+  // Create virtual "unassigned" member for unassigned sessions
+  const unassignedMember = {
+    id: 'unassigned',
+    firstName: 'Unassigned',
+    lastName: 'Sessions',
+    email: 'unassigned@system',
+    isActive: true,
+    photoURL: null
+  };
+
+  // Handle unassigned sessions separately
+  const unassignedSessions = getUnassignedSessions();
+  const showUnassignedSection = unassignedSessions.length > 0;
+  
+  // Don't include unassigned member in main display members
+  const finalDisplayMembers = displayMembers;
+
   // Calculate total hours for a photographer in the current week
   const calculatePhotographerHours = (photographerId) => {
+    // Don't calculate hours for unassigned sessions
+    if (photographerId === 'unassigned') {
+      return 0;
+    }
+
     const photographerSessions = sessions.filter((session) => {
       // Check if session is in current week
       let sessionDate;
@@ -251,9 +313,12 @@ const WeekView = ({
       originalDate = formatLocalDate(dateObj);
     }
 
+    // Get original photographer ID (handle unassigned sessions)
+    const originalPhotographerId = draggedSession.photographerId || 'unassigned';
+
     // Check if anything actually changed
     if (
-      draggedSession.photographerId === newPhotographerId &&
+      originalPhotographerId === newPhotographerId &&
       originalDate === newDateString
     ) {
       setDraggedSession(null);
@@ -266,14 +331,13 @@ const WeekView = ({
       // we need to use the actual session ID, not the compound ID
       const actualSessionId = draggedSession.sessionId || draggedSession.id;
 
-      // Update the session with the original photographer ID for accurate tracking
+      // Update the session with the new photographer ID
       const updatedSession = {
         ...draggedSession,
-        photographerId: newPhotographerId,
+        photographerId: newPhotographerId === 'unassigned' ? null : newPhotographerId,
         date: newDateString,
-        originalPhotographerId: draggedSession.photographerId, // Pass the ORIGINAL photographer ID
+        originalPhotographerId: originalPhotographerId === 'unassigned' ? null : originalPhotographerId,
       };
-
 
       await onUpdateSession(actualSessionId, updatedSession);
 
@@ -452,17 +516,27 @@ const WeekView = ({
     borderBottom: "1px solid var(--border-color, #dee2e6)",
   };
 
-  const photographerCellStyle = {
-    display: "flex",
-    alignItems: "center",
-    gap: "var(--spacing-sm, 8px)",
-    padding: "var(--spacing-sm, 8px)",
-    borderRight: "2px solid var(--primary-color, #007bff)",
-    backgroundColor: "var(--background, #ffffff)",
-    position: "sticky",
-    left: 0,
-    zIndex: 5,
-    boxSizing: "border-box",
+  const getPhotographerCellStyle = (member) => {
+    const baseStyle = {
+      display: "flex",
+      alignItems: "center",
+      gap: "var(--spacing-sm, 8px)",
+      padding: "var(--spacing-sm, 8px)",
+      borderRight: "2px solid var(--primary-color, #007bff)",
+      backgroundColor: "var(--background, #ffffff)",
+      position: "sticky",
+      left: 0,
+      zIndex: 5,
+      boxSizing: "border-box",
+    };
+
+    // Special styling for unassigned row
+    if (member.id === 'unassigned') {
+      baseStyle.backgroundColor = "#f8f9fa";
+      baseStyle.borderRight = "2px solid #dc3545";
+    }
+
+    return baseStyle;
   };
 
   const getDayCellStyle = (photographerId, day) => {
@@ -518,6 +592,234 @@ const WeekView = ({
 
   return (
     <div className="week-view" style={containerStyle}>
+      {/* Unassigned Sessions Section */}
+      {showUnassignedSection && (
+        <div className="unassigned-section">
+          {/* Unassigned Header */}
+          <div className="unassigned-header" style={headerStyle}>
+            {/* Corner cell for unassigned label */}
+            <div
+              className="calendar-header__cell calendar-header__cell--corner"
+              style={{...cornerCellStyle, backgroundColor: "#f8f9fa", borderRight: "2px solid #dc3545"}}
+            >
+              <div className="calendar-header__day">UNASSIGNED</div>
+            </div>
+
+            {/* Day columns */}
+            {weekDays.map((day, index) => (
+              <div
+                key={`unassigned-header-${index}`}
+                className={`calendar-header__cell ${
+                  isToday(day) ? "calendar-header__cell--today" : ""
+                }`}
+                style={{
+                  ...headerCellStyle,
+                  ...(isToday(day) ? todayHeaderStyle : {}),
+                }}
+              >
+                <div
+                  className="calendar-header__day"
+                  style={{ marginBottom: "4px" }}
+                >
+                  {dayNames[index]}
+                </div>
+                <div
+                  className={`calendar-header__date ${
+                    isToday(day) ? "calendar-header__date--today" : ""
+                  }`}
+                  style={{
+                    fontSize: "var(--font-size-lg, 16px)",
+                    fontWeight: "var(--font-weight-semibold, 600)",
+                  }}
+                >
+                  {day.getDate()}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Unassigned Row */}
+          <div className="calendar-row calendar-row--unassigned" style={rowStyle}>
+            {/* Unassigned Label Cell */}
+            <div
+              className="calendar-row__photographer"
+              style={getPhotographerCellStyle(unassignedMember)}
+            >
+              <div className="photographer-avatar">
+                {getUserAvatar(unassignedMember)}
+              </div>
+              <div className="photographer-info" style={{ flex: 1 }}>
+                <div
+                  className="photographer-name"
+                  style={{
+                    fontSize: "var(--font-size-sm, 14px)",
+                    fontWeight: "var(--font-weight-medium, 500)",
+                    color: "var(--text-primary, #333)",
+                  }}
+                >
+                  {unassignedMember.firstName} {unassignedMember.lastName}
+                </div>
+                <div
+                  className="photographer-stats"
+                  style={{
+                    fontSize: "var(--font-size-xs, 12px)",
+                    color: "var(--text-secondary, #6c757d)",
+                  }}
+                >
+                  Needs Assignment
+                </div>
+              </div>
+            </div>
+
+            {/* Day Cells for Unassigned Sessions */}
+            {weekDays.map((day, dayIndex) => {
+              const daySessions = getSortedSessionsForDay('unassigned', day);
+              
+              return (
+                <div
+                  key={`unassigned-cell-${dayIndex}`}
+                  className={`calendar-cell ${
+                    isToday(day) ? "calendar-cell--today" : ""
+                  }`}
+                  style={getDayCellStyle('unassigned', day)}
+                  onDragOver={(e) => handleDragOver(e, 'unassigned', day)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, 'unassigned', day)}
+                >
+                  {/* Drag Over Indicator */}
+                  {isDragOverCell('unassigned', day) && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "50%",
+                        left: "50%",
+                        transform: "translate(-50%, -50%)",
+                        fontSize: "24px",
+                        color: "#28a745",
+                        pointerEvents: "none",
+                      }}
+                    >
+                      📅
+                    </div>
+                  )}
+
+                  {daySessions.map((session) => {
+                    // Get global order for this session
+                    const globalSessionOrder = getGlobalSessionOrderForDay(day);
+                    const globalOrderIndex = globalSessionOrder.findIndex(
+                      globalSession => globalSession.id === session.id || 
+                      (globalSession.sessionId && globalSession.sessionId === session.sessionId)
+                    );
+                    
+                    return (
+                      <div
+                        key={session.id}
+                        className="session-block"
+                        draggable="true"
+                        onDragStart={(e) => handleDragStart(e, session)}
+                        onDragEnd={handleDragEnd}
+                        onClick={() => {
+                          if (onSessionClick) {
+                            onSessionClick(session);
+                          }
+                        }}
+                        style={{
+                          ...getSessionBlockStyle(session, globalOrderIndex),
+                          backgroundColor: "#dc3545",
+                          border: "1px dashed #ffffff",
+                          color: "white"
+                        }}
+                      >
+                        <div
+                          className="session-block__time"
+                          style={{ 
+                            fontSize: "11px",
+                            fontWeight: "500",
+                            marginBottom: "3px",
+                            opacity: 0.9,
+                            lineHeight: "1.2"
+                          }}
+                        >
+                          {formatTime(session.startTime)} - {formatTime(session.endTime)}
+                          {calculateDuration(session.startTime, session.endTime) && 
+                            ` (${calculateDuration(session.startTime, session.endTime)})`
+                          }
+                        </div>
+                        <div
+                          className="session-block__school"
+                          style={{ 
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            lineHeight: "1.2",
+                            color: "white",
+                            marginBottom: "3px"
+                          }}
+                        >
+                          {session.schoolName || 'School'}
+                        </div>
+                        {(session.sessionTypes || session.sessionType) && (
+                          <div style={{ display: 'flex', gap: '2px', flexWrap: 'wrap', marginTop: '2px' }}>
+                            {(() => {
+                              const sessionTypes = normalizeSessionTypes(session.sessionTypes || session.sessionType);
+                              const colors = getSessionTypeColors(sessionTypes, organization);
+                              const names = getSessionTypeNames(sessionTypes, organization);
+                              
+                              return sessionTypes.map((type, index) => {
+                                let displayName = names[index];
+                                if (type === 'other' && session.customSessionType) {
+                                  displayName = session.customSessionType;
+                                }
+                                
+                                return (
+                                  <div
+                                    key={`${type}-${index}`}
+                                    className="session-block__badge"
+                                    style={{
+                                      fontSize: "8px",
+                                      backgroundColor: colors[index],
+                                      color: "white",
+                                      padding: "1px 4px",
+                                      borderRadius: "6px",
+                                      textTransform: "capitalize",
+                                      fontWeight: "500",
+                                      display: "inline-block",
+                                      lineHeight: "1.2"
+                                    }}
+                                  >
+                                    {displayName}
+                                  </div>
+                                );
+                              });
+                            })()}
+                          </div>
+                        )}
+                        {session.notes && (
+                          <div
+                            className="session-block__notes"
+                            style={{
+                              fontSize: "10px",
+                              opacity: 0.7,
+                              fontStyle: "italic",
+                              marginTop: "3px",
+                              borderTop: "1px solid rgba(255,255,255,0.2)",
+                              paddingTop: "2px"
+                            }}
+                          >
+                            {session.notes.length > 25
+                              ? `${session.notes.substring(0, 25)}...`
+                              : session.notes}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Header Row with Days */}
       <div className="calendar-header" style={headerStyle}>
         {/* Corner cell for photographer column */}
@@ -563,12 +865,23 @@ const WeekView = ({
 
       {/* Body with Team Members and Sessions */}
       <div className="calendar-body" style={bodyStyle}>
-        {displayMembers.map((member) => (
+        {finalDisplayMembers.map((member) => (
           <div key={member.id} className="calendar-row" style={rowStyle}>
             {/* Photographer Name Cell */}
             <div
               className="calendar-row__photographer"
-              style={photographerCellStyle}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--spacing-sm, 8px)",
+                padding: "var(--spacing-sm, 8px)",
+                borderRight: "2px solid var(--primary-color, #007bff)",
+                backgroundColor: "var(--background, #ffffff)",
+                position: "sticky",
+                left: 0,
+                zIndex: 5,
+                boxSizing: "border-box",
+              }}
             >
               <div className="photographer-avatar">
                 {getUserAvatar(member)}
@@ -745,7 +1058,7 @@ const WeekView = ({
           </div>
         ))}
 
-        {displayMembers.length === 0 && (
+        {finalDisplayMembers.length === 0 && (
           <div
             className="calendar-empty"
             style={{

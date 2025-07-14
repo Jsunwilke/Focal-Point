@@ -368,6 +368,48 @@
   background-color: var(--background-secondary);
 }
 
+/* Unassigned Section Styles */
+.unassigned-section {
+  border-bottom: 3px solid #dc3545;
+  margin-bottom: 8px;
+}
+
+.unassigned-header {
+  display: grid;
+  grid-template-columns: 200px repeat(7, 1fr);
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dc3545;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.calendar-row--unassigned {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #dc3545;
+  display: grid;
+  grid-template-columns: 200px repeat(7, 1fr);
+  min-height: 80px;
+}
+
+.calendar-row--unassigned:hover {
+  background-color: #e9ecef;
+}
+
+.calendar-row--unassigned .calendar-row__photographer {
+  background-color: #f8f9fa;
+  border-right: 2px solid #dc3545;
+}
+
+.calendar-row--unassigned .session-block {
+  background-color: #dc3545;
+  border: 1px dashed #ffffff;
+}
+
+.calendar-row--unassigned .session-block:hover {
+  background-color: #c82333;
+}
+
 .calendar-row__photographer {
   display: flex;
   align-items: center;
@@ -903,13 +945,15 @@
     width: 100%;
   }
 
-  .calendar-header {
+  .calendar-header,
+  .unassigned-header {
     grid-template-columns: 100px repeat(7, minmax(70px, 1fr));
     min-width: 600px;
     width: 600px;
   }
 
-  .calendar-row {
+  .calendar-row,
+  .calendar-row--unassigned {
     grid-template-columns: 100px repeat(7, minmax(70px, 1fr));
     min-width: 600px;
     width: 600px;
@@ -1029,12 +1073,14 @@
     min-width: 600px; /* Smaller but still shows all days */
   }
 
-  .calendar-header {
+  .calendar-header,
+  .unassigned-header {
     grid-template-columns: 70px repeat(7, minmax(70px, 1fr));
     min-width: 600px;
   }
 
-  .calendar-row {
+  .calendar-row,
+  .calendar-row--unassigned {
     grid-template-columns: 70px repeat(7, minmax(70px, 1fr));
     min-width: 600px;
   }

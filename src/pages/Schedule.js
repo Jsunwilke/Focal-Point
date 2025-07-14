@@ -18,6 +18,7 @@ import StatsModal from "../components/stats/StatsModal";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Plus,
   Filter,
   Users,
@@ -158,6 +159,7 @@ const loadPhotographerPreferences = (organizationId) => {
 const Schedule = () => {
   const { userProfile, organization } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const dateRangeRef = React.useRef(null);
   const [viewMode, setViewMode] = useState("week");
   const [scheduleType, setScheduleType] = useState("full");
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -165,6 +167,10 @@ const Schedule = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showTeamFilter, setShowTeamFilter] = useState(false);
   const [showSchoolFilter, setShowSchoolFilter] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [calendarView, setCalendarView] = useState('days'); // 'days' or 'months'
+  const [datePickerPosition, setDatePickerPosition] = useState({ top: 0, left: 0 });
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
@@ -198,6 +204,9 @@ const Schedule = () => {
         });
 
         // Convert sessions to calendar format
+        console.log('Raw sessions data from Firestore:', sessionsData);
+        const unassignedSessions = sessionsData.filter(s => !s.photographers || s.photographers.length === 0);
+        console.log('Sessions without photographers:', unassignedSessions);
         const sessionData = sessionsData
           .map((session) => {
             // Handle date properly to avoid timezone issues
@@ -221,7 +230,7 @@ const Schedule = () => {
             }
 
             // For sessions with multiple photographers, create separate entries for each
-            if (session.photographers && Array.isArray(session.photographers)) {
+            if (session.photographers && Array.isArray(session.photographers) && session.photographers.length > 0) {
               return session.photographers.map((photographer) => ({
                 id: `${session.id}-${photographer.id}`,
                 sessionId: session.id,
@@ -268,7 +277,8 @@ const Schedule = () => {
           })
           .flat();
 
-        
+        console.log('Converted session data:', sessionData);
+        console.log('Sessions without photographers:', sessionData.filter(s => !s.photographerId));
         setSessions(sessionData);
         setLoading(false);
       },
@@ -618,6 +628,95 @@ const Schedule = () => {
     setCurrentDate(new Date());
   };
 
+  // Date picker functions
+  const handleDateRangeClick = () => {
+    if (dateRangeRef.current) {
+      const rect = dateRangeRef.current.getBoundingClientRect();
+      const calendarWidth = 320;
+      
+      // Calculate left position, ensuring it doesn't go off-screen
+      let leftPosition = rect.left + window.scrollX + (rect.width / 2) - (calendarWidth / 2);
+      
+      // Ensure calendar doesn't go off the left edge
+      if (leftPosition < 10) {
+        leftPosition = 10;
+      }
+      
+      // Ensure calendar doesn't go off the right edge
+      if (leftPosition + calendarWidth > window.innerWidth - 10) {
+        leftPosition = window.innerWidth - calendarWidth - 10;
+      }
+      
+      setDatePickerPosition({
+        top: rect.bottom + window.scrollY + 8, // 8px gap below the element
+        left: leftPosition,
+      });
+    }
+    setCalendarMonth(currentDate); // Set calendar to current month
+    setShowDatePicker(!showDatePicker);
+    // Reset to day view when opening
+    if (!showDatePicker) {
+      setCalendarView('days');
+    }
+  };
+
+  const handleDateSelect = (date) => {
+    setCurrentDate(date);
+    setShowDatePicker(false);
+    setCalendarView('days'); // Reset to day view when closing
+  };
+
+  const navigateCalendarMonth = (direction) => {
+    if (calendarView === 'months') {
+      // In month view, navigate by year
+      if (direction === 'prev') {
+        setCalendarMonth(new Date(calendarMonth.getFullYear() - 1, calendarMonth.getMonth(), 1));
+      } else {
+        setCalendarMonth(new Date(calendarMonth.getFullYear() + 1, calendarMonth.getMonth(), 1));
+      }
+    } else {
+      // In day view, navigate by month
+      if (direction === 'prev') {
+        setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1));
+      } else {
+        setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1));
+      }
+    }
+  };
+
+  const navigateCalendarYear = (direction) => {
+    if (direction === 'prev') {
+      setCalendarMonth(new Date(calendarMonth.getFullYear() - 1, calendarMonth.getMonth(), 1));
+    } else {
+      setCalendarMonth(new Date(calendarMonth.getFullYear() + 1, calendarMonth.getMonth(), 1));
+    }
+  };
+
+  // Switch between day and month view
+  const toggleCalendarView = () => {
+    setCalendarView(calendarView === 'days' ? 'months' : 'days');
+  };
+
+  // Handle month selection from month/year picker
+  const handleMonthSelect = (monthIndex) => {
+    setCalendarMonth(new Date(calendarMonth.getFullYear(), monthIndex, 1));
+    setCalendarView('days'); // Switch back to day view
+  };
+
+  // Close date picker on escape key
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && showDatePicker) {
+        setShowDatePicker(false);
+      }
+    };
+
+    if (showDatePicker) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [showDatePicker]);
+
   // Format date range for display
   const formatDateRange = () => {
     if (viewMode === "week") {
@@ -647,14 +746,23 @@ const Schedule = () => {
     const passesScheduleFilter =
       scheduleType === "my" ? session.photographerId === userProfile?.id : true;
 
-    // Then filter by visible photographers
-    const passesPhotographerFilter = visiblePhotographers.has(
-      session.photographerId
-    );
+    // Then filter by visible photographers - INCLUDE unassigned sessions
+    const passesPhotographerFilter = 
+      !session.photographerId || // Include unassigned sessions
+      visiblePhotographers.has(session.photographerId);
 
     // Then filter by visible schools (if any schools are selected)
     const passesSchoolFilter = 
       visibleSchools.size === 0 || visibleSchools.has(session.schoolId);
+
+    // Debug logging for unassigned sessions
+    if (!session.photographerId) {
+      console.log('Unassigned session found:', session);
+      console.log('Passes schedule filter:', passesScheduleFilter);
+      console.log('Passes photographer filter:', passesPhotographerFilter);
+      console.log('Passes school filter:', passesSchoolFilter);
+      console.log('Final result:', passesScheduleFilter && passesPhotographerFilter && passesSchoolFilter);
+    }
 
     return passesScheduleFilter && passesPhotographerFilter && passesSchoolFilter;
   });
@@ -816,7 +924,15 @@ const Schedule = () => {
             <button className="schedule__nav-btn" onClick={navigateNext}>
               <ChevronRight size={20} />
             </button>
-            <h2 className="schedule__date-range">{formatDateRange()}</h2>
+            <h2 
+              ref={dateRangeRef}
+              className="schedule__date-range" 
+              onClick={handleDateRangeClick} 
+              style={{ cursor: 'pointer' }}
+            >
+              {formatDateRange()}
+              <ChevronDown size={16} style={{ marginLeft: '8px' }} />
+            </h2>
           </div>
 
           <button className="schedule__today-btn" onClick={goToToday}>
@@ -1101,6 +1217,218 @@ const Schedule = () => {
       )}
 
       {/* Stats Modal */}
+      {/* Date Picker Dropdown */}
+      {showDatePicker && (
+        <div
+          className="schedule__date-picker-overlay"
+          onClick={() => setShowDatePicker(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.1)',
+            zIndex: 1000,
+          }}
+        >
+          <div
+            className="schedule__date-picker"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'absolute',
+              top: `${datePickerPosition.top}px`,
+              left: `${datePickerPosition.left}px`,
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+              padding: '16px',
+              width: '320px',
+              border: '1px solid #e1e5e9',
+              zIndex: 1001,
+            }}
+          >
+            {/* Calendar Header */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              marginBottom: '16px',
+              padding: '0 8px'
+            }}>
+              <button
+                onClick={() => navigateCalendarMonth('prev')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '4px',
+                  color: '#6c757d'
+                }}
+              >
+                <ChevronLeft size={20} />
+              </button>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={() => navigateCalendarYear('prev')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    color: '#007bff'
+                  }}
+                >
+                  {calendarMonth.getFullYear()}
+                </button>
+                <button
+                  onClick={toggleCalendarView}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    color: '#007bff',
+                    textDecoration: 'underline'
+                  }}
+                >
+                  {calendarMonth.toLocaleDateString('en-US', { month: 'long' })}
+                </button>
+              </div>
+              
+              <button
+                onClick={() => navigateCalendarMonth('next')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '4px',
+                  color: '#6c757d'
+                }}
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+
+            {/* Calendar Grid */}
+            {calendarView === 'days' ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
+                {/* Day Headers */}
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                  <div key={day} style={{ 
+                    textAlign: 'center', 
+                    padding: '8px 4px', 
+                    fontSize: '12px', 
+                    fontWeight: '600',
+                    color: '#6c757d'
+                  }}>
+                    {day}
+                  </div>
+                ))}
+                
+                {/* Calendar Days */}
+                {(() => {
+                  const firstDay = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+                  const lastDay = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
+                  const startDate = new Date(firstDay);
+                  startDate.setDate(startDate.getDate() - firstDay.getDay());
+                  
+                  const days = [];
+                  for (let i = 0; i < 42; i++) {
+                    const day = new Date(startDate);
+                    day.setDate(startDate.getDate() + i);
+                    days.push(day);
+                  }
+                  
+                  return days.map((day, index) => {
+                    const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
+                    const isToday = new Date().toDateString() === day.toDateString();
+                    const isSelected = currentDate.toDateString() === day.toDateString();
+                    
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => handleDateSelect(day)}
+                        style={{
+                          padding: '8px 4px',
+                          border: 'none',
+                          backgroundColor: isSelected ? '#007bff' : isToday ? '#e3f2fd' : 'transparent',
+                          color: isSelected ? 'white' : isCurrentMonth ? '#333' : '#ccc',
+                          cursor: 'pointer',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          fontWeight: isToday ? '600' : 'normal',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) {
+                            e.target.style.backgroundColor = '#f8f9fa';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) {
+                            e.target.style.backgroundColor = isToday ? '#e3f2fd' : 'transparent';
+                          }
+                        }}
+                      >
+                        {day.getDate()}
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
+            ) : (
+              /* Month/Year Picker */
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                {[
+                  'January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December'
+                ].map((month, index) => {
+                  const isCurrentMonth = index === calendarMonth.getMonth();
+                  const isToday = index === new Date().getMonth() && calendarMonth.getFullYear() === new Date().getFullYear();
+                  
+                  return (
+                    <button
+                      key={month}
+                      onClick={() => handleMonthSelect(index)}
+                      style={{
+                        padding: '12px 8px',
+                        border: 'none',
+                        backgroundColor: isCurrentMonth ? '#007bff' : isToday ? '#e3f2fd' : 'transparent',
+                        color: isCurrentMonth ? 'white' : '#333',
+                        cursor: 'pointer',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        fontWeight: isCurrentMonth || isToday ? '600' : 'normal',
+                        transition: 'all 0.2s ease',
+                        textAlign: 'center'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isCurrentMonth) {
+                          e.target.style.backgroundColor = '#f8f9fa';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isCurrentMonth) {
+                          e.target.style.backgroundColor = isToday ? '#e3f2fd' : 'transparent';
+                        }
+                      }}
+                    >
+                      {month}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {showStatsModal && (
         <StatsModal
           isOpen={showStatsModal}

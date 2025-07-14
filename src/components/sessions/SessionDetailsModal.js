@@ -10,6 +10,7 @@ import {
   Users,
   FileText,
   Edit3,
+  CalendarDays,
 } from "lucide-react";
 import { getSession, getSchools } from "../../firebase/firestore";
 import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
@@ -23,10 +24,99 @@ const SessionDetailsModal = ({
   userProfile, // Current signed-in user
   organization,
   onEditSession, // Callback to open the edit modal
+  onRescheduleToNextYear, // Callback to reschedule to next year
+  showRescheduleOption = false, // Whether to show reschedule option
 }) => {
   const [fullSessionData, setFullSessionData] = useState(null);
   const [schoolDetails, setSchoolDetails] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showRescheduleConfirm, setShowRescheduleConfirm] = useState(false);
+  const [nextYearDate, setNextYearDate] = useState(null);
+
+  // Helper function to check if there's a leap day (Feb 29) between two dates
+  const hasLeapDayBetween = (startDate, endDate) => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    // Get the years we need to check
+    const startYear = start.getFullYear();
+    const endYear = end.getFullYear();
+    
+    for (let year = startYear; year <= endYear; year++) {
+      // Check if this year is a leap year
+      const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+      
+      if (isLeapYear) {
+        const feb29 = new Date(year, 1, 29); // February 29th of this year
+        
+        // Check if Feb 29 falls between our start and end dates
+        if (feb29 > start && feb29 <= end) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  };
+
+  // Calculate next year date for the same day of week
+  // Examples:
+  // - 2024-08-21 (Wed) + 364 days = 2025-08-20 (Wed) ✓
+  // - 2024-02-28 (Wed) + 364 days = 2025-02-26 (Wed) + 1 leap day = 2025-02-27 (Thu) → needs 365 days total
+  // - 2023-08-21 (Mon) + 364 days = 2024-08-19 (Mon) ✓ (no leap day in range)
+  const calculateNextYearDate = (dateString) => {
+    // Parse the date string (YYYY-MM-DD format)
+    const [year, month, day] = dateString.split('-').map(Number);
+    const currentDate = new Date(year, month - 1, day); // month is 0-indexed
+    
+    // Add exactly 52 weeks (364 days) to maintain the same day of the week
+    const nextYearDate = new Date(currentDate);
+    nextYearDate.setDate(currentDate.getDate() + 364);
+    
+    // Check if there's a leap day between the original date and the calculated next year date
+    // If so, add 1 extra day to account for the leap year
+    if (hasLeapDayBetween(currentDate, nextYearDate)) {
+      nextYearDate.setDate(nextYearDate.getDate() + 1);
+    }
+    
+    return nextYearDate;
+  };
+
+  // Handle reschedule to next year
+  const handleRescheduleToNextYear = () => {
+    if (!fullSessionData || !onRescheduleToNextYear) return;
+    
+    const sessionDate = fullSessionData.date || session.date;
+    const calculatedNextYearDate = calculateNextYearDate(sessionDate);
+    setNextYearDate(calculatedNextYearDate);
+    setShowRescheduleConfirm(true);
+  };
+
+  // Confirm reschedule
+  const confirmReschedule = () => {
+    if (!nextYearDate || !fullSessionData) return;
+    
+    const formattedDate = nextYearDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    onRescheduleToNextYear({
+      ...fullSessionData,
+      date: formattedDate,
+      // Remove photographer assignments - they will need to be reassigned for next year
+      photographers: [],
+      photographerId: null,
+      photographer: null,
+    });
+    
+    setShowRescheduleConfirm(false);
+    setNextYearDate(null);
+    onClose();
+  };
+
+  // Cancel reschedule
+  const cancelReschedule = () => {
+    setShowRescheduleConfirm(false);
+    setNextYearDate(null);
+  };
 
   // Load full session data when modal opens
   useEffect(() => {
@@ -535,28 +625,145 @@ const SessionDetailsModal = ({
           <button type="button" className="btn btn-secondary" onClick={onClose}>
             Close
           </button>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            {showRescheduleOption && (
+              <button
+                type="button"
+                className="btn btn-warning"
+                onClick={handleRescheduleToNextYear}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  backgroundColor: "#ffc107",
+                  borderColor: "#ffc107",
+                  color: "#212529",
+                }}
+              >
+                <CalendarDays size={16} />
+                Duplicate to Next Year
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                onClose(); // Close this modal first
+                onEditSession(); // Then open the edit modal
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              <Edit3 size={16} />
+              Edit Session
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Confirmation modal content
+  const confirmationModal = showRescheduleConfirm && (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10002, // Higher than main modal
+        padding: '20px',
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          cancelReschedule();
+        }
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: 'white',
+          borderRadius: '8px',
+          padding: '24px',
+          maxWidth: '500px',
+          width: '100%',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '600' }}>
+          Duplicate Session for Next Year
+        </h3>
+        <p style={{ margin: '0 0 24px 0', lineHeight: '1.5', color: '#6c757d' }}>
+          Are you sure you want to create a copy of this session for:
+        </p>
+        <div style={{ 
+          padding: '16px', 
+          backgroundColor: '#f8f9fa', 
+          borderRadius: '6px', 
+          marginBottom: '24px',
+          textAlign: 'center'
+        }}>
+          <strong style={{ fontSize: '16px', color: '#495057' }}>
+            {nextYearDate && nextYearDate.toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            })}
+          </strong>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
           <button
             type="button"
-            className="btn btn-primary"
-            onClick={() => {
-              onClose(); // Close this modal first
-              onEditSession(); // Then open the edit modal
-            }}
+            onClick={cancelReschedule}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
+              padding: '8px 16px',
+              border: '1px solid #6c757d',
+              backgroundColor: 'transparent',
+              color: '#6c757d',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px',
             }}
           >
-            <Edit3 size={16} />
-            Edit Session
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={confirmReschedule}
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              backgroundColor: '#ffc107',
+              color: '#212529',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500',
+            }}
+          >
+            Create Duplicate
           </button>
         </div>
       </div>
     </div>
   );
 
-  return ReactDOM.createPortal(modalContent, document.body);
+  return (
+    <>
+      {ReactDOM.createPortal(modalContent, document.body)}
+      {confirmationModal && ReactDOM.createPortal(confirmationModal, document.body)}
+    </>
+  );
 };
 
 export default SessionDetailsModal;

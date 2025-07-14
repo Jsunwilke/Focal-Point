@@ -10,6 +10,7 @@ import {
   Circle
 } from 'lucide-react';
 import { getSessionTypeColors, getSessionTypeNames } from '../../utils/sessionTypes';
+import { getSchoolYear } from '../../utils/dateHelpers';
 import './SchoolSessionsList.css';
 
 const SchoolSessionsList = ({ sessions, organization, teamMembers = [], onSessionClick }) => {
@@ -62,60 +63,85 @@ const SchoolSessionsList = ({ sessions, organization, teamMembers = [], onSessio
     );
   }
 
+  // Group sessions by school year
+  const sessionsByYear = sessions.reduce((groups, session) => {
+    const schoolYear = getSchoolYear(session.date);
+    if (!groups[schoolYear]) {
+      groups[schoolYear] = [];
+    }
+    groups[schoolYear].push(session);
+    return groups;
+  }, {});
+
+  // Sort school years in descending order (newest first)
+  const sortedYears = Object.keys(sessionsByYear).sort((a, b) => {
+    const yearA = parseInt(a.split('-')[0]);
+    const yearB = parseInt(b.split('-')[0]);
+    return yearB - yearA;
+  });
+
   return (
     <div className="school-sessions-list">
-      {sessions.map((session) => (
-        <div 
-          key={session.id} 
-          className="school-session-item"
-          onClick={() => onSessionClick && onSessionClick(session)}
-        >
-          <div className="school-session-item__header">
-            <div className="school-session-item__date">
-              <Calendar size={16} />
-              <span>{formatDate(session.date)}</span>
-            </div>
-            <div className="school-session-item__status">
-              {getStatusIcon(session.status)}
-            </div>
+      {sortedYears.map((schoolYear) => (
+        <div key={schoolYear} className="school-year-group">
+          <div className="school-year-header">
+            <h3 className="school-year-title">{schoolYear}</h3>
           </div>
-
-          <div className="school-session-item__details">
-            <div className="school-session-item__time">
-              <Clock size={14} />
-              <span>
-                {formatTime(session.startTime)} - {formatTime(session.endTime)}
-              </span>
-            </div>
-
-            {session.sessionTypes && session.sessionTypes.length > 0 && (
-              <div className="school-session-item__types">
-                {getSessionTypeNames(session.sessionTypes, organization).map((typeName, index) => {
-                  const colors = getSessionTypeColors(session.sessionTypes, organization);
-                  return (
-                    <span 
-                      key={index} 
-                      className="school-session-type-tag"
-                      style={{ backgroundColor: colors[index] || '#6c757d' }}
-                    >
-                      {typeName}
-                    </span>
-                  );
-                })}
+          
+          {sessionsByYear[schoolYear].map((session) => (
+            <div 
+              key={session.id} 
+              className="school-session-item"
+              onClick={() => onSessionClick && onSessionClick(session)}
+            >
+              <div className="school-session-item__header">
+                <div className="school-session-item__date">
+                  <Calendar size={16} />
+                  <span>{formatDate(session.date)}</span>
+                </div>
+                <div className="school-session-item__status">
+                  {getStatusIcon(session.status)}
+                </div>
               </div>
-            )}
 
-            <div className="school-session-item__photographers">
-              {session.photographers && session.photographers.length > 1 ? (
-                <Users size={14} />
-              ) : (
-                <User size={14} />
-              )}
-              <span className="school-session-photographers-text">
-                {getPhotographerNames(session.photographers)}
-              </span>
+              <div className="school-session-item__details">
+                <div className="school-session-item__time">
+                  <Clock size={14} />
+                  <span>
+                    {formatTime(session.startTime)} - {formatTime(session.endTime)}
+                  </span>
+                </div>
+
+                {session.sessionTypes && session.sessionTypes.length > 0 && (
+                  <div className="school-session-item__types">
+                    {getSessionTypeNames(session.sessionTypes, organization).map((typeName, index) => {
+                      const colors = getSessionTypeColors(session.sessionTypes, organization);
+                      return (
+                        <span 
+                          key={index} 
+                          className="school-session-type-tag"
+                          style={{ backgroundColor: colors[index] || '#6c757d' }}
+                        >
+                          {typeName}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="school-session-item__photographers">
+                  {session.photographers && session.photographers.length > 1 ? (
+                    <Users size={14} />
+                  ) : (
+                    <User size={14} />
+                  )}
+                  <span className="school-session-photographers-text">
+                    {getPhotographerNames(session.photographers)}
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
+          ))}
         </div>
       ))}
     </div>

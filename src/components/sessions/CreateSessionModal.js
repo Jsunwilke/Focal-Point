@@ -146,9 +146,10 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
       newErrors.endTime = "End time is required";
     }
 
-    if (formData.photographerIds.length === 0) {
-      newErrors.photographerIds = "At least one photographer is required";
-    }
+    // Photographer assignment is now optional - sessions can be created without photographers
+    // if (formData.photographerIds.length === 0) {
+    //   newErrors.photographerIds = "At least one photographer is required";
+    // }
 
     if (!formData.sessionTypes || formData.sessionTypes.length === 0) {
       newErrors.sessionTypes = "At least one session type is required";

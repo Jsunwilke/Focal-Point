@@ -2,16 +2,17 @@
 export const getSchoolYear = (date) => {
   const shootDate = date && date.toDate ? date.toDate() : new Date(date);
   const month = shootDate.getMonth(); // 0-11
+  const day = shootDate.getDate();
   const year = shootDate.getFullYear();
 
-  // School year starts in August (month 7)
-  // If month is August-December, it's the start of the school year
-  // If month is January-May, it's the end of the previous school year
-  if (month >= 7) {
-    // August to December
+  // School year starts July 15th and ends June 1st
+  // If date is July 15th or later, it's the start of the school year
+  // If date is before July 15th, it's the end of the previous school year
+  if (month > 6 || (month === 6 && day >= 15)) {
+    // July 15th or later
     return `${year}-${(year + 1).toString().slice(-2)}`;
   } else {
-    // January to May
+    // Before July 15th
     return `${year - 1}-${year.toString().slice(-2)}`;
   }
 };
