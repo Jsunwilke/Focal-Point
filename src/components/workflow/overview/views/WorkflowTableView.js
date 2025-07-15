@@ -9,7 +9,7 @@ import {
   ChevronRight,
   ChevronDown
 } from 'lucide-react';
-import { updateWorkflowStepProgress } from '../../../../firebase/firestore';
+import { updateWorkflowStep } from '../../../../firebase/firestore';
 import { useToast } from '../../../../contexts/ToastContext';
 
 const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculateProgress }) => {
@@ -117,7 +117,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
     }
     
     try {
-      await updateWorkflowStepProgress(
+      await updateWorkflowStep(
         workflow.id,
         step.id,
         {

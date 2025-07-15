@@ -9,7 +9,7 @@ import {
   Clock,
   AlertCircle
 } from 'lucide-react';
-import { updateWorkflowStepProgress } from '../../../../firebase/firestore';
+import { updateWorkflowStep } from '../../../../firebase/firestore';
 import { useToast } from '../../../../contexts/ToastContext';
 import { 
   getWorkflowGroups, 
@@ -90,7 +90,7 @@ const WorkflowKanbanView = ({ workflows, sessionData, workflowTemplates }) => {
     
     try {
       // Update the target step to in progress
-      await updateWorkflowStepProgress(
+      await updateWorkflowStep(
         workflow.id,
         targetStep.id,
         {
@@ -104,7 +104,7 @@ const WorkflowKanbanView = ({ workflows, sessionData, workflowTemplates }) => {
       for (let i = 0; i < targetIndex; i++) {
         const step = template.steps[i];
         if (!workflow.stepProgress[step.id] || workflow.stepProgress[step.id].status !== 'completed') {
-          await updateWorkflowStepProgress(
+          await updateWorkflowStep(
             workflow.id,
             step.id,
             {
