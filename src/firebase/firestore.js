@@ -1751,6 +1751,20 @@ export const deleteWorkflowInstance = async (workflowId) => {
   }
 };
 
+// Get a single workflow by ID
+export const getWorkflow = async (workflowId) => {
+  try {
+    const workflowDoc = await getDoc(doc(firestore, "workflows", workflowId));
+    if (workflowDoc.exists()) {
+      return { id: workflowDoc.id, ...workflowDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching workflow:", workflowId, error);
+    throw error;
+  }
+};
+
 export const getWorkflowsForSession = async (sessionId, organizationID = null) => {
   try {
     // Query workflows for a specific session

@@ -49,7 +49,9 @@
       "WebFetch(domain:www.airtable.com)",
       "Bash(firebase firestore:rules:*)",
       "Bash(sed:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(timeout 20s npm start)",
+      "Bash(timeout 25s npm start)"
     ],
     "deny": []
   }

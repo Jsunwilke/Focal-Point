@@ -199,6 +199,38 @@ export const WorkflowProvider = ({ children }) => {
     setLastCheck(currentCheck);
   }, [userProfile?.id, workflowTemplates, teamMembers, lastCheck, showToast]);
 
+  // Update a single workflow in local state
+  const updateWorkflowInState = useCallback((workflowId, updates) => {
+    setUserWorkflows(prev => prev.map(workflow => 
+      workflow.id === workflowId 
+        ? { ...workflow, ...updates }
+        : workflow
+    ));
+    
+    setOrganizationWorkflows(prev => prev.map(workflow => 
+      workflow.id === workflowId 
+        ? { ...workflow, ...updates }
+        : workflow
+    ));
+  }, []);
+
+  // Refresh a single workflow from server
+  const refreshSingleWorkflow = useCallback(async (workflowId) => {
+    try {
+      // Import the getWorkflow function from firestore
+      const { getWorkflow } = await import('../firebase/firestore');
+      const updatedWorkflow = await getWorkflow(workflowId);
+      
+      if (updatedWorkflow) {
+        updateWorkflowInState(workflowId, updatedWorkflow);
+      }
+    } catch (error) {
+      console.error('Error refreshing single workflow:', error);
+      // Fallback to full refresh if single update fails
+      await refreshWorkflows();
+    }
+  }, [updateWorkflowInState]);
+
   // Refresh all workflow data
   const refreshWorkflows = useCallback(async () => {
     setLoading(true);
@@ -325,6 +357,8 @@ export const WorkflowProvider = ({ children }) => {
     
     // Functions
     refreshWorkflows,
+    refreshSingleWorkflow,
+    updateWorkflowInState,
     getWorkflowWithTemplate,
     getUserPendingTasks,
     getWorkflowStats,

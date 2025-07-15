@@ -1,5 +1,5 @@
 // src/components/workflow/overview/views/WorkflowTableView.js
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Download, 
   CheckCircle, 
@@ -12,10 +12,14 @@ import {
 import { updateWorkflowStep } from '../../../../firebase/firestore';
 import { useToast } from '../../../../contexts/ToastContext';
 
-const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculateProgress }) => {
+const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculateProgress, refreshWorkflows, refreshSingleWorkflow }) => {
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [selectedWorkflowType, setSelectedWorkflowType] = useState('All Types');
+  const [columnWidths, setColumnWidths] = useState({ stepWidth: 70, abbreviationType: 'short' });
+  const [optimisticUpdates, setOptimisticUpdates] = useState({}); // Store temporary UI updates
+  const [updatingSteps, setUpdatingSteps] = useState(new Set()); // Track which steps are being updated
+  const tableRef = useRef(null);
   const { showToast } = useToast();
 
   // Get unique workflow types for filter dropdown
@@ -56,41 +60,240 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
     )];
   };
 
-  // Get abbreviated step names with tooltips
-  const getAbbreviatedStepName = (stepTitle) => {
-    const abbreviations = {
-      'Pre-Wedding Consultation': 'PreWed',
-      'Equipment Preparation': 'Equip',
-      'Wedding Day Coverage': 'Wedding',
-      'Photo Import & Backup': 'Import',
-      'Initial Culling': 'Cull',
-      'Sneak Peek Selection': 'SPeek',
-      'Sneak Peek Editing': 'SEdit',
-      'Sneak Peek Delivery': 'SSend',
-      'Final Photo Selection': 'FSelect',
-      'Professional Editing': 'ProEdit',
-      'Final Review': 'Review',
-      'Gallery Creation': 'Gallery',
-      'Final Delivery': 'Deliver',
-      'Roster Collection': 'Roster',
-      'Equipment Check': 'Equip',
-      'Venue Setup': 'Venue',
-      'Game Coverage': 'Game',
-      'Photo Download & Backup': 'Download',
-      'Batch Processing': 'Batch',
-      'Team Sorting': 'Sort',
-      'Launch Sales': 'Sales',
-      'Session Confirmation': 'Confirm',
-      'Location Setup': 'Location',
-      'Conduct Portrait Session': 'Portrait',
-      'Download & Backup Photos': 'Download',
-      'Photo Culling': 'Cull',
-      'Basic Editing': 'Edit',
-      'Quality Review': 'Review',
-      'Create Client Gallery': 'Gallery',
-      'Client Notification': 'Notify'
+  // Calculate dynamic column widths based on available space and step count
+  const calculateColumnWidths = (stepCount, containerWidth) => {
+    // Fixed column widths
+    const expandColumn = 50;
+    const schoolColumn = 180;
+    const typeColumn = 120;
+    const dateColumn = 100;
+    const progressColumn = 110;
+    const fixedWidth = expandColumn + schoolColumn + typeColumn + dateColumn + progressColumn;
+    
+    // Available width for step columns
+    const availableWidth = containerWidth - fixedWidth - 40; // 40px for padding/scrollbar
+    
+    // Calculate optimal step column width
+    let stepWidth = Math.max(50, Math.floor(availableWidth / stepCount));
+    let abbreviationType = 'icon'; // default to most compact
+    
+    if (stepWidth >= 90) {
+      abbreviationType = 'full';
+    } else if (stepWidth >= 70) {
+      abbreviationType = 'short';
+    } else if (stepWidth >= 50) {
+      abbreviationType = 'ultra';
+    }
+    
+    // Ensure minimum table width for horizontal scroll if needed
+    const minTableWidth = fixedWidth + (stepCount * 50);
+    const calculatedTableWidth = fixedWidth + (stepCount * stepWidth);
+    
+    return {
+      stepWidth: Math.min(stepWidth, 120), // Cap at 120px max
+      abbreviationType,
+      tableWidth: Math.max(minTableWidth, calculatedTableWidth),
+      needsScroll: calculatedTableWidth > containerWidth
     };
-    return abbreviations[stepTitle] || (stepTitle.length > 6 ? stepTitle.substring(0, 6) + '...' : stepTitle);
+  };
+
+  // Update column widths when container size or step count changes
+  useEffect(() => {
+    const updateWidths = () => {
+      // Get actual available width from the table container's parent
+      let availableWidth = 800; // fallback
+      
+      if (tableRef.current) {
+        const tableViewContainer = tableRef.current.closest('.workflow-table-view');
+        if (tableViewContainer) {
+          // Get the actual width available for the table container
+          const containerStyle = window.getComputedStyle(tableViewContainer);
+          const containerWidth = tableViewContainer.clientWidth;
+          const paddingLeft = parseFloat(containerStyle.paddingLeft);
+          const paddingRight = parseFloat(containerStyle.paddingRight);
+          availableWidth = containerWidth - paddingLeft - paddingRight - 40; // 40px buffer for borders/scrollbar
+        }
+      }
+      
+      const currentSteps = selectedWorkflowType === 'All Types' 
+        ? Math.max(...Object.keys(groupedWorkflows).map(key => getStepsForWorkflows(groupedWorkflows[key]).length))
+        : getStepsForWorkflows(filteredWorkflows).length;
+      
+      const newWidths = calculateColumnWidths(currentSteps, availableWidth);
+      setColumnWidths(newWidths);
+    };
+
+    // Initial calculation
+    updateWidths();
+    
+    // Use ResizeObserver to watch the actual table view container
+    const resizeObserver = new ResizeObserver((entries) => {
+      updateWidths();
+    });
+    
+    if (tableRef.current) {
+      const tableViewContainer = tableRef.current.closest('.workflow-table-view');
+      if (tableViewContainer) {
+        resizeObserver.observe(tableViewContainer);
+      }
+    }
+    
+    // Also listen to window resize for sidebar changes
+    const handleWindowResize = () => {
+      setTimeout(updateWidths, 100); // Small delay to let layout settle
+    };
+    
+    window.addEventListener('resize', handleWindowResize);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
+    };
+  }, [selectedWorkflowType, workflows.length, groupedWorkflows, filteredWorkflows]);
+
+  // Apply calculated widths as CSS custom properties
+  useEffect(() => {
+    if (tableRef.current) {
+      const table = tableRef.current;
+      table.style.setProperty('--step-width', `${columnWidths.stepWidth}px`);
+      table.style.setProperty('--table-min-width', `${columnWidths.tableWidth}px`);
+      
+      // Set font size based on column width
+      let fontSize = '0.6rem';
+      if (columnWidths.stepWidth >= 90) {
+        fontSize = '0.7rem';
+      } else if (columnWidths.stepWidth <= 50) {
+        fontSize = '0.55rem';
+      }
+      table.style.setProperty('--step-font-size', fontSize);
+    }
+  }, [columnWidths]);
+
+  // Get abbreviated step names with multiple tiers based on available width
+  const getAbbreviatedStepName = (stepTitle, abbreviationType = 'short') => {
+    const abbreviations = {
+      full: {
+        'Pre-Wedding Consultation': 'Pre-Wedding',
+        'Equipment Preparation': 'Equipment',
+        'Wedding Day Coverage': 'Wedding Day',
+        'Photo Import & Backup': 'Import',
+        'Initial Culling': 'Initial Cull',
+        'Sneak Peek Selection': 'Sneak Peek',
+        'Sneak Peek Editing': 'Sneak Edit',
+        'Sneak Peek Delivery': 'Sneak Send',
+        'Final Photo Selection': 'Final Select',
+        'Professional Editing': 'Pro Edit',
+        'Final Review': 'Review',
+        'Gallery Creation': 'Gallery',
+        'Final Delivery': 'Delivery',
+        'Roster Collection': 'Roster',
+        'Equipment Check': 'Equipment',
+        'Venue Setup': 'Venue',
+        'Game Coverage': 'Game',
+        'Photo Download & Backup': 'Download',
+        'Batch Processing': 'Batch',
+        'Team Sorting': 'Sort',
+        'Launch Sales': 'Sales',
+        'Session Confirmation': 'Confirm',
+        'Location Setup': 'Location',
+        'Conduct Portrait Session': 'Portrait',
+        'Download & Backup Photos': 'Download',
+        'Photo Culling': 'Culling',
+        'Basic Editing': 'Editing',
+        'Quality Review': 'Review',
+        'Create Client Gallery': 'Gallery',
+        'Client Notification': 'Notify'
+      },
+      short: {
+        'Pre-Wedding Consultation': 'PreWed',
+        'Equipment Preparation': 'Equip',
+        'Wedding Day Coverage': 'Wedding',
+        'Photo Import & Backup': 'Import',
+        'Initial Culling': 'Cull',
+        'Sneak Peek Selection': 'SPeek',
+        'Sneak Peek Editing': 'SEdit',
+        'Sneak Peek Delivery': 'SSend',
+        'Final Photo Selection': 'FSelect',
+        'Professional Editing': 'ProEdit',
+        'Final Review': 'Review',
+        'Gallery Creation': 'Gallery',
+        'Final Delivery': 'Deliver',
+        'Roster Collection': 'Roster',
+        'Equipment Check': 'Equip',
+        'Venue Setup': 'Venue',
+        'Game Coverage': 'Game',
+        'Photo Download & Backup': 'Download',
+        'Batch Processing': 'Batch',
+        'Team Sorting': 'Sort',
+        'Launch Sales': 'Sales',
+        'Session Confirmation': 'Confirm',
+        'Location Setup': 'Location',
+        'Conduct Portrait Session': 'Portrait',
+        'Download & Backup Photos': 'Download',
+        'Photo Culling': 'Cull',
+        'Basic Editing': 'Edit',
+        'Quality Review': 'Review',
+        'Create Client Gallery': 'Gallery',
+        'Client Notification': 'Notify'
+      },
+      ultra: {
+        'Pre-Wedding Consultation': 'PreW',
+        'Equipment Preparation': 'Eq',
+        'Wedding Day Coverage': 'Wed',
+        'Photo Import & Backup': 'Imp',
+        'Initial Culling': 'Cull',
+        'Sneak Peek Selection': 'SP',
+        'Sneak Peek Editing': 'SE',
+        'Sneak Peek Delivery': 'SS',
+        'Final Photo Selection': 'FS',
+        'Professional Editing': 'PE',
+        'Final Review': 'Rev',
+        'Gallery Creation': 'Gal',
+        'Final Delivery': 'Del',
+        'Roster Collection': 'Ros',
+        'Equipment Check': 'Eq',
+        'Venue Setup': 'Ven',
+        'Game Coverage': 'Game',
+        'Photo Download & Backup': 'DL',
+        'Batch Processing': 'Bat',
+        'Team Sorting': 'Sort',
+        'Launch Sales': 'Sale',
+        'Session Confirmation': 'Conf',
+        'Location Setup': 'Loc',
+        'Conduct Portrait Session': 'Port',
+        'Download & Backup Photos': 'DL',
+        'Photo Culling': 'Cull',
+        'Basic Editing': 'Edit',
+        'Quality Review': 'Rev',
+        'Create Client Gallery': 'Gal',
+        'Client Notification': 'Not'
+      }
+    };
+
+    const currentAbbrevs = abbreviations[abbreviationType] || abbreviations.short;
+    let result = currentAbbrevs[stepTitle];
+    
+    if (!result) {
+      // Fallback abbreviation based on type
+      switch (abbreviationType) {
+        case 'full':
+          result = stepTitle.length > 12 ? stepTitle.substring(0, 12) + '...' : stepTitle;
+          break;
+        case 'short':
+          result = stepTitle.length > 8 ? stepTitle.substring(0, 8) + '...' : stepTitle;
+          break;
+        case 'ultra':
+          result = stepTitle.length > 4 ? stepTitle.substring(0, 4) : stepTitle;
+          break;
+        case 'icon':
+          result = '●'; // Use a simple icon for very narrow columns
+          break;
+        default:
+          result = stepTitle.substring(0, 6);
+      }
+    }
+    
+    return result;
   };
 
   // Toggle group expansion
@@ -115,13 +318,19 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
     setExpandedRows(newExpanded);
   };
 
-  // Get step status
+  // Get step status with optimistic updates
   const getStepStatus = (workflow, stepTitle) => {
     const template = workflowTemplates[workflow.templateId];
     if (!template) return null;
     
     const step = template.steps.find(s => s.title === stepTitle);
     if (!step) return null;
+    
+    // Check for optimistic update first
+    const optimisticKey = `${workflow.id}-${step.id}`;
+    if (optimisticUpdates[optimisticKey]) {
+      return optimisticUpdates[optimisticKey];
+    }
     
     return workflow.stepProgress[step.id];
   };
@@ -142,7 +351,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
     }
   };
 
-  // Handle step click
+  // Handle step click with optimistic updates
   const handleStepClick = async (workflow, stepTitle) => {
     const template = workflowTemplates[workflow.templateId];
     if (!template) return;
@@ -150,7 +359,13 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
     const step = template.steps.find(s => s.title === stepTitle);
     if (!step) return;
     
-    const currentStatus = workflow.stepProgress[step.id];
+    const optimisticKey = `${workflow.id}-${step.id}`;
+    const stepKey = `${workflow.id}-${step.id}`;
+    
+    // Prevent multiple clicks on the same step
+    if (updatingSteps.has(stepKey)) return;
+    
+    const currentStatus = getStepStatus(workflow, stepTitle); // This will check optimistic updates too
     
     // Cycle through statuses
     let newStatus = 'pending';
@@ -161,6 +376,22 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
     } else if (currentStatus.status === 'completed') {
       newStatus = 'pending';
     }
+    
+    // Optimistic update - immediately show the change in UI
+    const optimisticStepData = {
+      ...currentStatus,
+      status: newStatus,
+      ...(newStatus === 'in_progress' && { startTime: new Date() }),
+      ...(newStatus === 'completed' && { completedAt: new Date() }),
+      updatedAt: new Date()
+    };
+    
+    setOptimisticUpdates(prev => ({
+      ...prev,
+      [optimisticKey]: optimisticStepData
+    }));
+    
+    setUpdatingSteps(prev => new Set(prev).add(stepKey));
     
     try {
       await updateWorkflowStep(
@@ -174,8 +405,38 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
       );
       
       showToast('Step Updated', `${step.title} marked as ${newStatus}`, 'success');
+      
+      // Refresh just this workflow to get the real data from server
+      if (refreshSingleWorkflow) {
+        // Add a small delay to allow Firestore to propagate the change
+        setTimeout(async () => {
+          await refreshSingleWorkflow(workflow.id);
+        }, 300);
+      }
+      
+      // Clear optimistic update after successful server update
+      setOptimisticUpdates(prev => {
+        const updated = { ...prev };
+        delete updated[optimisticKey];
+        return updated;
+      });
+      
     } catch (error) {
       showToast('Error', 'Failed to update step status', 'error');
+      
+      // Revert optimistic update on error
+      setOptimisticUpdates(prev => {
+        const updated = { ...prev };
+        delete updated[optimisticKey];
+        return updated;
+      });
+    } finally {
+      // Remove from updating set
+      setUpdatingSteps(prev => {
+        const updated = new Set(prev);
+        updated.delete(stepKey);
+        return updated;
+      });
     }
   };
 
@@ -321,7 +582,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                 
                 {/* Group Table */}
                 {isGroupExpanded && (
-                  <table className="workflow-table">
+                  <table ref={tableRef} className="workflow-table">
                     <thead>
                       <tr>
                         <th className="sticky-column"></th>
@@ -332,7 +593,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                         {groupSteps.map((step, index) => (
                           <th key={index} className="step-header">
                             <div className="step-header-content" title={step}>
-                              {getAbbreviatedStepName(step)}
+                              {getAbbreviatedStepName(step, columnWidths.abbreviationType)}
                             </div>
                           </th>
                         ))}
@@ -379,6 +640,11 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                                 </div>
                               </td>
                               {groupSteps.map((stepTitle, index) => {
+                                const template = workflowTemplates[workflow.templateId];
+                                const step = template?.steps.find(s => s.title === stepTitle);
+                                const stepKey = step ? `${workflow.id}-${step.id}` : null;
+                                const isUpdating = stepKey && updatingSteps.has(stepKey);
+                                
                                 const status = getStepStatus(workflow, stepTitle);
                                 const display = getStatusDisplay(status);
                                 const Icon = display.icon;
@@ -387,9 +653,13 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                                   <td 
                                     key={index}
                                     className="step-cell"
-                                    style={{ backgroundColor: display.color }}
-                                    onClick={() => handleStepClick(workflow, stepTitle)}
-                                    title={`${stepTitle}: ${display.label}\nClick to change status`}
+                                    style={{ 
+                                      backgroundColor: display.color,
+                                      opacity: isUpdating ? 0.6 : 1,
+                                      cursor: isUpdating ? 'wait' : 'pointer'
+                                    }}
+                                    onClick={() => !isUpdating && handleStepClick(workflow, stepTitle)}
+                                    title={`${stepTitle}: ${display.label}\n${isUpdating ? 'Updating...' : 'Click to change status'}`}
                                   >
                                     <Icon size={16} />
                                   </td>
@@ -448,7 +718,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
           })
         ) : (
           // Single table for specific workflow type
-          <table className="workflow-table">
+          <table ref={tableRef} className="workflow-table">
             <thead>
               <tr>
                 <th className="sticky-column"></th>
@@ -459,7 +729,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                 {getStepsForWorkflows(filteredWorkflows).map((step, index) => (
                   <th key={index} className="step-header">
                     <div className="step-header-content" title={step}>
-                      {getAbbreviatedStepName(step)}
+                      {getAbbreviatedStepName(step, columnWidths.abbreviationType)}
                     </div>
                   </th>
                 ))}
@@ -507,6 +777,11 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                         </div>
                       </td>
                       {allSteps.map((stepTitle, index) => {
+                        const template = workflowTemplates[workflow.templateId];
+                        const step = template?.steps.find(s => s.title === stepTitle);
+                        const stepKey = step ? `${workflow.id}-${step.id}` : null;
+                        const isUpdating = stepKey && updatingSteps.has(stepKey);
+                        
                         const status = getStepStatus(workflow, stepTitle);
                         const display = getStatusDisplay(status);
                         const Icon = display.icon;
@@ -515,9 +790,13 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                           <td 
                             key={index}
                             className="step-cell"
-                            style={{ backgroundColor: display.color }}
-                            onClick={() => handleStepClick(workflow, stepTitle)}
-                            title={`${stepTitle}: ${display.label}\nClick to change status`}
+                            style={{ 
+                              backgroundColor: display.color,
+                              opacity: isUpdating ? 0.6 : 1,
+                              cursor: isUpdating ? 'wait' : 'pointer'
+                            }}
+                            onClick={() => !isUpdating && handleStepClick(workflow, stepTitle)}
+                            title={`${stepTitle}: ${display.label}\n${isUpdating ? 'Updating...' : 'Click to change status'}`}
                           >
                             <Icon size={16} />
                           </td>

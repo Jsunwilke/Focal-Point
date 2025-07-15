@@ -45,7 +45,8 @@ const WorkflowOverview = () => {
     workflowTemplates,
     getWorkflowWithTemplate,
     loading,
-    refreshWorkflows
+    refreshWorkflows,
+    refreshSingleWorkflow
   } = useWorkflow();
   
   const { userProfile, organization } = useAuth();
@@ -178,7 +179,9 @@ const WorkflowOverview = () => {
     sessionData,
     workflowTemplates,
     getWorkflowWithTemplate,
-    calculateProgress
+    calculateProgress,
+    refreshWorkflows,
+    refreshSingleWorkflow
   };
 
   // Render current view
