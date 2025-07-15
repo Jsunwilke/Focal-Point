@@ -22,6 +22,7 @@ import PayrollTimesheets from "./pages/PayrollTimesheets";
 import TemplatesList from "./pages/TemplatesList";
 import TemplateBuilder from "./pages/TemplateBuilder";
 import WorkflowDashboard from "./components/workflow/WorkflowDashboard";
+import WorkflowSettings from "./pages/WorkflowSettings";
 import "./App.css";
 
 const AppContent = () => {
@@ -100,6 +101,7 @@ const AppContent = () => {
                       <Route path="/schedule" element={<Schedule />} />
                       <Route path="/time-tracking" element={<TimeTracking />} />
                       <Route path="/workflows" element={<WorkflowDashboard />} />
+                      <Route path="/workflows/settings" element={<WorkflowSettings />} />
                       <Route path="/payroll-timesheets" element={<PayrollTimesheets />} />
                       <Route path="/team" element={<TeamManagement />} />
                       <Route path="/schools" element={<SchoolManagement />} />

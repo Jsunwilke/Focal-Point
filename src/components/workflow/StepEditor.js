@@ -14,7 +14,8 @@ import {
 } from 'lucide-react';
 import { 
   getStepTypes, 
-  getAssigneeRules 
+  getAssigneeRules,
+  getWorkflowGroups
 } from '../../utils/workflowTemplates';
 import { getTeamMembers } from '../../firebase/firestore';
 
@@ -30,6 +31,7 @@ const StepEditor = ({
     title: step?.title || '',
     description: step?.description || '',
     type: step?.type || 'task',
+    group: step?.group || 'pre_shoot',
     assigneeRule: step?.assigneeRule || 'role',
     assigneeValue: step?.assigneeValue || 'photographer',
     estimatedHours: step?.estimatedHours || 1,
@@ -52,6 +54,7 @@ const StepEditor = ({
 
   const stepTypes = getStepTypes();
   const assigneeRules = getAssigneeRules();
+  const workflowGroups = getWorkflowGroups();
 
   useEffect(() => {
     const loadTeamMembers = async () => {
@@ -299,6 +302,47 @@ const StepEditor = ({
                       {errors.type}
                     </p>
                   )}
+                </div>
+
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem' }}>
+                    Workflow Group
+                  </label>
+                  <select
+                    value={formData.group}
+                    onChange={(e) => handleInputChange('group', e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.375rem',
+                      fontSize: '0.875rem'
+                    }}
+                  >
+                    {workflowGroups.map(group => (
+                      <option key={group.id} value={group.id}>
+                        {group.name} - {group.description}
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.5rem', 
+                    marginTop: '0.5rem' 
+                  }}>
+                    <div
+                      style={{
+                        width: '12px',
+                        height: '12px',
+                        borderRadius: '2px',
+                        backgroundColor: workflowGroups.find(g => g.id === formData.group)?.color || '#6b7280'
+                      }}
+                    />
+                    <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                      {workflowGroups.find(g => g.id === formData.group)?.description}
+                    </span>
+                  </div>
                 </div>
               </div>
 

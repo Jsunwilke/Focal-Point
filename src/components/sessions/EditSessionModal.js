@@ -303,7 +303,7 @@ const EditSessionModal = ({
   const handleDelete = async () => {
     setDeleteLoading(true);
     try {
-      await deleteSession(session.sessionId || session.id);
+      await deleteSession(session.sessionId || session.id, organization?.id);
 
       // Notify parent component
       if (onSessionDeleted) {

@@ -48,7 +48,8 @@
       "WebFetch(domain:zapier.com)",
       "WebFetch(domain:www.airtable.com)",
       "Bash(firebase firestore:rules:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": []
   }

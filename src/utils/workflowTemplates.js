@@ -4,18 +4,52 @@
 // Generate unique step IDs
 const generateStepId = (prefix, index) => `${prefix}_step_${index + 1}`;
 
+// Define standard workflow groups
+export const WORKFLOW_GROUPS = [
+  {
+    id: 'pre_shoot',
+    name: 'Pre-Shoot',
+    description: 'Preparation steps before the photography session',
+    color: '#3b82f6', // Blue
+    order: 1
+  },
+  {
+    id: 'shoot',
+    name: 'Shoot',
+    description: 'Photography session execution',
+    color: '#10b981', // Green
+    order: 2
+  },
+  {
+    id: 'editing',
+    name: 'Editing',
+    description: 'Post-processing and photo enhancement',
+    color: '#f59e0b', // Amber
+    order: 3
+  },
+  {
+    id: 'production',
+    name: 'Production',
+    description: 'Final delivery and client communication',
+    color: '#8b5cf6', // Purple
+    order: 4
+  }
+];
+
 export const DEFAULT_WORKFLOW_TEMPLATES = {
   portrait: {
     name: "Portrait Session Workflow",
     description: "Complete workflow for portrait photography sessions from booking to delivery",
     sessionTypes: ["portrait", "portrait_day"],
     estimatedDays: 7,
+    groups: WORKFLOW_GROUPS,
     steps: [
       {
         id: generateStepId("portrait", 0),
         title: "Session Confirmation",
         description: "Contact client to confirm session details, timing, and location",
         type: "task",
+        group: "pre_shoot",
         assigneeRule: "role",
         assigneeValue: "admin",
         estimatedHours: 0.5,
@@ -36,6 +70,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Equipment Preparation",
         description: "Check camera equipment, batteries, memory cards, and backup gear",
         type: "task",
+        group: "pre_shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 0.5,
@@ -56,6 +91,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Location Setup",
         description: "Arrive early, scout location, and set up lighting/backdrop if needed",
         type: "task",
+        group: "pre_shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 0.5,
@@ -76,6 +112,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Conduct Portrait Session",
         description: "Photograph client according to planned shot list and style",
         type: "task",
+        group: "shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 2,
@@ -96,6 +133,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Download & Backup Photos",
         description: "Download all photos from camera/memory cards and create backup",
         type: "task",
+        group: "shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 0.5,
@@ -116,6 +154,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Photo Culling",
         description: "Review and select the best photos from the session",
         type: "task",
+        group: "editing",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 2,
@@ -136,6 +175,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Basic Editing",
         description: "Apply basic edits (exposure, color correction, cropping)",
         type: "task",
+        group: "editing",
         assigneeRule: "role",
         assigneeValue: "editor",
         estimatedHours: 3,
@@ -156,6 +196,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Quality Review",
         description: "Review edited photos for quality and consistency",
         type: "approval",
+        group: "editing",
         assigneeRule: "role",
         assigneeValue: "admin",
         estimatedHours: 1,
@@ -176,6 +217,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Create Client Gallery",
         description: "Upload photos to client gallery platform",
         type: "task",
+        group: "production",
         assigneeRule: "role",
         assigneeValue: "admin",
         estimatedHours: 0.5,
@@ -196,6 +238,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Client Notification",
         description: "Send gallery link and instructions to client",
         type: "notification",
+        group: "production",
         assigneeRule: "role",
         assigneeValue: "admin",
         estimatedHours: 0.1,
@@ -219,12 +262,14 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
     description: "Complete workflow for sports photography from preparation to sales",
     sessionTypes: ["sports", "sports_photography"],
     estimatedDays: 5,
+    groups: WORKFLOW_GROUPS,
     steps: [
       {
         id: generateStepId("sports", 0),
         title: "Roster Collection",
         description: "Collect team roster and jersey numbers from coach/school",
         type: "task",
+        group: "pre_shoot",
         assigneeRule: "role",
         assigneeValue: "admin",
         estimatedHours: 0.5,
@@ -245,6 +290,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Equipment Check",
         description: "Check cameras, telephoto lenses, extra batteries, and memory cards",
         type: "task",
+        group: "pre_shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 0.5,
@@ -265,6 +311,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Venue Setup",
         description: "Arrive early to scout best shooting positions and lighting conditions",
         type: "task",
+        group: "pre_shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 0.5,
@@ -285,6 +332,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Game Coverage",
         description: "Photograph players during the sporting event",
         type: "task",
+        group: "shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 3,
@@ -305,6 +353,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Photo Download & Backup",
         description: "Download photos and create backup copies",
         type: "task",
+        group: "shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 1,
@@ -325,6 +374,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Batch Processing",
         description: "Apply batch corrections and basic edits to all photos",
         type: "task",
+        group: "editing",
         assigneeRule: "role",
         assigneeValue: "editor",
         estimatedHours: 4,
@@ -345,6 +395,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Team Sorting",
         description: "Sort photos by team and player using roster data",
         type: "task",
+        group: "editing",
         assigneeRule: "role",
         assigneeValue: "admin",
         estimatedHours: 2,
@@ -365,6 +416,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Gallery Creation",
         description: "Create team and individual player galleries",
         type: "task",
+        group: "production",
         assigneeRule: "role",
         assigneeValue: "admin",
         estimatedHours: 1,
@@ -385,6 +437,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Launch Sales",
         description: "Activate galleries for team and parent purchases",
         type: "task",
+        group: "production",
         assigneeRule: "role",
         assigneeValue: "admin",
         estimatedHours: 0.5,
@@ -408,12 +461,14 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
     description: "Complete wedding photography workflow from preparation to final delivery",
     sessionTypes: ["wedding", "event", "school_event"],
     estimatedDays: 21,
+    groups: WORKFLOW_GROUPS,
     steps: [
       {
         id: generateStepId("wedding", 0),
         title: "Pre-Wedding Consultation",
         description: "Meet with couple to discuss timeline, shot list, and special requests",
         type: "task",
+        group: "pre_shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 2,
@@ -434,6 +489,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Equipment Preparation",
         description: "Check all cameras, lenses, batteries, and backup equipment",
         type: "task",
+        group: "pre_shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 1,
@@ -454,6 +510,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Venue Setup",
         description: "Arrive early to scout ceremony and reception venues",
         type: "task",
+        group: "pre_shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 1,
@@ -474,6 +531,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Wedding Day Coverage",
         description: "Photograph ceremony, reception, and all key moments",
         type: "task",
+        group: "shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 8,
@@ -494,6 +552,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Photo Import & Backup",
         description: "Import all wedding photos and create multiple backups",
         type: "task",
+        group: "shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 2,
@@ -514,6 +573,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Initial Culling",
         description: "Remove duplicates and obviously bad shots",
         type: "task",
+        group: "editing",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 6,
@@ -534,6 +594,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Sneak Peek Selection",
         description: "Select 10-15 photos for same-day sneak peek",
         type: "task",
+        group: "editing",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 1,
@@ -554,6 +615,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Sneak Peek Editing",
         description: "Quick edit sneak peek photos for social media",
         type: "task",
+        group: "editing",
         assigneeRule: "role",
         assigneeValue: "editor",
         estimatedHours: 2,
@@ -574,6 +636,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Sneak Peek Delivery",
         description: "Send sneak peek photos to couple",
         type: "notification",
+        group: "production",
         assigneeRule: "role",
         assigneeValue: "admin",
         estimatedHours: 0.5,
@@ -594,6 +657,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Final Photo Selection",
         description: "Final culling to delivery-ready photo count",
         type: "task",
+        group: "editing",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 4,
@@ -614,6 +678,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Professional Editing",
         description: "Full professional editing of all selected photos",
         type: "task",
+        group: "editing",
         assigneeRule: "role",
         assigneeValue: "editor",
         estimatedHours: 20,
@@ -634,6 +699,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Final Review",
         description: "Final quality check and approval",
         type: "approval",
+        group: "editing",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 2,
@@ -654,6 +720,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Gallery Creation",
         description: "Create online gallery with client access",
         type: "task",
+        group: "production",
         assigneeRule: "role",
         assigneeValue: "admin",
         estimatedHours: 1,
@@ -674,6 +741,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Final Delivery",
         description: "Send gallery link and download instructions to couple",
         type: "notification",
+        group: "production",
         assigneeRule: "role",
         assigneeValue: "admin",
         estimatedHours: 0.5,
@@ -697,12 +765,14 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
     description: "Complete graduation ceremony workflow from preparation to family delivery",
     sessionTypes: ["graduation", "ceremony"],
     estimatedDays: 7,
+    groups: WORKFLOW_GROUPS,
     steps: [
       {
         id: generateStepId("graduation", 0),
         title: "Graduate Roster Collection",
         description: "Collect graduate roster with names and seating order from school",
         type: "task",
+        group: "pre_shoot",
         assigneeRule: "role",
         assigneeValue: "admin",
         estimatedHours: 0.5,
@@ -723,6 +793,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Equipment Setup",
         description: "Prepare multiple cameras with telephoto lenses for ceremony coverage",
         type: "task",
+        group: "pre_shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 1,
@@ -743,6 +814,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Venue Positioning",
         description: "Arrive early to position cameras for optimal ceremony coverage",
         type: "task",
+        group: "pre_shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 0.5,
@@ -763,6 +835,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Ceremony Coverage",
         description: "Photograph graduates walking across stage during ceremony",
         type: "task",
+        group: "shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 4,
@@ -783,6 +856,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Photo Download",
         description: "Download ceremony photos from all cameras and create backups",
         type: "task",
+        group: "shoot",
         assigneeRule: "role",
         assigneeValue: "photographer",
         estimatedHours: 1,
@@ -803,6 +877,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Graduate Identification",
         description: "Match photos to graduate roster using name cards and seating order",
         type: "task",
+        group: "editing",
         assigneeRule: "role",
         assigneeValue: "admin",
         estimatedHours: 8,
@@ -823,6 +898,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Batch Processing",
         description: "Apply consistent color correction and cropping to all photos",
         type: "task",
+        group: "editing",
         assigneeRule: "role",
         assigneeValue: "editor",
         estimatedHours: 4,
@@ -843,6 +919,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Individual Galleries",
         description: "Create individual graduate galleries for family access",
         type: "task",
+        group: "production",
         assigneeRule: "role",
         assigneeValue: "admin",
         estimatedHours: 2,
@@ -863,6 +940,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES = {
         title: "Family Notifications",
         description: "Send gallery access codes and instructions to graduate families",
         type: "notification",
+        group: "production",
         assigneeRule: "role",
         assigneeValue: "admin",
         estimatedHours: 1,
@@ -1079,4 +1157,94 @@ const getWorkflowMappingReason = (sessionType, templateKey) => {
   }
   
   return config.default;
+};
+
+// Group utility functions
+export const getWorkflowGroups = () => {
+  return WORKFLOW_GROUPS;
+};
+
+export const getGroupById = (groupId) => {
+  return WORKFLOW_GROUPS.find(group => group.id === groupId);
+};
+
+export const getGroupsByTemplate = (template) => {
+  return template.groups || WORKFLOW_GROUPS;
+};
+
+export const groupStepsByGroup = (steps, groups = WORKFLOW_GROUPS) => {
+  const groupedSteps = {};
+  
+  // Initialize all groups
+  groups.forEach(group => {
+    groupedSteps[group.id] = {
+      group: group,
+      steps: []
+    };
+  });
+  
+  // Add ungrouped category for steps without a group
+  groupedSteps['ungrouped'] = {
+    group: {
+      id: 'ungrouped',
+      name: 'Other',
+      description: 'Steps without a specific group',
+      color: '#6b7280',
+      order: 999
+    },
+    steps: []
+  };
+  
+  // Group the steps
+  steps.forEach(step => {
+    const groupId = step.group || 'ungrouped';
+    if (groupedSteps[groupId]) {
+      groupedSteps[groupId].steps.push(step);
+    } else {
+      // If group doesn't exist, add to ungrouped
+      groupedSteps['ungrouped'].steps.push(step);
+    }
+  });
+  
+  // Remove empty groups and sort by order
+  const result = Object.values(groupedSteps)
+    .filter(groupData => groupData.steps.length > 0)
+    .sort((a, b) => a.group.order - b.group.order);
+  
+  return result;
+};
+
+export const getStepCountsByGroup = (steps, groups = WORKFLOW_GROUPS) => {
+  const counts = {};
+  
+  groups.forEach(group => {
+    counts[group.id] = 0;
+  });
+  counts['ungrouped'] = 0;
+  
+  steps.forEach(step => {
+    const groupId = step.group || 'ungrouped';
+    if (counts.hasOwnProperty(groupId)) {
+      counts[groupId]++;
+    } else {
+      counts['ungrouped']++;
+    }
+  });
+  
+  return counts;
+};
+
+export const getGroupProgress = (steps, stepProgress, groupId) => {
+  const groupSteps = steps.filter(step => step.group === groupId);
+  if (groupSteps.length === 0) return 0;
+  
+  const completedSteps = groupSteps.filter(step => 
+    stepProgress[step.id]?.status === 'completed'
+  ).length;
+  
+  return (completedSteps / groupSteps.length) * 100;
+};
+
+export const validateStepGroup = (groupId, availableGroups = WORKFLOW_GROUPS) => {
+  return availableGroups.some(group => group.id === groupId);
 };

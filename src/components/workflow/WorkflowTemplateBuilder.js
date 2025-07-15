@@ -24,7 +24,9 @@ import {
 import { 
   getStepTypes, 
   getAssigneeRules,
-  createTemplateForOrganization 
+  createTemplateForOrganization,
+  getWorkflowGroups,
+  groupStepsByGroup
 } from '../../utils/workflowTemplates';
 import { 
   getOrganizationSessionTypes 
@@ -49,6 +51,7 @@ const WorkflowTemplateBuilder = ({
     description: editTemplate?.description || '',
     sessionTypes: editTemplate?.sessionTypes || [],
     estimatedDays: editTemplate?.estimatedDays || 7,
+    groups: editTemplate?.groups || getWorkflowGroups(),
     steps: editTemplate?.steps || []
   });
   
@@ -61,6 +64,7 @@ const WorkflowTemplateBuilder = ({
   // Get available options
   const stepTypes = getStepTypes();
   const assigneeRules = getAssigneeRules();
+  const workflowGroups = getWorkflowGroups();
   const organizationSessionTypes = getOrganizationSessionTypes(organization);
 
   if (!isOpen) return null;
@@ -136,6 +140,7 @@ const WorkflowTemplateBuilder = ({
       title: '',
       description: '',
       type: 'task',
+      group: 'pre_shoot', // Default to pre_shoot group
       assigneeRule: 'role',
       assigneeValue: 'photographer',
       estimatedHours: 1,
@@ -518,129 +523,179 @@ const WorkflowTemplateBuilder = ({
                   </p>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {formData.steps.map((step, index) => (
-                    <div
-                      key={step.id}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, step)}
-                      onDragOver={handleDragOver}
-                      onDrop={(e) => handleDrop(e, step)}
-                      style={{
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '8px',
-                        padding: '1rem',
-                        backgroundColor: 'white',
-                        cursor: 'grab',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)'}
-                      onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
-                        {/* Step Number */}
-                        <div style={{
-                          minWidth: '32px',
-                          height: '32px',
-                          borderRadius: '50%',
-                          backgroundColor: '#3b82f6',
-                          color: 'white',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '0.875rem',
-                          fontWeight: '600'
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                  {groupStepsByGroup(formData.steps, formData.groups).map((groupData) => (
+                    <div key={groupData.group.id} style={{ marginBottom: '1rem' }}>
+                      {/* Group Header */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.75rem',
+                        marginBottom: '1rem',
+                        padding: '0.75rem',
+                        backgroundColor: '#f9fafb',
+                        borderRadius: '0.5rem',
+                        border: `1px solid ${groupData.group.color}20`
+                      }}>
+                        <div
+                          style={{
+                            width: '16px',
+                            height: '16px',
+                            borderRadius: '4px',
+                            backgroundColor: groupData.group.color
+                          }}
+                        />
+                        <h4 style={{ 
+                          margin: 0, 
+                          fontSize: '1rem', 
+                          fontWeight: '600',
+                          color: '#1f2937'
                         }}>
-                          {index + 1}
-                        </div>
+                          {groupData.group.name}
+                        </h4>
+                        <span style={{
+                          padding: '0.125rem 0.5rem',
+                          borderRadius: '12px',
+                          backgroundColor: groupData.group.color + '20',
+                          color: groupData.group.color,
+                          fontSize: '0.75rem',
+                          fontWeight: '500'
+                        }}>
+                          {groupData.steps.length} step{groupData.steps.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      
+                      {/* Group Steps */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        {groupData.steps.map((step, index) => {
+                          const overallIndex = formData.steps.findIndex(s => s.id === step.id);
+                          return (
+                            <div
+                              key={step.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, step)}
+                              onDragOver={handleDragOver}
+                              onDrop={(e) => handleDrop(e, step)}
+                              style={{
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '8px',
+                                padding: '1rem',
+                                backgroundColor: 'white',
+                                cursor: 'grab',
+                                transition: 'all 0.2s ease',
+                                borderLeft: `4px solid ${groupData.group.color}`
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)'}
+                              onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+                                {/* Step Number */}
+                                <div style={{
+                                  minWidth: '32px',
+                                  height: '32px',
+                                  borderRadius: '50%',
+                                  backgroundColor: groupData.group.color,
+                                  color: 'white',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '0.875rem',
+                                  fontWeight: '600'
+                                }}>
+                                  {overallIndex + 1}
+                                </div>
 
-                        {/* Step Content */}
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                            <span style={{ fontSize: '1rem' }}>{getStepTypeIcon(step.type)}</span>
-                            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: '600' }}>
-                              {step.title || 'Untitled Step'}
-                            </h4>
-                            <span style={{
-                              padding: '0.125rem 0.5rem',
-                              borderRadius: '12px',
-                              backgroundColor: '#f3f4f6',
-                              fontSize: '0.75rem',
-                              color: '#6b7280',
-                              textTransform: 'capitalize'
-                            }}>
-                              {step.type}
-                            </span>
-                          </div>
-                          
-                          {step.description && (
-                            <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
-                              {step.description}
-                            </p>
-                          )}
-                          
-                          <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
-                            {step.estimatedHours}h estimated • Due {step.dueOffsetDays > 0 ? `${step.dueOffsetDays} days after` : step.dueOffsetDays < 0 ? `${Math.abs(step.dueOffsetDays)} days before` : 'on'} session
-                          </div>
-                        </div>
+                                {/* Step Content */}
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                    <span style={{ fontSize: '1rem' }}>{getStepTypeIcon(step.type)}</span>
+                                    <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: '600' }}>
+                                      {step.title || 'Untitled Step'}
+                                    </h4>
+                                    <span style={{
+                                      padding: '0.125rem 0.5rem',
+                                      borderRadius: '12px',
+                                      backgroundColor: '#f3f4f6',
+                                      fontSize: '0.75rem',
+                                      color: '#6b7280',
+                                      textTransform: 'capitalize'
+                                    }}>
+                                      {step.type}
+                                    </span>
+                                  </div>
+                                  
+                                  {step.description && (
+                                    <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
+                                      {step.description}
+                                    </p>
+                                  )}
+                                  
+                                  <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                                    {step.estimatedHours}h estimated • Due {step.dueOffsetDays > 0 ? `${step.dueOffsetDays} days after` : step.dueOffsetDays < 0 ? `${Math.abs(step.dueOffsetDays)} days before` : 'on'} session
+                                  </div>
+                                </div>
 
-                        {/* Actions */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                          <button
-                            onClick={() => handleMoveStep(step.id, 'up')}
-                            disabled={index === 0}
-                            style={{
-                              padding: '0.25rem',
-                              border: '1px solid #d1d5db',
-                              backgroundColor: 'white',
-                              borderRadius: '0.25rem',
-                              cursor: index === 0 ? 'not-allowed' : 'pointer',
-                              opacity: index === 0 ? 0.5 : 1
-                            }}
-                          >
-                            <ArrowUp size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleMoveStep(step.id, 'down')}
-                            disabled={index === formData.steps.length - 1}
-                            style={{
-                              padding: '0.25rem',
-                              border: '1px solid #d1d5db',
-                              backgroundColor: 'white',
-                              borderRadius: '0.25rem',
-                              cursor: index === formData.steps.length - 1 ? 'not-allowed' : 'pointer',
-                              opacity: index === formData.steps.length - 1 ? 0.5 : 1
-                            }}
-                          >
-                            <ArrowDown size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleEditStep(step)}
-                            style={{
-                              padding: '0.25rem',
-                              border: '1px solid #3b82f6',
-                              backgroundColor: 'white',
-                              color: '#3b82f6',
-                              borderRadius: '0.25rem',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <Settings size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteStep(step.id)}
-                            style={{
-                              padding: '0.25rem',
-                              border: '1px solid #ef4444',
-                              backgroundColor: 'white',
-                              color: '#ef4444',
-                              borderRadius: '0.25rem',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
+                                {/* Actions */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                  <button
+                                    onClick={() => handleMoveStep(step.id, 'up')}
+                                    disabled={overallIndex === 0}
+                                    style={{
+                                      padding: '0.25rem',
+                                      border: '1px solid #d1d5db',
+                                      backgroundColor: 'white',
+                                      borderRadius: '0.25rem',
+                                      cursor: overallIndex === 0 ? 'not-allowed' : 'pointer',
+                                      opacity: overallIndex === 0 ? 0.5 : 1
+                                    }}
+                                  >
+                                    <ArrowUp size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleMoveStep(step.id, 'down')}
+                                    disabled={overallIndex === formData.steps.length - 1}
+                                    style={{
+                                      padding: '0.25rem',
+                                      border: '1px solid #d1d5db',
+                                      backgroundColor: 'white',
+                                      borderRadius: '0.25rem',
+                                      cursor: overallIndex === formData.steps.length - 1 ? 'not-allowed' : 'pointer',
+                                      opacity: overallIndex === formData.steps.length - 1 ? 0.5 : 1
+                                    }}
+                                  >
+                                    <ArrowDown size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleEditStep(step)}
+                                    style={{
+                                      padding: '0.25rem',
+                                      border: '1px solid #3b82f6',
+                                      backgroundColor: 'white',
+                                      color: '#3b82f6',
+                                      borderRadius: '0.25rem',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    <Settings size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteStep(step.id)}
+                                    style={{
+                                      padding: '0.25rem',
+                                      border: '1px solid #ef4444',
+                                      backgroundColor: 'white',
+                                      color: '#ef4444',
+                                      borderRadius: '0.25rem',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}

@@ -494,78 +494,120 @@ export const createSession = async (organizationID, sessionData) => {
     
     const sessionId = sessionRef.id;
     
-    // Auto-create workflow for this new session
+    // Auto-create workflows for all session types
     try {
-      const primarySessionType = sessionData.sessionTypes?.[0] || 
-                                 sessionData.sessionType || 
-                                 'other';
+      // Get all session types for this session
+      const sessionTypes = sessionData.sessionTypes || 
+                          (sessionData.sessionType ? [sessionData.sessionType] : ['other']);
       
-      console.log("🔄 SESSION CREATED - Starting workflow creation process");
+      console.log("🔄 SESSION CREATED - Starting multiple workflow creation process");
       console.log("📋 Session ID:", sessionId);
       console.log("🏢 Organization ID:", organizationID);
-      console.log("🎯 Primary Session Type:", primarySessionType);
+      console.log("🎯 Session Types:", sessionTypes);
       console.log("📝 Full Session Data:", sessionData);
       
-      // Also store in localStorage for debugging
+      // Store session creation info for debugging
       localStorage.setItem('lastSessionCreated', JSON.stringify({
         sessionId,
         organizationID,
-        primarySessionType,
+        sessionTypes,
         timestamp: new Date().toISOString()
       }));
       
-      const workflowId = await autoCreateWorkflowForSession(
-        sessionId, 
-        organizationID, 
-        primarySessionType
-      );
+      const workflowResults = [];
       
-      if (workflowId) {
-        console.log("✅ SUCCESS: Workflow created with ID:", workflowId);
+      // Create a separate workflow for each session type
+      for (let i = 0; i < sessionTypes.length; i++) {
+        const sessionType = sessionTypes[i];
+        console.log(`🎯 Creating workflow ${i + 1}/${sessionTypes.length} for session type: "${sessionType}"`);
         
-        // Store success in localStorage
-        localStorage.setItem('lastWorkflowResult', JSON.stringify({
-          success: true,
-          workflowId,
-          sessionId,
-          timestamp: new Date().toISOString()
-        }));
-        
-        // Double-check that the workflow was actually created in Firestore
         try {
-          const workflowDoc = await getDoc(doc(firestore, "workflows", workflowId));
-          if (workflowDoc.exists()) {
-            console.log("✅ VERIFIED: Workflow exists in Firestore with data:", workflowDoc.data());
+          const workflowId = await autoCreateWorkflowForSession(
+            sessionId, 
+            organizationID, 
+            sessionType
+          );
+          
+          if (workflowId) {
+            console.log(`✅ SUCCESS: Workflow ${i + 1} created with ID: ${workflowId} for session type: "${sessionType}"`);
+            
+            // Verify workflow was created
+            const workflowDoc = await getDoc(doc(firestore, "workflows", workflowId));
+            if (workflowDoc.exists()) {
+              console.log(`✅ VERIFIED: Workflow ${i + 1} exists in Firestore`);
+              workflowResults.push({
+                success: true,
+                workflowId,
+                sessionType,
+                templateName: workflowDoc.data().templateName
+              });
+            } else {
+              console.error(`❌ ERROR: Workflow ${i + 1} ID returned but document doesn't exist!`);
+              workflowResults.push({
+                success: false,
+                error: 'Workflow ID returned but document does not exist',
+                sessionType
+              });
+            }
           } else {
-            console.error("❌ ERROR: Workflow ID returned but document doesn't exist in Firestore!");
-            localStorage.setItem('lastWorkflowResult', JSON.stringify({
+            console.log(`❌ FAILED: No workflow created for session type: "${sessionType}"`);
+            workflowResults.push({
               success: false,
-              error: 'Workflow ID returned but document does not exist',
-              sessionId,
-              timestamp: new Date().toISOString()
-            }));
+              error: 'No workflow ID returned',
+              sessionType
+            });
           }
-        } catch (verifyError) {
-          console.error("❌ ERROR: Failed to verify workflow creation:", verifyError);
-          localStorage.setItem('lastWorkflowResult', JSON.stringify({
+        } catch (workflowError) {
+          console.error(`❌ ERROR: Failed to create workflow for session type "${sessionType}":`, workflowError);
+          workflowResults.push({
             success: false,
-            error: verifyError.message,
-            sessionId,
-            timestamp: new Date().toISOString()
-          }));
+            error: workflowError.message,
+            sessionType
+          });
         }
-      } else {
-        console.log("❌ FAILED: No workflow was created");
+      }
+      
+      // Store comprehensive results
+      const successfulWorkflows = workflowResults.filter(r => r.success);
+      const failedWorkflows = workflowResults.filter(r => !r.success);
+      
+      console.log(`🎉 WORKFLOW CREATION COMPLETE: ${successfulWorkflows.length}/${sessionTypes.length} workflows created successfully`);
+      if (successfulWorkflows.length > 0) {
+        console.log("✅ Successful workflows:", successfulWorkflows);
+      }
+      if (failedWorkflows.length > 0) {
+        console.log("❌ Failed workflows:", failedWorkflows);
+      }
+      
+      localStorage.setItem('lastWorkflowResult', JSON.stringify({
+        success: successfulWorkflows.length > 0,
+        totalAttempted: sessionTypes.length,
+        successCount: successfulWorkflows.length,
+        failureCount: failedWorkflows.length,
+        results: workflowResults,
+        sessionId,
+        timestamp: new Date().toISOString()
+      }));
+      
+      // Continue with success if at least one workflow was created
+      if (successfulWorkflows.length === 0) {
+        console.log("❌ CRITICAL: No workflows were created at all");
         localStorage.setItem('lastWorkflowResult', JSON.stringify({
           success: false,
-          error: 'No workflow ID returned',
+          error: 'No workflows were created for any session type',
           sessionId,
           timestamp: new Date().toISOString()
         }));
       }
     } catch (workflowError) {
-      console.error("💥 ERROR: Failed to create workflow for new session:", sessionId);
+      console.error("💥 ERROR: Failed to create workflows for new session:", sessionId);
       console.error("Error details:", workflowError);
+      localStorage.setItem('lastWorkflowResult', JSON.stringify({
+        success: false,
+        error: workflowError.message,
+        sessionId,
+        timestamp: new Date().toISOString()
+      }));
       // Don't fail the session creation if workflow creation fails
     }
     
@@ -602,11 +644,55 @@ export const updateSession = async (sessionId, updateData) => {
   }
 };
 
-export const deleteSession = async (sessionId) => {
+export const deleteSession = async (sessionId, organizationID = null) => {
   try {
+    console.log("🗑️ Starting session deletion process for:", sessionId);
+    
+    // First, find and delete all workflows associated with this session
+    console.log("🔍 Finding workflows for session:", sessionId);
+    const associatedWorkflows = await getWorkflowsForSession(sessionId, organizationID);
+    
+    if (associatedWorkflows.length > 0) {
+      console.log(`📋 Found ${associatedWorkflows.length} workflows to delete:`, 
+        associatedWorkflows.map(w => ({ id: w.id, sessionType: w.sessionType, templateName: w.templateName }))
+      );
+      
+      // Delete each workflow
+      const deletionResults = [];
+      for (const workflow of associatedWorkflows) {
+        try {
+          await deleteWorkflowInstance(workflow.id);
+          console.log(`✅ Deleted workflow: ${workflow.id} (${workflow.sessionType || 'unknown type'})`);
+          deletionResults.push({ workflowId: workflow.id, success: true });
+        } catch (workflowError) {
+          console.error(`❌ Failed to delete workflow: ${workflow.id}`, workflowError);
+          deletionResults.push({ 
+            workflowId: workflow.id, 
+            success: false, 
+            error: workflowError.message 
+          });
+        }
+      }
+      
+      const successfulDeletions = deletionResults.filter(r => r.success).length;
+      const failedDeletions = deletionResults.filter(r => !r.success).length;
+      
+      console.log(`🎯 Workflow deletion summary: ${successfulDeletions} successful, ${failedDeletions} failed`);
+      
+      if (failedDeletions > 0) {
+        console.warn("⚠️ Some workflows failed to delete, but continuing with session deletion");
+      }
+    } else {
+      console.log("📭 No workflows found for this session");
+    }
+    
+    // Delete the session
+    console.log("🗑️ Deleting session document:", sessionId);
     await deleteDoc(doc(firestore, "sessions", sessionId));
+    
+    console.log("✅ Session deletion completed successfully:", sessionId);
   } catch (error) {
-    console.error("Error deleting session:", error);
+    console.error("💥 Error deleting session:", sessionId, error);
     throw error;
   }
 };
@@ -1616,6 +1702,28 @@ export const getWorkflowTemplate = async (templateId) => {
   }
 };
 
+// Get all workflow templates for organization (including inactive ones)
+export const getWorkflowTemplatesForOrganization = async (organizationID) => {
+  try {
+    const q = query(
+      collection(firestore, "workflowTemplates"),
+      where("organizationID", "==", organizationID),
+      orderBy("name", "asc")
+    );
+
+    const querySnapshot = await getDocs(q);
+    const templates = [];
+    querySnapshot.forEach((doc) => {
+      templates.push({ id: doc.id, ...doc.data() });
+    });
+
+    return templates;
+  } catch (error) {
+    console.error("Error fetching workflow templates for organization:", error);
+    throw error;
+  }
+};
+
 // Workflow Instances Functions
 export const createWorkflowInstance = async (workflowData) => {
   try {
@@ -1628,6 +1736,17 @@ export const createWorkflowInstance = async (workflowData) => {
     return workflowRef.id;
   } catch (error) {
     console.error("Error creating workflow instance:", error);
+    throw error;
+  }
+};
+
+// Delete a workflow instance
+export const deleteWorkflowInstance = async (workflowId) => {
+  try {
+    await deleteDoc(doc(firestore, "workflows", workflowId));
+    console.log("Workflow instance deleted successfully:", workflowId);
+  } catch (error) {
+    console.error("Error deleting workflow instance:", workflowId, error);
     throw error;
   }
 };
@@ -1907,14 +2026,18 @@ export const initializeDefaultWorkflowTemplates = async (organizationID) => {
   }
 };
 
-// Auto-create workflow when session is created
+// Auto-create workflow for a specific session type
 export const autoCreateWorkflowForSession = async (sessionId, organizationID, sessionType) => {
   try {
-    // Check if workflow already exists for this session
+    // Check if workflow already exists for this session and session type combination
     const existingWorkflows = await getWorkflowsForSession(sessionId, organizationID);
-    if (existingWorkflows.length > 0) {
-      console.log("Workflow already exists for session:", sessionId);
-      return existingWorkflows[0].id;
+    const existingWorkflowForType = existingWorkflows.find(workflow => 
+      workflow.sessionType === sessionType
+    );
+    
+    if (existingWorkflowForType) {
+      console.log(`Workflow already exists for session: ${sessionId} and session type: ${sessionType}`);
+      return existingWorkflowForType.id;
     }
 
     // Get session data to calculate step due dates
@@ -2035,6 +2158,7 @@ export const autoCreateWorkflowForSession = async (sessionId, organizationID, se
     const workflowData = {
       sessionId,
       organizationID,
+      sessionType,  // Store the specific session type for this workflow
       templateId: defaultTemplate.id,
       templateName: defaultTemplate.name,
       templateVersion: defaultTemplate.version,
