@@ -15,27 +15,83 @@ import { useToast } from '../../../../contexts/ToastContext';
 const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculateProgress }) => {
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [expandedGroups, setExpandedGroups] = useState(new Set());
-  const [groupBySessionType, setGroupBySessionType] = useState(true);
+  const [selectedWorkflowType, setSelectedWorkflowType] = useState('All Types');
   const { showToast } = useToast();
 
-  // Group workflows by session type
-  const groupedWorkflows = groupBySessionType 
-    ? workflows.reduce((groups, workflow) => {
-        const groupKey = workflow.sessionType || workflow.templateName || 'Unknown Type';
-        if (!groups[groupKey]) groups[groupKey] = [];
-        groups[groupKey].push(workflow);
-        return groups;
-      }, {})
-    : { 'All Workflows': workflows };
+  // Get unique workflow types for filter dropdown
+  const workflowTypes = ['All Types', ...new Set(workflows.map(workflow => 
+    workflow.sessionType || workflow.templateName || 'Unknown Type'
+  ))].sort();
+
+  // Group workflows by session type (for "All Types" view)
+  const groupedWorkflows = workflows.reduce((groups, workflow) => {
+    const groupKey = workflow.sessionType || workflow.templateName || 'Unknown Type';
+    if (!groups[groupKey]) groups[groupKey] = [];
+    groups[groupKey].push(workflow);
+    return groups;
+  }, {});
 
   // Sort groups
   const sortedGroups = Object.keys(groupedWorkflows).sort((a, b) => {
     if (a === 'Unknown Type') return 1;
     if (b === 'Unknown Type') return -1;
-    if (a === 'All Workflows') return -1;
-    if (b === 'All Workflows') return 1;
     return a.localeCompare(b);
   });
+
+  // Filter workflows by selected type (for specific type view)
+  const filteredWorkflows = selectedWorkflowType === 'All Types' 
+    ? workflows 
+    : workflows.filter(workflow => {
+        const workflowType = workflow.sessionType || workflow.templateName || 'Unknown Type';
+        return workflowType === selectedWorkflowType;
+      });
+
+  // Get steps for filtered workflows
+  const getStepsForWorkflows = (workflows) => {
+    return [...new Set(
+      workflows.flatMap(workflow => {
+        const template = workflowTemplates[workflow.templateId];
+        return template ? template.steps.map(step => step.title) : [];
+      })
+    )];
+  };
+
+  // Get abbreviated step names with tooltips
+  const getAbbreviatedStepName = (stepTitle) => {
+    const abbreviations = {
+      'Pre-Wedding Consultation': 'PreWed',
+      'Equipment Preparation': 'Equip',
+      'Wedding Day Coverage': 'Wedding',
+      'Photo Import & Backup': 'Import',
+      'Initial Culling': 'Cull',
+      'Sneak Peek Selection': 'SPeek',
+      'Sneak Peek Editing': 'SEdit',
+      'Sneak Peek Delivery': 'SSend',
+      'Final Photo Selection': 'FSelect',
+      'Professional Editing': 'ProEdit',
+      'Final Review': 'Review',
+      'Gallery Creation': 'Gallery',
+      'Final Delivery': 'Deliver',
+      'Roster Collection': 'Roster',
+      'Equipment Check': 'Equip',
+      'Venue Setup': 'Venue',
+      'Game Coverage': 'Game',
+      'Photo Download & Backup': 'Download',
+      'Batch Processing': 'Batch',
+      'Team Sorting': 'Sort',
+      'Launch Sales': 'Sales',
+      'Session Confirmation': 'Confirm',
+      'Location Setup': 'Location',
+      'Conduct Portrait Session': 'Portrait',
+      'Download & Backup Photos': 'Download',
+      'Photo Culling': 'Cull',
+      'Basic Editing': 'Edit',
+      'Quality Review': 'Review',
+      'Create Client Gallery': 'Gallery',
+      'Client Notification': 'Notify'
+    };
+    return abbreviations[stepTitle] || (stepTitle.length > 6 ? stepTitle.substring(0, 6) + '...' : stepTitle);
+  };
 
   // Toggle group expansion
   const toggleGroup = (groupKey) => {
@@ -46,16 +102,6 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
       newExpanded.add(groupKey);
     }
     setExpandedGroups(newExpanded);
-  };
-
-  // Get steps for each group separately (instead of all steps combined)
-  const getStepsForGroup = (groupWorkflows) => {
-    return [...new Set(
-      groupWorkflows.flatMap(workflow => {
-        const template = workflowTemplates[workflow.templateId];
-        return template ? template.steps.map(step => step.title) : [];
-      })
-    )];
   };
 
   // Toggle row expansion
@@ -135,9 +181,9 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
 
   // Export to CSV
   const exportToCSV = () => {
-    const allStepsForExport = getStepsForGroup(workflows);
+    const allStepsForExport = getStepsForWorkflows(filteredWorkflows);
     const headers = ['School', 'Session Type', 'Template', 'Date', 'Status', 'Progress', ...allStepsForExport];
-    const rows = workflows.map(workflow => {
+    const rows = filteredWorkflows.map(workflow => {
       const session = sessionData[workflow.sessionId];
       const progress = calculateProgress(workflow);
       
@@ -175,15 +221,19 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
       <div className="table-header">
         <h3>Workflow Progress Table</h3>
         <div className="table-controls">
-          <label style={{ marginRight: '1rem' }}>
-            <input
-              type="checkbox"
-              checked={groupBySessionType}
-              onChange={(e) => setGroupBySessionType(e.target.checked)}
-              style={{ marginRight: '0.5rem' }}
-            />
-            Group by Session Type
-          </label>
+          <div className="workflow-type-filter">
+            <label htmlFor="workflowTypeSelect">Workflow Type:</label>
+            <select
+              id="workflowTypeSelect"
+              value={selectedWorkflowType}
+              onChange={(e) => setSelectedWorkflowType(e.target.value)}
+              className="workflow-type-select"
+            >
+              {workflowTypes.map(type => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </div>
           <button onClick={exportToCSV} className="export-button">
             <Download size={16} />
             Export CSV
@@ -192,11 +242,11 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
       </div>
       
       <div className="table-container">
-        {groupBySessionType ? (
-          // Render separate tables for each workflow type
+        {selectedWorkflowType === 'All Types' ? (
+          // Grouped view for "All Types"
           sortedGroups.map(groupKey => {
             const groupWorkflows = groupedWorkflows[groupKey];
-            const groupSteps = getStepsForGroup(groupWorkflows);
+            const groupSteps = getStepsForWorkflows(groupWorkflows);
             const isGroupExpanded = expandedGroups.has(groupKey);
             
             return (
@@ -281,15 +331,14 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                         <th>Progress</th>
                         {groupSteps.map((step, index) => (
                           <th key={index} className="step-header">
-                            <div className="step-header-content">
-                              {step}
+                            <div className="step-header-content" title={step}>
+                              {getAbbreviatedStepName(step)}
                             </div>
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {/* Workflows in this group */}
                       {groupWorkflows.map(workflow => {
                         const session = sessionData[workflow.sessionId];
                         const progress = calculateProgress(workflow);
@@ -398,7 +447,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
             );
           })
         ) : (
-          // Single table when not grouped
+          // Single table for specific workflow type
           <table className="workflow-table">
             <thead>
               <tr>
@@ -407,21 +456,21 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                 <th>Type</th>
                 <th>Date</th>
                 <th>Progress</th>
-                {getStepsForGroup(workflows).map((step, index) => (
+                {getStepsForWorkflows(filteredWorkflows).map((step, index) => (
                   <th key={index} className="step-header">
-                    <div className="step-header-content">
-                      {step}
+                    <div className="step-header-content" title={step}>
+                      {getAbbreviatedStepName(step)}
                     </div>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {workflows.map(workflow => {
+              {filteredWorkflows.map(workflow => {
                 const session = sessionData[workflow.sessionId];
                 const progress = calculateProgress(workflow);
                 const isExpanded = expandedRows.has(workflow.id);
-                const allStepsUngrouped = getStepsForGroup(workflows);
+                const allSteps = getStepsForWorkflows(filteredWorkflows);
                 
                 return (
                   <React.Fragment key={workflow.id}>
@@ -457,7 +506,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                           <span className="progress-text">{Math.round(progress)}%</span>
                         </div>
                       </td>
-                      {allStepsUngrouped.map((stepTitle, index) => {
+                      {allSteps.map((stepTitle, index) => {
                         const status = getStepStatus(workflow, stepTitle);
                         const display = getStatusDisplay(status);
                         const Icon = display.icon;
@@ -478,7 +527,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                     
                     {isExpanded && (
                       <tr className="expanded-row">
-                        <td colSpan={5 + allStepsUngrouped.length}>
+                        <td colSpan={5 + allSteps.length}>
                           <div className="expanded-content">
                             <div className="workflow-details">
                               <p><strong>Workflow:</strong> {workflow.templateName}</p>
@@ -489,7 +538,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                             <div className="step-details">
                               <h4>Step Details:</h4>
                               <div className="step-grid">
-                                {allStepsUngrouped.map((stepTitle, index) => {
+                                {allSteps.map((stepTitle, index) => {
                                   const status = getStepStatus(workflow, stepTitle);
                                   const display = getStatusDisplay(status);
                                   

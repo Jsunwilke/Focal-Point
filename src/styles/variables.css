@@ -61,6 +61,7 @@
 
   /* Layout */
   --sidebar-width: 16rem;
+  --sidebar-collapsed-width: 4rem;
   --header-height: 4rem;
 
   /* Responsive Breakpoints */

@@ -41,8 +41,8 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
       
       setCheckingConflicts(true);
       try {
-        const start = new Date(e.target.name === 'startDate' ? e.target.value : formData.startDate);
-        const end = new Date(e.target.name === 'endDate' ? e.target.value : formData.endDate);
+        const start = new Date((e.target.name === 'startDate' ? e.target.value : formData.startDate) + 'T12:00:00');
+        const end = new Date((e.target.name === 'endDate' ? e.target.value : formData.endDate) + 'T12:00:00');
         
         const conflictingSessions = await checkTimeOffConflicts(
           organization.id,
@@ -79,8 +79,8 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
       return;
     }
     
-    const startDate = new Date(formData.startDate);
-    const endDate = formData.isPartialDay ? new Date(formData.startDate) : new Date(formData.endDate);
+    const startDate = new Date(formData.startDate + 'T12:00:00');
+    const endDate = formData.isPartialDay ? new Date(formData.startDate + 'T12:00:00') : new Date(formData.endDate + 'T12:00:00');
     
     if (!formData.isPartialDay && startDate > endDate) {
       setError('End date must be after start date');

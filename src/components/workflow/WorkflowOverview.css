@@ -5,6 +5,9 @@
   padding: 1.5rem;
   background-color: var(--bg-secondary);
   min-height: 100vh;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .workflow-overview-loading {
@@ -321,6 +324,9 @@
 /* Table View Styles */
 .workflow-table-view {
   padding: 1.5rem;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .table-header {
@@ -334,6 +340,35 @@
   margin: 0;
   font-size: 1.25rem;
   color: var(--text-primary);
+}
+
+.table-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.workflow-type-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.workflow-type-filter label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.workflow-type-select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  min-width: 140px;
 }
 
 .export-button {
@@ -357,11 +392,44 @@
   overflow-x: auto;
   border: 1px solid var(--border-color);
   border-radius: 0.375rem;
+  width: 100%;
+  max-width: calc(100vw - var(--sidebar-collapsed-width) - 4rem);
+  box-sizing: border-box;
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+
+.table-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-container::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
 }
 
 .workflow-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.workflow-table th,
+.workflow-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-sizing: border-box;
 }
 
 .workflow-table th {
@@ -374,6 +442,31 @@
   white-space: nowrap;
 }
 
+.workflow-table th.step-header {
+  width: 70px;
+  min-width: 70px;
+  max-width: 70px;
+  text-align: center;
+  padding: 0.5rem 0.25rem;
+  overflow: hidden;
+  white-space: nowrap;
+  position: relative;
+}
+
+.step-header-content {
+  font-size: 0.6rem;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  max-width: 60px;
+  display: block;
+  margin: 0 auto;
+}
+
 .workflow-table td {
   padding: 0.75rem;
   border-bottom: 1px solid var(--border-color);
@@ -384,6 +477,47 @@
   left: 0;
   background-color: var(--bg-primary);
   z-index: 1;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
+}
+
+.workflow-table th.sticky-column {
+  background-color: var(--bg-secondary);
+  z-index: 2;
+}
+
+.workflow-table th.sticky-column:first-child {
+  width: 50px;
+  min-width: 50px;
+  max-width: 50px;
+}
+
+.workflow-table th.sticky-column:nth-child(2) {
+  width: 180px;
+  min-width: 180px;
+  max-width: 180px;
+  left: 50px; /* Position after the first sticky column */
+}
+
+.workflow-table td.sticky-column:nth-child(2) {
+  left: 50px; /* Position after the first sticky column */
+}
+
+.workflow-table th:nth-child(3) {
+  width: 120px;
+  min-width: 120px;
+  max-width: 120px;
+}
+
+.workflow-table th:nth-child(4) {
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
+}
+
+.workflow-table th:nth-child(5) {
+  width: 110px;
+  min-width: 110px;
+  max-width: 110px;
 }
 
 .expand-cell {
@@ -436,6 +570,10 @@
   text-align: center;
   cursor: pointer;
   transition: background-color 0.2s;
+  width: 70px;
+  min-width: 70px;
+  max-width: 70px;
+  padding: 0.25rem;
 }
 
 .step-cell:hover {
@@ -1514,5 +1652,28 @@
   .workflow-cards-grid.grid-medium,
   .workflow-cards-grid.grid-large {
     grid-template-columns: 1fr;
+  }
+  
+  /* Table view mobile adjustments */
+  .workflow-table th.step-header {
+    width: 70px;
+    min-width: 60px;
+    max-width: 70px;
+  }
+  
+  .step-cell {
+    width: 70px;
+    min-width: 60px;
+    max-width: 70px;
+    padding: 0.25rem;
+  }
+  
+  .step-header-content {
+    font-size: 0.625rem;
+  }
+  
+  .workflow-table th.sticky-column:nth-child(2) {
+    width: 120px;
+    min-width: 100px;
   }
 }

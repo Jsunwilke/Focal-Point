@@ -855,8 +855,8 @@ const Schedule = () => {
 
   // Convert time off requests to calendar format
   const timeOffCalendarEntries = visibleTimeOffRequests.map(request => {
-    const startDate = request.startDate.toDate ? request.startDate.toDate() : new Date(request.startDate);
-    const endDate = request.endDate.toDate ? request.endDate.toDate() : new Date(request.endDate);
+    const startDate = request.startDate.toDate ? request.startDate.toDate() : new Date(request.startDate + 'T12:00:00');
+    const endDate = request.endDate.toDate ? request.endDate.toDate() : new Date(request.endDate + 'T12:00:00');
     
     // Create entries for each day of time off
     const entries = [];

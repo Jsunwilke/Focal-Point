@@ -14,10 +14,12 @@ import {
   FileText,
   Receipt,
   Workflow,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import "./Sidebar.css";
 
-const Sidebar = ({ isOpen, onClose, isMobile }) => {
+const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { userProfile } = useAuth();
@@ -125,10 +127,19 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
   };
 
   return (
-    <aside className={`sidebar ${isMobile ? 'sidebar--mobile' : ''} ${isMobile && isOpen ? 'sidebar--open' : ''}`}>
+    <aside className={`sidebar ${isMobile ? 'sidebar--mobile' : ''} ${isMobile && isOpen ? 'sidebar--open' : ''} ${!isMobile && isCollapsed ? 'sidebar--collapsed' : ''}`}>
       <div className="sidebar__header">
         <h1 className="sidebar__logo">iconik</h1>
         <p className="sidebar__subtitle">Studio Management</p>
+        {!isMobile && (
+          <button 
+            className="sidebar__toggle" 
+            onClick={onToggleCollapse}
+            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+          </button>
+        )}
       </div>
 
       <nav className="sidebar__nav">
@@ -145,6 +156,8 @@ const Sidebar = ({ isOpen, onClose, isMobile }) => {
                   } ${!item.enabled ? "sidebar__nav-link--disabled" : ""}`}
                   onClick={() => handleNavigation(item)}
                   disabled={!item.enabled}
+                  data-tooltip={item.label}
+                  title={isCollapsed ? item.label : undefined}
                 >
                   <IconComponent className="sidebar__nav-icon" size={20} />
                   <span className="sidebar__nav-label">{item.label}</span>
