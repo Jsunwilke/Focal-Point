@@ -173,8 +173,14 @@ export const getTeamMembers = async (organizationID) => {
 // Invite user to organization (creates user record but they need to complete signup)
 export const inviteUser = async (organizationID, inviteData) => {
   try {
-    // Create a pending user record
-    const userRef = await addDoc(collection(firestore, "users"), {
+    // Create a temporary UID placeholder for the invited user
+    // We'll use a predictable format: "invite_" + email hash + timestamp
+    const emailHash = btoa(inviteData.email.toLowerCase()).replace(/[^a-zA-Z0-9]/g, '');
+    const timestamp = Date.now();
+    const tempUID = `invite_${emailHash}_${timestamp}`;
+
+    // Create a pending user record with temporary UID
+    await setDoc(doc(firestore, "users", tempUID), {
       email: inviteData.email,
       firstName: inviteData.firstName,
       lastName: inviteData.lastName,
@@ -183,6 +189,7 @@ export const inviteUser = async (organizationID, inviteData) => {
       position: inviteData.position || "",
       organizationID,
       isActive: false, // Will be activated when they complete signup
+      isTemporaryInvite: true, // Flag to identify temp invite records
       invitedAt: serverTimestamp(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -191,7 +198,7 @@ export const inviteUser = async (organizationID, inviteData) => {
     // TODO: Send invitation email here
     // For now, we just create the user record
 
-    return userRef.id;
+    return tempUID;
   } catch (error) {
     console.error("Error inviting user:", error);
     throw error;
@@ -232,15 +239,45 @@ export const getInvitationByEmail = async (email) => {
 };
 
 // Accept invitation (activate user account)
-export const acceptInvitation = async (userId, firebaseUid) => {
+export const acceptInvitation = async (tempUserId, firebaseUid) => {
   try {
-    await updateDoc(doc(firestore, "users", userId), {
+    // Get the temporary invitation user data
+    const tempUserDoc = await getDoc(doc(firestore, "users", tempUserId));
+    
+    if (!tempUserDoc.exists()) {
+      throw new Error("Invitation not found");
+    }
+    
+    const tempUserData = tempUserDoc.data();
+    
+    // Verify this is a temporary invite record
+    if (!tempUserData.isTemporaryInvite) {
+      throw new Error("Invalid invitation record");
+    }
+    
+    // Create the proper user document with Firebase UID as the document ID
+    const finalUserData = {
+      ...tempUserData,
       isActive: true,
+      isTemporaryInvite: false, // Remove the temp flag
       acceptedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      // Note: The firebaseUid is already set when the auth account is created
-      // We could store it separately if needed, but Firebase Auth handles the link
+      firebaseUid: firebaseUid, // Store Firebase UID for reference
+    };
+    
+    // Remove fields that shouldn't be copied
+    delete finalUserData.createdAt; // Will be set by setDoc
+    
+    // Create the new user document with Firebase UID as document ID
+    await setDoc(doc(firestore, "users", firebaseUid), {
+      ...finalUserData,
+      createdAt: serverTimestamp(), // Reset creation time to when account was activated
     });
+    
+    // Clean up the temporary invitation document
+    await deleteDoc(doc(firestore, "users", tempUserId));
+    
+    console.log(`User migration successful: ${tempUserId} → ${firebaseUid}`);
   } catch (error) {
     console.error("Error accepting invitation:", error);
     throw error;
@@ -256,6 +293,52 @@ export const updateUserRole = async (userId, newRole) => {
     });
   } catch (error) {
     console.error("Error updating user role:", error);
+    throw error;
+  }
+};
+
+// Utility function to clean up old temporary invite records (admin function)
+export const cleanupTemporaryInvites = async (organizationID, olderThanDays = 30) => {
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+    
+    const q = query(
+      collection(firestore, "users"),
+      where("organizationID", "==", organizationID),
+      where("isTemporaryInvite", "==", true)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const expiredInvites = [];
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      const inviteDate = data.invitedAt?.toDate() || new Date(0);
+      
+      if (inviteDate < cutoffDate) {
+        expiredInvites.push({
+          id: doc.id,
+          email: data.email,
+          invitedAt: inviteDate
+        });
+      }
+    });
+    
+    console.log(`Found ${expiredInvites.length} expired temporary invites to clean up`);
+    
+    // Delete expired invites
+    for (const invite of expiredInvites) {
+      await deleteDoc(doc(firestore, "users", invite.id));
+      console.log(`Cleaned up expired invite for ${invite.email} (invited ${invite.invitedAt.toDateString()})`);
+    }
+    
+    return {
+      cleaned: expiredInvites.length,
+      expiredInvites
+    };
+  } catch (error) {
+    console.error("Error cleaning up temporary invites:", error);
     throw error;
   }
 };

@@ -68,13 +68,34 @@ service cloud.firestore {
       // **INVITATION FLOW: Allow reading inactive users for invitation lookup**
       allow read: if resource.data.isActive == false;
       
+      // **INVITATION FLOW: Allow reading temporary invite documents**
+      allow read: if resource.data.keys().hasAny(['isTemporaryInvite']) && 
+                     resource.data.isTemporaryInvite == true;
+      
       // Users can create their own profile (during signup)
       allow create: if request.auth != null && request.auth.uid == userId;
       
-      // Admins can create user profiles (for invites)
+      // **INVITATION FLOW: Admins can create temporary invite documents**
       allow create: if request.auth != null && 
                        isAdmin(request.auth.uid) &&
-                       belongsToSameOrg(request.auth.uid, request.resource.data.organizationID);
+                       belongsToSameOrg(request.auth.uid, request.resource.data.organizationID) &&
+                       (
+                         // Regular user creation (document ID matches Firebase UID)
+                         userId == request.auth.uid ||
+                         // Temporary invite creation (document ID starts with "invite_")
+                         (userId.matches('invite_.*') &&
+                          request.resource.data.isTemporaryInvite == true &&
+                          request.resource.data.isActive == false &&
+                          request.resource.data.keys().hasAll(['email', 'firstName', 'lastName', 'role', 'organizationID', 'isTemporaryInvite', 'isActive']))
+                       );
+      
+      // **INVITATION FLOW: Allow creating new user document during acceptance**
+      allow create: if request.auth != null && 
+                       request.auth.uid == userId &&
+                       // This is a new Firebase Auth user accepting an invitation
+                       request.resource.data.isActive == true &&
+                       (!request.resource.data.keys().hasAny(['isTemporaryInvite']) || 
+                        request.resource.data.isTemporaryInvite == false);
       
       // Users can update their own profile
       allow update: if request.auth != null && 
@@ -90,7 +111,7 @@ service cloud.firestore {
                        // Prevent changing organizationID
                        request.resource.data.organizationID == resource.data.organizationID;
       
-      // **INVITATION FLOW: Allow activating inactive invitations**
+      // **INVITATION FLOW: Allow activating inactive invitations (legacy support)**
       allow update: if request.auth != null &&
                        resource.data.isActive == false &&
                        request.resource.data.isActive == true &&
@@ -101,8 +122,17 @@ service cloud.firestore {
                        request.resource.data.firstName == resource.data.firstName &&
                        request.resource.data.lastName == resource.data.lastName;
       
-      // No deletes, only deactivation (set isActive: false)
-      allow delete: if false;
+      // **INVITATION FLOW: Allow deleting temporary invite documents**
+      allow delete: if request.auth != null &&
+                       userId.matches('invite_.*') &&
+                       resource.data.isTemporaryInvite == true &&
+                       (
+                         // During acceptance process (any authenticated user can delete temp invite they're accepting)
+                         true ||
+                         // Admins can delete temporary invites (cleanup)
+                         (isAdmin(request.auth.uid) &&
+                          belongsToSameOrg(request.auth.uid, resource.data.organizationID))
+                       );
     }
 
     // Sessions collection
