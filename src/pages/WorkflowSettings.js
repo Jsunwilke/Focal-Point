@@ -22,6 +22,7 @@ import {
 import { getWorkflowGroups } from '../utils/workflowTemplates';
 import WorkflowTemplateBuilder from '../components/workflow/WorkflowTemplateBuilder';
 import WorkflowTemplateGallery from '../components/workflow/WorkflowTemplateGallery';
+import DeleteConfirmationModal from '../components/workflow/DeleteConfirmationModal';
 import './WorkflowSettings.css';
 
 const WorkflowSettings = () => {
@@ -33,6 +34,8 @@ const WorkflowSettings = () => {
   const [showTemplateGallery, setShowTemplateGallery] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState(null);
   
   const navigate = useNavigate();
   const { userProfile, organization } = useAuth();
@@ -59,18 +62,26 @@ const WorkflowSettings = () => {
   }, [organization?.id]);
 
   // Handle template deletion
-  const handleDeleteTemplate = async (templateId, templateName) => {
-    if (!window.confirm(`Are you sure you want to delete the "${templateName}" template?`)) {
-      return;
-    }
+  const handleDeleteTemplate = (template) => {
+    setTemplateToDelete(template);
+    setShowDeleteModal(true);
+  };
 
+  const confirmDeleteTemplate = async () => {
+    if (!templateToDelete) return;
+    
+    setLoading(true);
     try {
-      await deleteWorkflowTemplate(templateId);
-      setCustomTemplates(prev => prev.filter(t => t.id !== templateId));
-      showToast('Template Deleted', `"${templateName}" has been deleted`, 'success');
+      await deleteWorkflowTemplate(templateToDelete.id);
+      setCustomTemplates(prev => prev.filter(t => t.id !== templateToDelete.id));
+      showToast('Template Deleted', `"${templateToDelete.name}" has been permanently deleted`, 'success');
+      setShowDeleteModal(false);
+      setTemplateToDelete(null);
     } catch (error) {
       console.error('Error deleting template:', error);
       showToast('Error', 'Failed to delete template', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -320,7 +331,7 @@ const WorkflowSettings = () => {
                           </button>
                           
                           <button
-                            onClick={() => handleDeleteTemplate(template.id, template.name)}
+                            onClick={() => handleDeleteTemplate(template)}
                             className="action-button danger"
                             title="Delete template"
                           >
@@ -427,6 +438,18 @@ const WorkflowSettings = () => {
           onTemplateCreated={handleTemplateCreated}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setTemplateToDelete(null);
+        }}
+        onConfirm={confirmDeleteTemplate}
+        templateName={templateToDelete?.name || ''}
+        loading={loading}
+      />
     </div>
   );
 };

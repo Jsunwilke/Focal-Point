@@ -77,15 +77,16 @@ const DeleteConfirmationModal = ({
               color: '#111827',
               lineHeight: '1.4'
             }}>
-              Delete Template
+              Permanently Delete Template
             </h3>
             <p style={{ 
               margin: '0.5rem 0 0 0', 
               fontSize: '0.875rem', 
-              color: '#6b7280',
-              lineHeight: '1.4'
+              color: '#ef4444',
+              lineHeight: '1.4',
+              fontWeight: '500'
             }}>
-              This action cannot be undone
+              This will permanently delete the template from the database
             </p>
           </div>
         </div>
@@ -98,15 +99,24 @@ const DeleteConfirmationModal = ({
             color: '#374151',
             lineHeight: '1.5'
           }}>
-            Are you sure you want to delete "<strong style={{ color: '#111827' }}>{templateName}</strong>"?
+            Are you sure you want to permanently delete "<strong style={{ color: '#111827' }}>{templateName}</strong>"?
           </p>
           <p style={{ 
             margin: '0.75rem 0 0 0', 
             fontSize: '0.875rem', 
+            color: '#ef4444',
+            lineHeight: '1.4',
+            fontWeight: '500'
+          }}>
+            This action cannot be undone. The template will be permanently removed from the database.
+          </p>
+          <p style={{ 
+            margin: '0.5rem 0 0 0', 
+            fontSize: '0.875rem', 
             color: '#6b7280',
             lineHeight: '1.4'
           }}>
-            Any workflows created from this template will not be affected, but you won't be able to create new workflows from this template.
+            Existing workflows created from this template will not be affected.
           </p>
         </div>
 
@@ -179,7 +189,7 @@ const DeleteConfirmationModal = ({
             }}
           >
             <Trash2 size={16} />
-            {loading ? 'Deleting...' : 'Delete Template'}
+            {loading ? 'Deleting...' : 'Delete Permanently'}
           </button>
         </div>
       </div>

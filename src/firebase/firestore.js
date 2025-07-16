@@ -1762,7 +1762,7 @@ export const updateWorkflowTemplate = async (templateId, templateData) => {
 
 export const deleteWorkflowTemplate = async (templateId) => {
   try {
-    console.log(`🗑️ Firestore: Soft deleting template ${templateId}`);
+    console.log(`🗑️ Firestore: Permanently deleting template ${templateId}`);
     
     const templateRef = doc(firestore, "workflowTemplates", templateId);
     
@@ -1774,12 +1774,10 @@ export const deleteWorkflowTemplate = async (templateId) => {
     
     console.log(`📄 Template found:`, templateDoc.data());
     
-    await updateDoc(templateRef, {
-      isActive: false,
-      updatedAt: serverTimestamp(),
-    });
+    // Permanently delete the document from Firestore
+    await deleteDoc(templateRef);
     
-    console.log(`✅ Template ${templateId} successfully marked as inactive`);
+    console.log(`✅ Template ${templateId} successfully deleted from Firestore`);
   } catch (error) {
     console.error(`💥 Error deleting workflow template ${templateId}:`, error);
     throw error;

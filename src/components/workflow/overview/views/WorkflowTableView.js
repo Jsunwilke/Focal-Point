@@ -1,5 +1,5 @@
 // src/components/workflow/overview/views/WorkflowTableView.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Download, 
   CheckCircle, 
@@ -21,6 +21,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
   const [updatingSteps, setUpdatingSteps] = useState(new Set()); // Track which steps are being updated
   const tableRef = useRef(null);
   const { showToast } = useToast();
+
 
   // Get unique workflow types for filter dropdown
   const workflowTypes = ['All Types', ...new Set(workflows.map(workflow => 
@@ -149,7 +150,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
       resizeObserver.disconnect();
       window.removeEventListener('resize', handleWindowResize);
     };
-  }, [selectedWorkflowType, workflows.length, groupedWorkflows, filteredWorkflows]);
+  }, [selectedWorkflowType, workflows]);
 
   // Apply calculated widths as CSS custom properties
   useEffect(() => {
@@ -168,6 +169,57 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
       table.style.setProperty('--step-font-size', fontSize);
     }
   }, [columnWidths]);
+
+  // Update group scrollbar widths dynamically
+  useEffect(() => {
+    // Update scroll content widths for all visible groups
+    const updateGroupScrollWidths = () => {
+      // Handle grouped view scrollbars
+      document.querySelectorAll('[data-group]:not([data-group="single"]) .group-top-scrollbar').forEach((scrollbar) => {
+        const scrollContent = scrollbar.querySelector('.group-scroll-content');
+        const table = scrollbar.closest('[data-group]')?.querySelector('.workflow-table');
+        if (scrollContent && table) {
+          const tableWidth = table.scrollWidth;
+          scrollContent.style.width = `${tableWidth}px`;
+        }
+      });
+      
+      // Handle single table view scrollbar
+      const singleScrollbar = document.querySelector('.single-table-container .group-top-scrollbar');
+      if (singleScrollbar) {
+        const scrollContent = singleScrollbar.querySelector('.group-scroll-content');
+        const table = document.querySelector('.single-table-container .workflow-table');
+        if (scrollContent && table) {
+          const tableWidth = table.scrollWidth;
+          scrollContent.style.width = `${tableWidth}px`;
+        }
+      }
+    };
+    
+    // Small delay to ensure DOM is updated
+    setTimeout(updateGroupScrollWidths, 100);
+  }, [selectedWorkflowType, workflows.length, columnWidths, expandedGroups]);
+
+  // Clear optimistic updates when fresh workflow data comes in
+  useEffect(() => {
+    // Clear any optimistic updates that now have real data
+    setOptimisticUpdates(prev => {
+      const updated = { ...prev };
+      let hasChanges = false;
+      
+      Object.keys(updated).forEach(optimisticKey => {
+        const [workflowId, stepId] = optimisticKey.split('-');
+        const workflow = workflows.find(w => w.id === workflowId);
+        if (workflow && workflow.stepProgress && workflow.stepProgress[stepId]) {
+          delete updated[optimisticKey];
+          hasChanges = true;
+        }
+      });
+      
+      return hasChanges ? updated : prev;
+    });
+  }, [workflows]);
+
 
   // Get abbreviated step names with multiple tiers based on available width
   const getAbbreviatedStepName = (stepTitle, abbreviationType = 'short') => {
@@ -406,20 +458,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
       
       showToast('Step Updated', `${step.title} marked as ${newStatus}`, 'success');
       
-      // Refresh just this workflow to get the real data from server
-      if (refreshSingleWorkflow) {
-        // Add a small delay to allow Firestore to propagate the change
-        setTimeout(async () => {
-          await refreshSingleWorkflow(workflow.id);
-        }, 300);
-      }
-      
-      // Clear optimistic update after successful server update
-      setOptimisticUpdates(prev => {
-        const updated = { ...prev };
-        delete updated[optimisticKey];
-        return updated;
-      });
+      // Let optimistic update persist - it will be replaced by fresh data from parent component
       
     } catch (error) {
       showToast('Error', 'Failed to update step status', 'error');
@@ -489,6 +528,33 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
     URL.revokeObjectURL(url);
   };
 
+  // Per-group scroll synchronization
+  const syncGroupScroll = (groupKey, source, target) => {
+    if (target && source) {
+      target.scrollLeft = source.scrollLeft;
+    }
+  };
+
+  const handleGroupTopScroll = (groupKey, e) => {
+    let tableContainer;
+    if (groupKey === 'single') {
+      tableContainer = document.querySelector(`[data-group="${groupKey}"]`);
+    } else {
+      tableContainer = document.querySelector(`[data-group="${groupKey}"] .group-table-container`);
+    }
+    syncGroupScroll(groupKey, e.target, tableContainer);
+  };
+
+  const handleGroupTableScroll = (groupKey, e) => {
+    let topScrollbar;
+    if (groupKey === 'single') {
+      topScrollbar = document.querySelector(`.single-table-container .group-top-scrollbar`);
+    } else {
+      topScrollbar = document.querySelector(`[data-group="${groupKey}"] .group-top-scrollbar`);
+    }
+    syncGroupScroll(groupKey, e.target, topScrollbar);
+  };
+
   return (
     <div className="workflow-table-view">
       <div className="table-header">
@@ -523,7 +589,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
             const isGroupExpanded = expandedGroups.has(groupKey);
             
             return (
-              <div key={groupKey} className="workflow-group-table" style={{ marginBottom: '2rem' }}>
+              <div key={groupKey} className="workflow-group-table" data-group={groupKey} style={{ marginBottom: '2rem' }}>
                 {/* Group Header */}
                 <div className="workflow-type-section-header" style={{
                   backgroundColor: '#f1f5f9',
@@ -594,21 +660,33 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                 
                 {/* Group Table */}
                 {isGroupExpanded && (
-                  <table ref={tableRef} className="workflow-table">
-                    <thead>
-                      <tr>
-                        <th className="sticky-column"></th>
-                        <th className="sticky-column">School</th>
-                        <th>Type</th>
-                        <th>Date</th>
-                        <th>Progress</th>
-                        {groupSteps.map((step, index) => (
-                          <th key={index} className="step-header" title={step}>
-                            {step}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
+                  <div className="group-container">
+                    {/* Per-group horizontal scrollbar */}
+                    <div className="group-scroll-container">
+                      <div 
+                        className="group-top-scrollbar"
+                        onScroll={(e) => handleGroupTopScroll(groupKey, e)}
+                      >
+                        <div className="group-scroll-content" style={{ width: `${230 + (groupSteps.length * 140)}px` }}></div>
+                      </div>
+                    </div>
+                    
+                    <div className="group-table-container" onScroll={(e) => handleGroupTableScroll(groupKey, e)}>
+                      <table ref={tableRef} className="workflow-table">
+                        <thead>
+                          <tr>
+                            <th className="sticky-column group-sticky-header"></th>
+                            <th className="sticky-column group-sticky-header">School</th>
+                            <th className="group-sticky-header">Type</th>
+                            <th className="group-sticky-header">Date</th>
+                            <th className="group-sticky-header">Progress</th>
+                            {groupSteps.map((step, index) => (
+                              <th key={index} className="step-header group-sticky-header" title={step}>
+                                {step}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
                     <tbody>
                       {groupWorkflows.map(workflow => {
                         const session = sessionData[workflow.sessionId];
@@ -705,11 +783,28 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                                           const status = getStepStatus(workflow, stepTitle);
                                           const display = getStatusDisplay(status);
                                           
+                                          const template = workflowTemplates[workflow.templateId];
+                                          const step = template?.steps.find(s => s.title === stepTitle);
+                                          const stepKey = step ? `${workflow.id}-${step.id}` : null;
+                                          const isUpdating = stepKey && updatingSteps.has(stepKey);
+                                          
                                           return (
-                                            <div key={index} className="step-detail-card">
+                                            <div 
+                                              key={index} 
+                                              className="step-detail-card" 
+                                              data-workflow-id={workflow.id}
+                                              onClick={() => !isUpdating && handleStepClick(workflow, stepTitle)}
+                                              style={{ 
+                                                opacity: isUpdating ? 0.6 : 1,
+                                                cursor: isUpdating ? 'wait' : 'pointer'
+                                              }}
+                                              title={`${stepTitle}: ${display.label}\n${isUpdating ? 'Updating...' : 'Click to change status'}`}
+                                            >
                                               <div className="step-detail-header">
                                                 {display.icon && <display.icon size={14} />}
-                                                <span>{stepTitle}</span>
+                                                <span>
+                                                  {stepTitle}
+                                                </span>
                                               </div>
                                               <div className="step-detail-status">
                                                 {display.label}
@@ -732,28 +827,42 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                         );
                       })}
                     </tbody>
-                  </table>
+                      </table>
+                    </div>
+                  </div>
                 )}
               </div>
             );
           })
         ) : (
           // Single table for specific workflow type
-          <table ref={tableRef} className="workflow-table">
-            <thead>
-              <tr>
-                <th className="sticky-column"></th>
-                <th className="sticky-column">School</th>
-                <th>Type</th>
-                <th>Date</th>
-                <th>Progress</th>
-                {getStepsForWorkflows(filteredWorkflows).map((step, index) => (
-                  <th key={index} className="step-header" title={step}>
-                    {step}
-                  </th>
-                ))}
-              </tr>
-            </thead>
+          <div className="single-table-container">
+            {/* Single table horizontal scrollbar */}
+            <div className="group-scroll-container">
+              <div 
+                className="group-top-scrollbar"
+                onScroll={(e) => handleGroupTopScroll('single', e)}
+              >
+                <div className="group-scroll-content" style={{ width: `${230 + (getStepsForWorkflows(filteredWorkflows).length * 140)}px` }}></div>
+              </div>
+            </div>
+            
+            <div className="group-table-container" data-group="single" onScroll={(e) => handleGroupTableScroll('single', e)}>
+              <table ref={tableRef} className="workflow-table">
+                <thead>
+                  <tr>
+                    <th className="sticky-column group-sticky-header"></th>
+                    <th className="sticky-column group-sticky-header">School</th>
+                    <th className="group-sticky-header">Type</th>
+                    <th className="group-sticky-header">Date</th>
+                    <th className="group-sticky-header">Progress</th>
+                    {getStepsForWorkflows(filteredWorkflows).map((step, index) => (
+                      <th key={index} className="step-header group-sticky-header" title={step}>
+                        {step}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
             <tbody>
               {filteredWorkflows.map(workflow => {
                 const session = sessionData[workflow.sessionId];
@@ -851,11 +960,28 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                                   const status = getStepStatus(workflow, stepTitle);
                                   const display = getStatusDisplay(status);
                                   
+                                  const template = workflowTemplates[workflow.templateId];
+                                  const step = template?.steps.find(s => s.title === stepTitle);
+                                  const stepKey = step ? `${workflow.id}-${step.id}` : null;
+                                  const isUpdating = stepKey && updatingSteps.has(stepKey);
+                                  
                                   return (
-                                    <div key={index} className="step-detail-card">
+                                    <div 
+                                      key={index} 
+                                      className="step-detail-card" 
+                                      data-workflow-id={workflow.id}
+                                      onClick={() => !isUpdating && handleStepClick(workflow, stepTitle)}
+                                      style={{ 
+                                        opacity: isUpdating ? 0.6 : 1,
+                                        cursor: isUpdating ? 'wait' : 'pointer'
+                                      }}
+                                      title={`${stepTitle}: ${display.label}\n${isUpdating ? 'Updating...' : 'Click to change status'}`}
+                                    >
                                       <div className="step-detail-header">
                                         {display.icon && <display.icon size={14} />}
-                                        <span>{stepTitle}</span>
+                                        <span>
+                                          {stepTitle}
+                                        </span>
                                       </div>
                                       <div className="step-detail-status">
                                         {display.label}
@@ -878,7 +1004,9 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                 );
               })}
             </tbody>
-          </table>
+              </table>
+            </div>
+          </div>
         )}
       </div>
     </div>

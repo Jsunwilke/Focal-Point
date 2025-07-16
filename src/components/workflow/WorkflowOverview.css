@@ -400,22 +400,114 @@
 }
 
 .table-container {
-  overflow-x: auto;
-  overflow-y: hidden;
-  border: 1px solid var(--border-color);
-  border-radius: 0.375rem;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
   position: relative;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-color) transparent;
   /* Force container to respect parent width constraints */
   min-width: 0;
   flex-shrink: 1;
   flex-grow: 1;
   /* Absolute containment to prevent any overflow */
   contain: layout style;
+}
+
+/* Per-group containers */
+.group-container,
+.single-table-container {
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  background-color: var(--background);
+  overflow: hidden;
+}
+
+/* Single table container with consistent scroll behavior */
+.single-table-container .group-table-container {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 65vh;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+  scroll-behavior: smooth;
+}
+
+/* Responsive table heights for different screen sizes */
+@media (max-height: 768px) {
+  .group-table-container,
+  .single-table-container .group-table-container {
+    max-height: 60vh; /* Smaller screens get more compact tables */
+  }
+}
+
+@media (min-height: 1200px) {
+  .group-table-container,
+  .single-table-container .group-table-container {
+    max-height: 70vh; /* Larger screens get more spacious tables */
+  }
+}
+
+/* Enhanced scrollbar styling */
+.group-table-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.group-table-container::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+  border-radius: 4px;
+}
+
+.group-table-container::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.group-table-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+.group-table-container {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 65vh;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+  scroll-behavior: smooth;
+}
+
+/* Per-group horizontal scrollbars */
+.group-scroll-container {
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+}
+
+.group-top-scrollbar {
+  height: 17px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.group-scroll-content {
+  height: 1px;
+  background: transparent;
+}
+
+/* Sticky headers within groups */
+.group-sticky-header {
+  position: sticky;
+  top: 0;
+  background-color: var(--background-secondary) !important;
+  z-index: 20;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.workflow-table th.sticky-column.group-sticky-header {
+  z-index: 30;
+  position: sticky;
+  top: 0;
+  left: 0;
+  background-color: var(--background-secondary) !important;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1) !important;
 }
 
 .table-container::-webkit-scrollbar {
@@ -504,14 +596,14 @@
 .sticky-column {
   position: sticky;
   left: 0;
-  background-color: var(--bg-primary);
-  z-index: 1;
-  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
+  background-color: var(--background) !important;
+  z-index: 15;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.15) !important;
 }
 
 .workflow-table th.sticky-column {
-  background-color: var(--bg-secondary);
-  z-index: 2;
+  background-color: var(--background-secondary) !important;
+  z-index: 25;
 }
 
 .workflow-table th.sticky-column:first-child {
@@ -529,6 +621,36 @@
 
 .workflow-table td.sticky-column:nth-child(2) {
   left: 50px; /* Position after the first sticky column */
+  background-color: var(--background) !important;
+  z-index: 15;
+}
+
+.workflow-table td.sticky-column {
+  background-color: var(--background) !important;
+  z-index: 15;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Additional specificity for sticky elements */
+.workflow-table th.sticky-column:first-child,
+.workflow-table td.sticky-column:first-child {
+  background-color: var(--background-secondary) !important;
+  left: 0 !important;
+}
+
+.workflow-table th.sticky-column:nth-child(2),
+.workflow-table td.sticky-column:nth-child(2) {
+  background-color: var(--background) !important;
+  left: 50px !important;
+}
+
+/* Ensure all cells in sticky columns have backgrounds */
+.workflow-table .sticky-column {
+  background-color: var(--background) !important;
+}
+
+.workflow-table th.sticky-column {
+  background-color: var(--background-secondary) !important;
 }
 
 .workflow-table th:nth-child(3) {
@@ -638,9 +760,22 @@
 
 .step-detail-card {
   padding: 0.75rem;
-  background-color: var(--bg-primary);
+  background-color: var(--background);
   border: 1px solid var(--border-color);
   border-radius: 0.375rem;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.step-detail-card:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--primary-color);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .step-detail-header {
@@ -650,6 +785,17 @@
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.5rem;
+  min-height: 20px;
+}
+
+.step-detail-header span {
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  flex: 1;
+  line-height: 1.4;
+  font-weight: 600;
+  font-size: 0.875rem;
 }
 
 .step-detail-status {
