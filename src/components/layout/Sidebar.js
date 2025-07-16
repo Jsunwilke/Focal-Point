@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Calendar,
   Clock,
+  Navigation,
   School,
   Users,
   BarChart3,
@@ -48,6 +49,13 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       label: "Time Tracking",
       icon: Clock,
       path: "/time-tracking",
+      enabled: true,
+    },
+    {
+      id: "mileage",
+      label: "Mileage",
+      icon: Navigation,
+      path: "/mileage",
       enabled: true,
     },
     {

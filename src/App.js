@@ -18,6 +18,7 @@ import Sports from "./pages/Sports";
 import Schedule from "./pages/Schedule";
 import Settings from "./pages/Settings";
 import TimeTracking from "./pages/TimeTracking";
+import MileageTracking from "./pages/MileageTracking";
 import PayrollTimesheets from "./pages/PayrollTimesheets";
 import TemplatesList from "./pages/TemplatesList";
 import TemplateBuilder from "./pages/TemplateBuilder";
@@ -100,6 +101,7 @@ const AppContent = () => {
                       <Route path="/" element={<Dashboard />} />
                       <Route path="/schedule" element={<Schedule />} />
                       <Route path="/time-tracking" element={<TimeTracking />} />
+                      <Route path="/mileage" element={<MileageTracking />} />
                       <Route path="/workflows" element={<WorkflowDashboard />} />
                       <Route path="/workflows/settings" element={<WorkflowSettings />} />
                       <Route path="/payroll-timesheets" element={<PayrollTimesheets />} />
