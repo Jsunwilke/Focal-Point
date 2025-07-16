@@ -1,7 +1,7 @@
 // src/components/workflow/WorkflowStepModal.js
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { X, Clock, User, CheckCircle, FileText, Upload, Save } from 'lucide-react';
+import { X, Clock, User, CheckCircle, FileText, Upload, Save, MessageSquare } from 'lucide-react';
 import { 
   updateWorkflowStep, 
   completeWorkflowStep, 
@@ -9,6 +9,7 @@ import {
   getTeamMembers 
 } from '../../firebase/firestore';
 import { useToast } from '../../contexts/ToastContext';
+import QuestionnaireResponseDisplay from '../workflow/QuestionnaireResponseDisplay';
 
 const WorkflowStepModal = ({
   isOpen,
@@ -22,6 +23,7 @@ const WorkflowStepModal = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
+  const [activeTab, setActiveTab] = useState('details');
   const [formData, setFormData] = useState({
     notes: '',
     files: [],
@@ -241,19 +243,69 @@ const WorkflowStepModal = ({
           </button>
         </div>
 
+        {/* Tabs */}
+        <div style={{
+          borderBottom: '1px solid #e5e7eb',
+          display: 'flex',
+          backgroundColor: '#f9fafb'
+        }}>
+          <button
+            onClick={() => setActiveTab('details')}
+            style={{
+              padding: '0.75rem 1.5rem',
+              border: 'none',
+              backgroundColor: activeTab === 'details' ? 'white' : 'transparent',
+              color: activeTab === 'details' ? '#3b82f6' : '#6b7280',
+              borderBottom: activeTab === 'details' ? '2px solid #3b82f6' : '2px solid transparent',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <FileText size={16} />
+            Step Details
+          </button>
+          {workflow?.workflowType === 'tracking' && (workflow?.customFormData || workflow?.additionalData?.customFormData) && (
+            <button
+              onClick={() => setActiveTab('questionnaire')}
+              style={{
+                padding: '0.75rem 1.5rem',
+                border: 'none',
+                backgroundColor: activeTab === 'questionnaire' ? 'white' : 'transparent',
+                color: activeTab === 'questionnaire' ? '#3b82f6' : '#6b7280',
+                borderBottom: activeTab === 'questionnaire' ? '2px solid #3b82f6' : '2px solid transparent',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              <MessageSquare size={16} />
+              Tracking Info
+            </button>
+          )}
+        </div>
+
         {/* Body */}
         <div style={{ padding: '1.5rem', overflow: 'auto', flex: 1 }}>
-          {/* Step Description */}
-          {step.description && (
-            <div style={{ marginBottom: '1.5rem' }}>
-              <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
-                DESCRIPTION
-              </h4>
-              <p style={{ margin: 0, color: '#6b7280', lineHeight: '1.5' }}>
-                {step.description}
-              </p>
-            </div>
-          )}
+          {activeTab === 'details' && (
+            <>
+              {/* Step Description */}
+              {step.description && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
+                    DESCRIPTION
+                  </h4>
+                  <p style={{ margin: 0, color: '#6b7280', lineHeight: '1.5' }}>
+                    {step.description}
+                  </p>
+                </div>
+              )}
 
           {/* Assignment Section */}
           {canAssign && (
@@ -356,17 +408,28 @@ const WorkflowStepModal = ({
             </div>
           )}
 
-          {/* Progress History */}
-          {stepProgress?.updatedAt && (
-            <div style={{ marginBottom: '1rem' }}>
-              <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
-                LAST UPDATED
-              </h4>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-                {new Date(stepProgress.updatedAt.toDate()).toLocaleString()}
-                {stepProgress.updatedBy && ` by ${stepProgress.updatedBy}`}
-              </div>
-            </div>
+              {/* Progress History */}
+              {stepProgress?.updatedAt && (
+                <div style={{ marginBottom: '1rem' }}>
+                  <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
+                    LAST UPDATED
+                  </h4>
+                  <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                    {new Date(stepProgress.updatedAt.toDate()).toLocaleString()}
+                    {stepProgress.updatedBy && ` by ${stepProgress.updatedBy}`}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {activeTab === 'questionnaire' && workflow?.workflowType === 'tracking' && (workflow?.customFormData || workflow?.additionalData?.customFormData) && (
+            <QuestionnaireResponseDisplay
+              customFormData={workflow.customFormData || workflow.additionalData?.customFormData}
+              customFormFields={workflow.customFormFields || workflow.additionalData?.customFormFields || []}
+              title="Tracking Information"
+              showTitle={false}
+            />
           )}
         </div>
 

@@ -167,9 +167,11 @@ const CreateTrackingWorkflowModal = ({ isOpen, onClose, school, organizationID, 
       endDate.setDate(endDate.getDate() + 30);
 
       // Prepare additional data including custom form fields
+      const currentTemplate = trackingTemplates.find(t => t.id === formData.templateId);
       const additionalData = {
         notes: formData.notes,
-        customFormData: customFormData
+        customFormData: customFormData,
+        customFormFields: currentTemplate?.customFormFields || []
       };
 
       const workflowId = await createTrackingWorkflowForSchool(

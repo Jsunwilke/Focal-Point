@@ -5,7 +5,8 @@ import {
   getWorkflowsForOrganization,
   getWorkflowTemplate,
   getTeamMembers,
-  getSession
+  getSession,
+  deleteWorkflowInstance
 } from '../firebase/firestore';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
@@ -245,6 +246,27 @@ export const WorkflowProvider = ({ children }) => {
     }
   }, [loadTeamMembers, loadUserWorkflows, loadOrganizationWorkflows]);
 
+  // Delete workflow
+  const deleteWorkflow = useCallback(async (workflowId) => {
+    try {
+      // Optimistically remove from state
+      setUserWorkflows(prev => prev.filter(w => w.id !== workflowId));
+      setOrganizationWorkflows(prev => prev.filter(w => w.id !== workflowId));
+      
+      // Delete from Firebase
+      await deleteWorkflowInstance(workflowId);
+      
+      showToast('Workflow Deleted', 'Workflow has been permanently deleted', 'success');
+    } catch (error) {
+      console.error('Error deleting workflow:', error);
+      showToast('Error', 'Failed to delete workflow', 'error');
+      
+      // Revert optimistic update by refreshing workflows
+      await refreshWorkflows();
+      throw error;
+    }
+  }, [showToast, refreshWorkflows]);
+
   // Get workflow with template
   const getWorkflowWithTemplate = useCallback((workflowId) => {
     const workflow = [...userWorkflows, ...organizationWorkflows].find(w => w.id === workflowId);
@@ -358,6 +380,7 @@ export const WorkflowProvider = ({ children }) => {
     // Functions
     refreshWorkflows,
     refreshSingleWorkflow,
+    deleteWorkflow,
     updateWorkflowInState,
     getWorkflowWithTemplate,
     getUserPendingTasks,

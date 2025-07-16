@@ -7,10 +7,14 @@ import {
   AlertCircle, 
   Circle,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  Trash2
 } from 'lucide-react';
 import { updateWorkflowStep } from '../../../../firebase/firestore';
 import { useToast } from '../../../../contexts/ToastContext';
+import { useWorkflow } from '../../../../contexts/WorkflowContext';
+import DeleteWorkflowModal from '../../DeleteWorkflowModal';
+import QuestionnaireResponseDisplay from '../../QuestionnaireResponseDisplay';
 
 const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculateProgress, refreshWorkflows, refreshSingleWorkflow }) => {
   const [expandedRows, setExpandedRows] = useState(new Set());
@@ -19,8 +23,12 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
   const [columnWidths, setColumnWidths] = useState({ stepWidth: 70, abbreviationType: 'short' });
   const [optimisticUpdates, setOptimisticUpdates] = useState({}); // Store temporary UI updates
   const [updatingSteps, setUpdatingSteps] = useState(new Set()); // Track which steps are being updated
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [workflowToDelete, setWorkflowToDelete] = useState(null);
+  const [deletingWorkflow, setDeletingWorkflow] = useState(false);
   const tableRef = useRef(null);
   const { showToast } = useToast();
+  const { deleteWorkflow } = useWorkflow();
 
 
   // Get unique workflow types for filter dropdown
@@ -479,6 +487,27 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
     }
   };
 
+  // Handle workflow deletion
+  const handleDeleteWorkflow = (workflow) => {
+    setWorkflowToDelete(workflow);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteWorkflow = async () => {
+    if (!workflowToDelete) return;
+    
+    setDeletingWorkflow(true);
+    try {
+      await deleteWorkflow(workflowToDelete.id);
+      setShowDeleteModal(false);
+      setWorkflowToDelete(null);
+    } catch (error) {
+      // Error is already handled in the context
+    } finally {
+      setDeletingWorkflow(false);
+    }
+  };
+
   // Export to CSV
   const exportToCSV = () => {
     const allStepsForExport = getStepsForWorkflows(filteredWorkflows);
@@ -680,6 +709,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                             <th className="group-sticky-header">Type</th>
                             <th className="group-sticky-header">Date</th>
                             <th className="group-sticky-header">Progress</th>
+                            <th className="group-sticky-header">Actions</th>
                             {groupSteps.map((step, index) => (
                               <th key={index} className="step-header group-sticky-header" title={step}>
                                 {step}
@@ -735,6 +765,31 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                                   <span className="progress-text">{Math.round(progress)}%</span>
                                 </div>
                               </td>
+                              <td style={{ textAlign: 'center', width: '60px' }}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteWorkflow(workflow);
+                                  }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#ef4444',
+                                    cursor: 'pointer',
+                                    padding: '0.25rem',
+                                    borderRadius: '0.25rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'background-color 0.2s'
+                                  }}
+                                  onMouseEnter={(e) => e.target.style.backgroundColor = '#fef2f2'}
+                                  onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                                  title="Delete workflow"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </td>
                               {groupSteps.map((stepTitle, index) => {
                                 const template = workflowTemplates[workflow.templateId];
                                 const step = template?.steps.find(s => s.title === stepTitle);
@@ -765,14 +820,43 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                             
                             {isExpanded && (
                               <tr className="expanded-row">
-                                <td colSpan={5 + groupSteps.length}>
+                                <td colSpan={6 + groupSteps.length}>
                                   <div className="expanded-content">
-                                    <div className="workflow-details">
-                                      <p><strong>Workflow:</strong> {workflow.templateName}</p>
-                                      <p><strong>Client:</strong> {workflow.workflowType === 'tracking' ? workflow.schoolName || 'N/A' : session?.clientName || 'N/A'}</p>
-                                      <p><strong>Status:</strong> {workflow.status}</p>
-                                      {workflow.workflowType === 'tracking' && (
-                                        <p><strong>Academic Year:</strong> {workflow.academicYear || 'N/A'}</p>
+                                    <div style={{ display: 'flex', gap: '3rem', marginBottom: '1rem' }}>
+                                      <div className="workflow-details">
+                                        <p><strong>Workflow:</strong> {workflow.templateName}</p>
+                                        <p><strong>Client:</strong> {workflow.workflowType === 'tracking' ? workflow.schoolName || 'N/A' : session?.clientName || 'N/A'}</p>
+                                        <p><strong>Status:</strong> {workflow.status}</p>
+                                        {workflow.workflowType === 'tracking' && (
+                                          <p><strong>Academic Year:</strong> {workflow.academicYear || 'N/A'}</p>
+                                        )}
+                                      </div>
+                                      
+                                      {/* Questionnaire Responses */}
+                                      {workflow.workflowType === 'tracking' && (workflow.customFormData || workflow.additionalData?.customFormData) && (
+                                        <div>
+                                          {(workflow.customFormFields || workflow.additionalData?.customFormFields || []).map((field) => {
+                                            const value = (workflow.customFormData || workflow.additionalData?.customFormData)?.[field.id];
+                                            if (value === null || value === undefined || value === '') return null;
+                                            
+                                            let displayValue = value;
+                                            if (field.type === 'checkbox') {
+                                              displayValue = value ? 'Yes' : 'No';
+                                            } else if (field.type === 'date') {
+                                              try {
+                                                displayValue = new Date(value).toLocaleDateString();
+                                              } catch {
+                                                displayValue = value;
+                                              }
+                                            }
+                                            
+                                            return (
+                                              <p key={field.id} style={{ margin: '0.25rem 0', fontSize: '0.875rem' }}>
+                                                <strong>{field.label || field.id}:</strong> {displayValue}
+                                              </p>
+                                            );
+                                          })}
+                                        </div>
                                       )}
                                     </div>
                                     
@@ -856,6 +940,7 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                     <th className="group-sticky-header">Type</th>
                     <th className="group-sticky-header">Date</th>
                     <th className="group-sticky-header">Progress</th>
+                    <th className="group-sticky-header">Actions</th>
                     {getStepsForWorkflows(filteredWorkflows).map((step, index) => (
                       <th key={index} className="step-header group-sticky-header" title={step}>
                         {step}
@@ -912,6 +997,31 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                           <span className="progress-text">{Math.round(progress)}%</span>
                         </div>
                       </td>
+                      <td style={{ textAlign: 'center', width: '60px' }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteWorkflow(workflow);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#ef4444',
+                            cursor: 'pointer',
+                            padding: '0.25rem',
+                            borderRadius: '0.25rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'background-color 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.target.style.backgroundColor = '#fef2f2'}
+                          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                          title="Delete workflow"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
                       {allSteps.map((stepTitle, index) => {
                         const template = workflowTemplates[workflow.templateId];
                         const step = template?.steps.find(s => s.title === stepTitle);
@@ -942,14 +1052,43 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                     
                     {isExpanded && (
                       <tr className="expanded-row">
-                        <td colSpan={5 + allSteps.length}>
+                        <td colSpan={6 + allSteps.length}>
                           <div className="expanded-content">
-                            <div className="workflow-details">
-                              <p><strong>Workflow:</strong> {workflow.templateName}</p>
-                              <p><strong>Client:</strong> {workflow.workflowType === 'tracking' ? workflow.schoolName || 'N/A' : session?.clientName || 'N/A'}</p>
-                              <p><strong>Status:</strong> {workflow.status}</p>
-                              {workflow.workflowType === 'tracking' && (
-                                <p><strong>Academic Year:</strong> {workflow.academicYear || 'N/A'}</p>
+                            <div style={{ display: 'flex', gap: '3rem', marginBottom: '1rem' }}>
+                              <div className="workflow-details">
+                                <p><strong>Workflow:</strong> {workflow.templateName}</p>
+                                <p><strong>Client:</strong> {workflow.workflowType === 'tracking' ? workflow.schoolName || 'N/A' : session?.clientName || 'N/A'}</p>
+                                <p><strong>Status:</strong> {workflow.status}</p>
+                                {workflow.workflowType === 'tracking' && (
+                                  <p><strong>Academic Year:</strong> {workflow.academicYear || 'N/A'}</p>
+                                )}
+                              </div>
+                              
+                              {/* Questionnaire Responses */}
+                              {workflow.workflowType === 'tracking' && (workflow.customFormData || workflow.additionalData?.customFormData) && (
+                                <div>
+                                  {(workflow.customFormFields || workflow.additionalData?.customFormFields || []).map((field) => {
+                                    const value = (workflow.customFormData || workflow.additionalData?.customFormData)?.[field.id];
+                                    if (value === null || value === undefined || value === '') return null;
+                                    
+                                    let displayValue = value;
+                                    if (field.type === 'checkbox') {
+                                      displayValue = value ? 'Yes' : 'No';
+                                    } else if (field.type === 'date') {
+                                      try {
+                                        displayValue = new Date(value).toLocaleDateString();
+                                      } catch {
+                                        displayValue = value;
+                                      }
+                                    }
+                                    
+                                    return (
+                                      <p key={field.id} style={{ margin: '0.25rem 0', fontSize: '0.875rem' }}>
+                                        <strong>{field.label || field.id}:</strong> {displayValue}
+                                      </p>
+                                    );
+                                  })}
+                                </div>
                               )}
                             </div>
                             
@@ -1009,6 +1148,19 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
           </div>
         )}
       </div>
+
+      {/* Delete Workflow Modal */}
+      <DeleteWorkflowModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setWorkflowToDelete(null);
+        }}
+        onConfirm={confirmDeleteWorkflow}
+        workflow={workflowToDelete}
+        sessionData={sessionData}
+        loading={deletingWorkflow}
+      />
     </div>
   );
 };
