@@ -1248,3 +1248,55 @@ export const getGroupProgress = (steps, stepProgress, groupId) => {
 export const validateStepGroup = (groupId, availableGroups = WORKFLOW_GROUPS) => {
   return availableGroups.some(group => group.id === groupId);
 };
+
+// Get available tracking templates for organization
+export const getOrganizationTrackingTemplates = async (organizationID, getWorkflowTemplates) => {
+  try {
+    const templates = [];
+    
+    // Get default tracking templates
+    Object.entries(DEFAULT_WORKFLOW_TEMPLATES).forEach(([key, template]) => {
+      if (template.trackingTypes && template.trackingTypes.length > 0) {
+        templates.push({
+          id: `default_${key}`,
+          templateKey: key,
+          name: template.name,
+          description: template.description,
+          isDefault: true,
+          isCustom: false,
+          steps: template.steps,
+          estimatedDays: template.estimatedDays,
+          customFormFields: template.customFormFields
+        });
+      }
+    });
+    
+    // Get custom tracking templates for the organization
+    if (getWorkflowTemplates) {
+      const customTemplates = await getWorkflowTemplates(organizationID);
+      
+      customTemplates.forEach(template => {
+        if (template.isTrackingTemplate) {
+          templates.push({
+            id: template.id,
+            templateId: template.id,
+            name: template.name,
+            description: template.description,
+            isDefault: false,
+            isCustom: true,
+            steps: template.steps,
+            estimatedDays: template.estimatedDays || 30,
+            customFormFields: template.customFormFields
+          });
+        }
+      });
+    }
+    
+    // Sort templates by name
+    return templates.sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    console.error('Error getting organization tracking templates:', error);
+    // Fallback to empty array if there's an error
+    return [];
+  }
+};

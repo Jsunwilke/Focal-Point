@@ -34,6 +34,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import StepEditor from './StepEditor';
+import FormFieldEditor from './FormFieldEditor';
 
 const WorkflowTemplateBuilder = ({
   isOpen,
@@ -50,9 +51,11 @@ const WorkflowTemplateBuilder = ({
     name: editTemplate?.name || '',
     description: editTemplate?.description || '',
     sessionTypes: editTemplate?.sessionTypes || [],
+    isTrackingTemplate: editTemplate?.isTrackingTemplate || false,
     estimatedDays: editTemplate?.estimatedDays || 7,
     groups: editTemplate?.groups || getWorkflowGroups(),
-    steps: editTemplate?.steps || []
+    steps: editTemplate?.steps || [],
+    customFormFields: editTemplate?.customFormFields || []
   });
   
   const [errors, setErrors] = useState({});
@@ -60,12 +63,26 @@ const WorkflowTemplateBuilder = ({
   const [activeStep, setActiveStep] = useState(null);
   const [showStepEditor, setShowStepEditor] = useState(false);
   const [draggedStep, setDraggedStep] = useState(null);
+  const [showFormFieldEditor, setShowFormFieldEditor] = useState(false);
+  const [activeFormField, setActiveFormField] = useState(null);
 
   // Get available options
   const stepTypes = getStepTypes();
   const assigneeRules = getAssigneeRules();
   const workflowGroups = getWorkflowGroups();
   const organizationSessionTypes = getOrganizationSessionTypes(organization);
+  
+  // Available form field types
+  const formFieldTypes = [
+    { id: 'text', name: 'Text Input', description: 'Single line text field' },
+    { id: 'textarea', name: 'Text Area', description: 'Multi-line text field' },
+    { id: 'select', name: 'Dropdown', description: 'Select from predefined options' },
+    { id: 'number', name: 'Number', description: 'Numeric input field' },
+    { id: 'date', name: 'Date', description: 'Date picker field' },
+    { id: 'checkbox', name: 'Checkbox', description: 'Yes/No checkbox' },
+    { id: 'radio', name: 'Radio Buttons', description: 'Choose one from multiple options' }
+  ];
+  
 
   if (!isOpen) return null;
 
@@ -88,8 +105,12 @@ const WorkflowTemplateBuilder = ({
       newErrors.description = 'Template description is required';
     }
     
-    if (formData.sessionTypes.length === 0) {
-      newErrors.sessionTypes = 'At least one session type is required';
+    if (!formData.isTrackingTemplate && formData.sessionTypes.length === 0) {
+      newErrors.sessionTypes = 'At least one session type is required for session workflows';
+    }
+    
+    if (formData.isTrackingTemplate && !formData.name.trim()) {
+      newErrors.name = 'Template name is required for tracking workflows (this becomes the tracking type)';
     }
     
     if (formData.steps.length === 0) {
@@ -131,6 +152,82 @@ const WorkflowTemplateBuilder = ({
         ? prev.sessionTypes.filter(id => id !== sessionTypeId)
         : [...prev.sessionTypes, sessionTypeId]
     }));
+  };
+
+  // Template type toggle
+  const handleTemplateTypeToggle = (isTracking) => {
+    setFormData(prev => ({
+      ...prev,
+      isTrackingTemplate: isTracking,
+      // Clear session types when switching to tracking template
+      sessionTypes: isTracking ? [] : prev.sessionTypes
+    }));
+  };
+
+  // Custom form field management
+  const generateFormFieldId = () => {
+    const prefix = formData.name.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'field';
+    const fieldNumber = formData.customFormFields.length + 1;
+    return `${prefix}_field_${fieldNumber}`;
+  };
+
+  const handleAddFormField = () => {
+    const newField = {
+      id: generateFormFieldId(),
+      type: 'text',
+      label: '',
+      required: false,
+      placeholder: '',
+      helpText: '',
+      options: [],
+      validation: {},
+      defaultValue: ''
+    };
+    
+    setFormData(prev => ({
+      ...prev,
+      customFormFields: [...prev.customFormFields, newField]
+    }));
+    
+    setActiveFormField(newField);
+    setShowFormFieldEditor(true);
+  };
+
+  const handleEditFormField = (field) => {
+    setActiveFormField(field);
+    setShowFormFieldEditor(true);
+  };
+
+  const handleUpdateFormField = (updatedField) => {
+    setFormData(prev => ({
+      ...prev,
+      customFormFields: prev.customFormFields.map(field => 
+        field.id === updatedField.id ? updatedField : field
+      )
+    }));
+    setShowFormFieldEditor(false);
+    setActiveFormField(null);
+  };
+
+  const handleDeleteFormField = (fieldId) => {
+    setFormData(prev => ({
+      ...prev,
+      customFormFields: prev.customFormFields.filter(field => field.id !== fieldId)
+    }));
+  };
+
+  const handleMoveFormField = (fieldId, direction) => {
+    setFormData(prev => {
+      const fields = [...prev.customFormFields];
+      const index = fields.findIndex(field => field.id === fieldId);
+      const newIndex = direction === 'up' ? index - 1 : index + 1;
+      
+      if (newIndex >= 0 && newIndex < fields.length) {
+        [fields[index], fields[newIndex]] = [fields[newIndex], fields[index]];
+      }
+      
+      return { ...prev, customFormFields: fields };
+    });
   };
 
   // Step management
@@ -423,56 +520,294 @@ const WorkflowTemplateBuilder = ({
               />
             </div>
 
-            {/* Session Types */}
+            {/* Template Type Selection */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem' }}>
-                Session Types *
+                Template Type *
               </label>
-              <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: '#6b7280' }}>
-                Select which session types should use this workflow
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.5rem 0.75rem',
+                  border: `2px solid ${!formData.isTrackingTemplate ? '#3b82f6' : '#d1d5db'}`,
+                  borderRadius: '0.375rem',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  backgroundColor: !formData.isTrackingTemplate ? '#eff6ff' : 'white'
+                }}>
+                  <input
+                    type="radio"
+                    name="templateType"
+                    checked={!formData.isTrackingTemplate}
+                    onChange={() => handleTemplateTypeToggle(false)}
+                  />
+                  Session Workflow
+                </label>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.5rem 0.75rem',
+                  border: `2px solid ${formData.isTrackingTemplate ? '#3b82f6' : '#d1d5db'}`,
+                  borderRadius: '0.375rem',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  backgroundColor: formData.isTrackingTemplate ? '#eff6ff' : 'white'
+                }}>
+                  <input
+                    type="radio"
+                    name="templateType"
+                    checked={formData.isTrackingTemplate}
+                    onChange={() => handleTemplateTypeToggle(true)}
+                  />
+                  Tracking Workflow
+                </label>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: '#6b7280' }}>
+                {formData.isTrackingTemplate 
+                  ? 'Tracking workflows are used for non-session tasks. The template name becomes the tracking type (e.g., "Police Composite").'
+                  : 'Session workflows are tied to photo sessions and bookings'
+                }
               </p>
+            </div>
+
+            {/* Session Types - Show only for session templates */}
+            {!formData.isTrackingTemplate && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem' }}>
+                  Session Types *
+                </label>
+                <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: '#6b7280' }}>
+                  Select which session types should use this workflow
+                </p>
+                <div style={{ 
+                  maxHeight: '150px', 
+                  overflow: 'auto',
+                  border: `1px solid ${errors.sessionTypes ? '#ef4444' : '#d1d5db'}`,
+                  borderRadius: '0.375rem',
+                  padding: '0.5rem'
+                }}>
+                  {organizationSessionTypes.map(sessionType => (
+                    <label
+                      key={sessionType.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        padding: '0.25rem',
+                        cursor: 'pointer',
+                        fontSize: '0.875rem'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.sessionTypes.includes(sessionType.id)}
+                        onChange={() => handleSessionTypeToggle(sessionType.id)}
+                      />
+                      <div
+                        style={{
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '2px',
+                          backgroundColor: sessionType.color
+                        }}
+                      />
+                      {sessionType.name}
+                    </label>
+                  ))}
+                </div>
+                {errors.sessionTypes && (
+                  <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.75rem', color: '#ef4444' }}>
+                    {errors.sessionTypes}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Info for tracking templates */}
+            {formData.isTrackingTemplate && (
               <div style={{ 
-                maxHeight: '150px', 
-                overflow: 'auto',
-                border: `1px solid ${errors.sessionTypes ? '#ef4444' : '#d1d5db'}`,
-                borderRadius: '0.375rem',
-                padding: '0.5rem'
+                marginBottom: '1.5rem',
+                padding: '1rem',
+                backgroundColor: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: '0.375rem'
               }}>
-                {organizationSessionTypes.map(sessionType => (
-                  <label
-                    key={sessionType.id}
+                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', fontWeight: '600', color: '#1e40af' }}>
+                  💡 Tracking Template Info
+                </h4>
+                <p style={{ margin: 0, fontSize: '0.75rem', color: '#1e40af', lineHeight: '1.4' }}>
+                  The template name you enter above (e.g., "Police Composite", "School Yearbook") will appear directly in the tracking workflow dropdown in School Management. Make it descriptive and specific to your workflow.
+                </p>
+              </div>
+            )}
+
+            {/* Custom Form Fields - Show only for tracking templates */}
+            {formData.isTrackingTemplate && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  marginBottom: '1rem'
+                }}>
+                  <div>
+                    <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
+                      Custom Form Fields ({formData.customFormFields.length})
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: '#6b7280' }}>
+                      Define custom fields that appear when creating workflows with this template
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleAddFormField}
                     style={{
+                      padding: '0.5rem 1rem',
+                      backgroundColor: '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '0.375rem',
+                      cursor: 'pointer',
+                      fontSize: '0.75rem',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.5rem',
-                      padding: '0.25rem',
-                      cursor: 'pointer',
-                      fontSize: '0.875rem'
+                      gap: '0.5rem'
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={formData.sessionTypes.includes(sessionType.id)}
-                      onChange={() => handleSessionTypeToggle(sessionType.id)}
-                    />
-                    <div
-                      style={{
-                        width: '12px',
-                        height: '12px',
-                        borderRadius: '2px',
-                        backgroundColor: sessionType.color
-                      }}
-                    />
-                    {sessionType.name}
-                  </label>
-                ))}
+                    <Plus size={14} />
+                    Add Field
+                  </button>
+                </div>
+
+                {formData.customFormFields.length === 0 ? (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '2rem',
+                    backgroundColor: '#f9fafb',
+                    borderRadius: '0.375rem',
+                    border: '1px dashed #d1d5db'
+                  }}>
+                    <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
+                      No custom form fields added yet
+                    </p>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: '#9ca3af' }}>
+                      Add custom fields to collect specific information when creating workflows
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {formData.customFormFields.map((field, index) => (
+                      <div
+                        key={field.id}
+                        style={{
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '6px',
+                          padding: '1rem',
+                          backgroundColor: 'white',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '1rem'
+                        }}
+                      >
+                        {/* Field Info */}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                            <h5 style={{ margin: 0, fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
+                              {field.label || 'Untitled Field'}
+                            </h5>
+                            <span style={{
+                              padding: '0.125rem 0.5rem',
+                              borderRadius: '12px',
+                              backgroundColor: '#f3f4f6',
+                              fontSize: '0.75rem',
+                              color: '#6b7280',
+                              textTransform: 'capitalize'
+                            }}>
+                              {field.type}
+                            </span>
+                            {field.required && (
+                              <span style={{
+                                padding: '0.125rem 0.5rem',
+                                borderRadius: '12px',
+                                backgroundColor: '#fef2f2',
+                                fontSize: '0.75rem',
+                                color: '#dc2626'
+                              }}>
+                                Required
+                              </span>
+                            )}
+                          </div>
+                          <p style={{ margin: 0, fontSize: '0.75rem', color: '#6b7280' }}>
+                            ID: {field.id}
+                            {field.helpText && ` • ${field.helpText}`}
+                          </p>
+                        </div>
+
+                        {/* Actions */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          <button
+                            onClick={() => handleMoveFormField(field.id, 'up')}
+                            disabled={index === 0}
+                            style={{
+                              padding: '0.25rem',
+                              border: '1px solid #d1d5db',
+                              backgroundColor: 'white',
+                              borderRadius: '0.25rem',
+                              cursor: index === 0 ? 'not-allowed' : 'pointer',
+                              opacity: index === 0 ? 0.5 : 1
+                            }}
+                          >
+                            <ArrowUp size={12} />
+                          </button>
+                          <button
+                            onClick={() => handleMoveFormField(field.id, 'down')}
+                            disabled={index === formData.customFormFields.length - 1}
+                            style={{
+                              padding: '0.25rem',
+                              border: '1px solid #d1d5db',
+                              backgroundColor: 'white',
+                              borderRadius: '0.25rem',
+                              cursor: index === formData.customFormFields.length - 1 ? 'not-allowed' : 'pointer',
+                              opacity: index === formData.customFormFields.length - 1 ? 0.5 : 1
+                            }}
+                          >
+                            <ArrowDown size={12} />
+                          </button>
+                          <button
+                            onClick={() => handleEditFormField(field)}
+                            style={{
+                              padding: '0.25rem',
+                              border: '1px solid #3b82f6',
+                              backgroundColor: 'white',
+                              color: '#3b82f6',
+                              borderRadius: '0.25rem',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Settings size={12} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteFormField(field.id)}
+                            style={{
+                              padding: '0.25rem',
+                              border: '1px solid #ef4444',
+                              backgroundColor: 'white',
+                              color: '#ef4444',
+                              borderRadius: '0.25rem',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              {errors.sessionTypes && (
-                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.75rem', color: '#ef4444' }}>
-                  {errors.sessionTypes}
-                </p>
-              )}
-            </div>
+            )}
           </div>
 
           {/* Right Panel - Steps */}
@@ -767,6 +1102,20 @@ const WorkflowTemplateBuilder = ({
           step={activeStep}
           onSave={handleUpdateStep}
           organizationID={organizationID}
+        />
+      )}
+
+      {/* Form Field Editor Modal */}
+      {showFormFieldEditor && (
+        <FormFieldEditor
+          isOpen={showFormFieldEditor}
+          onClose={() => {
+            setShowFormFieldEditor(false);
+            setActiveFormField(null);
+          }}
+          field={activeFormField}
+          onSave={handleUpdateFormField}
+          formFieldTypes={formFieldTypes}
         />
       )}
     </div>

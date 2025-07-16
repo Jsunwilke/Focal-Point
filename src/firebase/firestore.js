@@ -1762,12 +1762,26 @@ export const updateWorkflowTemplate = async (templateId, templateData) => {
 
 export const deleteWorkflowTemplate = async (templateId) => {
   try {
-    await updateDoc(doc(firestore, "workflowTemplates", templateId), {
+    console.log(`🗑️ Firestore: Soft deleting template ${templateId}`);
+    
+    const templateRef = doc(firestore, "workflowTemplates", templateId);
+    
+    // First check if template exists
+    const templateDoc = await getDoc(templateRef);
+    if (!templateDoc.exists()) {
+      throw new Error(`Template with ID ${templateId} does not exist`);
+    }
+    
+    console.log(`📄 Template found:`, templateDoc.data());
+    
+    await updateDoc(templateRef, {
       isActive: false,
       updatedAt: serverTimestamp(),
     });
+    
+    console.log(`✅ Template ${templateId} successfully marked as inactive`);
   } catch (error) {
-    console.error("Error deleting workflow template:", error);
+    console.error(`💥 Error deleting workflow template ${templateId}:`, error);
     throw error;
   }
 };
@@ -1925,6 +1939,167 @@ export const getWorkflowsForOrganization = async (organizationID, status = null)
     return workflows;
   } catch (error) {
     console.error("Error fetching workflows for organization:", error);
+    throw error;
+  }
+};
+
+// Enhanced workflow retrieval with type filtering
+export const getWorkflowsWithFilters = async (organizationID, filters = {}) => {
+  try {
+    const {
+      workflowType = null, // 'session' or 'tracking'
+      status = null,
+      schoolId = null,
+      trackingType = null,
+      academicYear = null,
+      sessionId = null
+    } = filters;
+
+    // Get all workflows for organization
+    const allWorkflows = await getWorkflowsForOrganization(organizationID, status);
+    
+    // Apply client-side filtering
+    let filteredWorkflows = allWorkflows;
+    
+    if (workflowType) {
+      if (workflowType === 'tracking') {
+        filteredWorkflows = filteredWorkflows.filter(w => w.workflowType === 'tracking');
+      } else if (workflowType === 'session') {
+        filteredWorkflows = filteredWorkflows.filter(w => w.sessionId && w.workflowType !== 'tracking');
+      }
+    }
+    
+    if (schoolId) {
+      filteredWorkflows = filteredWorkflows.filter(w => w.schoolId === schoolId);
+    }
+    
+    if (trackingType) {
+      filteredWorkflows = filteredWorkflows.filter(w => w.trackingType === trackingType);
+    }
+    
+    if (academicYear) {
+      filteredWorkflows = filteredWorkflows.filter(w => w.academicYear === academicYear);
+    }
+    
+    if (sessionId) {
+      filteredWorkflows = filteredWorkflows.filter(w => w.sessionId === sessionId);
+    }
+    
+    return filteredWorkflows;
+  } catch (error) {
+    console.error("Error fetching workflows with filters:", error);
+    throw error;
+  }
+};
+
+// Get only tracking workflows for organization
+export const getTrackingWorkflowsForOrganization = async (organizationID, filters = {}) => {
+  return getWorkflowsWithFilters(organizationID, { 
+    ...filters, 
+    workflowType: 'tracking' 
+  });
+};
+
+// Get only session-based workflows for organization  
+export const getSessionWorkflowsForOrganization = async (organizationID, filters = {}) => {
+  return getWorkflowsWithFilters(organizationID, { 
+    ...filters, 
+    workflowType: 'session' 
+  });
+};
+
+// Get workflows with enhanced metadata (includes school/session names)
+export const getWorkflowsWithMetadata = async (organizationID, filters = {}) => {
+  try {
+    const workflows = await getWorkflowsWithFilters(organizationID, filters);
+    
+    // Enhance workflows with additional metadata
+    const enhancedWorkflows = await Promise.all(
+      workflows.map(async (workflow) => {
+        const enhanced = { ...workflow };
+        
+        // Add school metadata for tracking workflows
+        if (workflow.workflowType === 'tracking' && workflow.schoolId) {
+          try {
+            const schoolDoc = await getDoc(doc(firestore, "schools", workflow.schoolId));
+            if (schoolDoc.exists()) {
+              enhanced.schoolData = schoolDoc.data();
+            }
+          } catch (error) {
+            console.warn(`Could not fetch school data for ${workflow.schoolId}:`, error);
+          }
+        }
+        
+        // Add session metadata for session workflows
+        if (workflow.sessionId) {
+          try {
+            const sessionDoc = await getDoc(doc(firestore, "sessions", workflow.sessionId));
+            if (sessionDoc.exists()) {
+              enhanced.sessionData = sessionDoc.data();
+            }
+          } catch (error) {
+            console.warn(`Could not fetch session data for ${workflow.sessionId}:`, error);
+          }
+        }
+        
+        return enhanced;
+      })
+    );
+    
+    return enhancedWorkflows;
+  } catch (error) {
+    console.error("Error fetching workflows with metadata:", error);
+    throw error;
+  }
+};
+
+// Get workflow summary statistics
+export const getWorkflowStatistics = async (organizationID) => {
+  try {
+    const allWorkflows = await getWorkflowsForOrganization(organizationID);
+    
+    const stats = {
+      total: allWorkflows.length,
+      byType: {
+        session: 0,
+        tracking: 0
+      },
+      byStatus: {
+        active: 0,
+        completed: 0,
+        on_hold: 0,
+        cancelled: 0
+      },
+      trackingByType: {},
+      sessionsByType: {}
+    };
+    
+    allWorkflows.forEach(workflow => {
+      // Count by workflow type
+      if (workflow.workflowType === 'tracking') {
+        stats.byType.tracking++;
+        
+        // Count tracking workflows by tracking type
+        const trackingType = workflow.trackingType || 'unknown';
+        stats.trackingByType[trackingType] = (stats.trackingByType[trackingType] || 0) + 1;
+      } else {
+        stats.byType.session++;
+        
+        // Count session workflows by session type
+        const sessionType = workflow.sessionType || 'unknown';
+        stats.sessionsByType[sessionType] = (stats.sessionsByType[sessionType] || 0) + 1;
+      }
+      
+      // Count by status
+      const status = workflow.status || 'unknown';
+      if (stats.byStatus.hasOwnProperty(status)) {
+        stats.byStatus[status]++;
+      }
+    });
+    
+    return stats;
+  } catch (error) {
+    console.error("Error fetching workflow statistics:", error);
     throw error;
   }
 };
@@ -2120,6 +2295,169 @@ export const initializeDefaultWorkflowTemplates = async (organizationID) => {
   } catch (error) {
     console.error("Error initializing default workflow templates:", error);
     return [];
+  }
+};
+
+// Create tracking workflow for school (not tied to a session)
+export const createTrackingWorkflowForSchool = async (schoolId, organizationID, templateId, academicYear, options = {}) => {
+  try {
+    console.log(`🏗️ Creating tracking workflow for school: ${schoolId}, template: ${templateId}, year: ${academicYear}`);
+    
+    // Check if workflow already exists for this school and template combination
+    const existingWorkflows = await getTrackingWorkflowsForSchool(schoolId, organizationID, templateId, academicYear);
+    
+    if (existingWorkflows.length > 0) {
+      console.log(`Tracking workflow already exists for school: ${schoolId} with template: ${templateId}`);
+      return existingWorkflows[0].id;
+    }
+
+    // Get school data for context
+    const schoolDoc = await getDoc(doc(firestore, "schools", schoolId));
+    if (!schoolDoc.exists()) {
+      throw new Error("School not found");
+    }
+    const schoolData = schoolDoc.data();
+
+    // Get the specific tracking template by ID
+    console.log(`📊 Fetching tracking template: ${templateId}`);
+    let trackingTemplate = null;
+    
+    // Check if it's a default template
+    if (templateId.startsWith('default_')) {
+      const templateKey = templateId.replace('default_', '');
+      const { getTrackingTemplateById } = await import('../utils/workflowTemplates.js');
+      trackingTemplate = await getTrackingTemplateById(templateId, organizationID, getWorkflowTemplates);
+    } else {
+      // It's a custom template - fetch from organization templates
+      const allTemplates = await getWorkflowTemplates(organizationID);
+      trackingTemplate = allTemplates.find(template => template.id === templateId);
+    }
+    
+    if (!trackingTemplate) {
+      throw new Error(`Tracking template not found: ${templateId}`);
+    }
+    
+    if (!trackingTemplate.isTrackingTemplate && (!trackingTemplate.trackingTypes || trackingTemplate.trackingTypes.length === 0)) {
+      throw new Error(`Template "${trackingTemplate.name}" is not a tracking template`);
+    }
+
+    console.log(`🏗️ Creating tracking workflow using template: "${trackingTemplate.name}"`);
+
+    // Calculate dates for due date calculation
+    const trackingStartDate = options.trackingStartDate || new Date();
+    const trackingEndDate = options.trackingEndDate || new Date(trackingStartDate.getTime() + (30 * 24 * 60 * 60 * 1000)); // 30 days default
+    
+    // Initialize step progress for all steps in template with calculated due dates
+    console.log(`📋 Initializing ${trackingTemplate.steps.length} workflow steps...`);
+    const stepProgress = {};
+    trackingTemplate.steps.forEach((step, index) => {
+      // Calculate due date based on tracking start date and step's dueOffsetDays
+      let dueDate = null;
+      if (step.dueOffsetDays !== undefined) {
+        dueDate = new Date(trackingStartDate);
+        dueDate.setDate(dueDate.getDate() + step.dueOffsetDays);
+      }
+      
+      stepProgress[step.id] = {
+        status: "pending",
+        assignedTo: null,
+        startTime: null,
+        completedAt: null,
+        dueDate: dueDate,
+        notes: "",
+        files: [],
+        createdAt: serverTimestamp(),
+      };
+      
+      console.log(`  ${index + 1}. "${step.title}" - Due: ${dueDate ? dueDate.toLocaleDateString() : 'Not set'}`);
+    });
+
+    // Create tracking workflow instance
+    const workflowData = {
+      // Tracking workflow fields (no sessionId)
+      schoolId,
+      organizationID,
+      templateId: trackingTemplate.id || templateId, // Use either template.id or the templateId passed in
+      trackingTemplateId: templateId, // Store the original template ID for reference
+      academicYear,
+      trackingStartDate: trackingStartDate.toISOString().split('T')[0], // Store as date string
+      trackingEndDate: trackingEndDate.toISOString().split('T')[0],
+      
+      // Template and workflow fields
+      templateName: trackingTemplate.name,
+      templateVersion: trackingTemplate.version || 1,
+      currentStep: trackingTemplate.steps[0]?.id || null,
+      stepProgress,
+      status: "active",
+      
+      // Context fields
+      schoolName: schoolData.value || schoolData.name || "Unknown School",
+      workflowType: "tracking", // Flag to distinguish from session workflows
+      
+      // Optional fields
+      ...options.additionalData
+    };
+
+    // Clean the workflow data to remove any undefined values
+    const cleanWorkflowData = Object.fromEntries(
+      Object.entries(workflowData).filter(([key, value]) => value !== undefined)
+    );
+
+    console.log("🚀 Creating tracking workflow instance in Firestore...");
+    const workflowId = await createWorkflowInstance(cleanWorkflowData);
+    
+    if (workflowId) {
+      console.log(`🎉 SUCCESS: Tracking workflow created!`);
+      console.log(`📋 Workflow ID: ${workflowId}`);
+      console.log(`📄 Template: "${trackingTemplate.name}"`);
+      console.log(`🏫 School: "${schoolData.name}"`);
+      console.log(`🆔 Template ID: "${templateId}"`);
+    } else {
+      console.error("💥 FAILED: createWorkflowInstance returned null/undefined");
+    }
+    
+    return workflowId;
+  } catch (error) {
+    console.error("Error creating tracking workflow for school:", error);
+    throw error;
+  }
+};
+
+// Get tracking workflows for a school
+export const getTrackingWorkflowsForSchool = async (schoolId, organizationID, templateId = null, academicYear = null) => {
+  try {
+    let q = query(
+      collection(firestore, "workflows"),
+      where("schoolId", "==", schoolId),
+      where("organizationID", "==", organizationID),
+      where("workflowType", "==", "tracking")
+    );
+
+    if (templateId) {
+      q = query(q, where("trackingTemplateId", "==", templateId));
+    }
+    
+    if (academicYear) {
+      q = query(q, where("academicYear", "==", academicYear));
+    }
+
+    const querySnapshot = await getDocs(q);
+    const workflows = [];
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      if (data.status !== "deleted") {
+        workflows.push({
+          id: doc.id,
+          ...data,
+        });
+      }
+    });
+
+    return workflows;
+  } catch (error) {
+    console.error("Error fetching tracking workflows for school:", error);
+    throw error;
   }
 };
 

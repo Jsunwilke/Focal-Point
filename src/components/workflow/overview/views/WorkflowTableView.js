@@ -448,11 +448,23 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
       const session = sessionData[workflow.sessionId];
       const progress = calculateProgress(workflow);
       
+      // Handle tracking vs session workflows
+      let schoolName, sessionType, workflowDate;
+      if (workflow.workflowType === 'tracking') {
+        schoolName = workflow.schoolName || 'Unknown';
+        sessionType = 'Tracking';
+        workflowDate = workflow.trackingStartDate ? new Date(workflow.trackingStartDate).toLocaleDateString() : 'N/A';
+      } else {
+        schoolName = session?.schoolName || 'Unknown';
+        sessionType = workflow.sessionType || session?.sessionTypes?.join(', ') || 'N/A';
+        workflowDate = session?.date ? new Date(session.date).toLocaleDateString() : 'N/A';
+      }
+      
       const row = [
-        session?.schoolName || 'Unknown',
-        workflow.sessionType || session?.sessionTypes?.join(', ') || 'N/A',
+        schoolName,
+        sessionType,
         workflow.templateName || 'Unknown Template',
-        session?.date ? new Date(session.date).toLocaleDateString() : 'N/A',
+        workflowDate,
         workflow.status,
         `${Math.round(progress)}%`,
         ...allStepsForExport.map(stepTitle => {
@@ -591,10 +603,8 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                         <th>Date</th>
                         <th>Progress</th>
                         {groupSteps.map((step, index) => (
-                          <th key={index} className="step-header">
-                            <div className="step-header-content" title={step}>
-                              {getAbbreviatedStepName(step, columnWidths.abbreviationType)}
-                            </div>
+                          <th key={index} className="step-header" title={step}>
+                            {step}
                           </th>
                         ))}
                       </tr>
@@ -617,17 +627,25 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                                 </button>
                               </td>
                               <td className="sticky-column school-cell">
-                                {session?.schoolName || 'Unknown'}
+                                {workflow.workflowType === 'tracking' ? workflow.schoolName || 'Unknown' : session?.schoolName || 'Unknown'}
                               </td>
                               <td>
-                                {workflow.sessionType || session?.sessionTypes?.join(', ') || 'N/A'}
+                                {workflow.workflowType === 'tracking' ? 
+                                  'Tracking' : 
+                                  workflow.sessionType || session?.sessionTypes?.join(', ') || 'N/A'
+                                }
                                 {workflow.templateName && (
                                   <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
                                     {workflow.templateName}
                                   </div>
                                 )}
                               </td>
-                              <td>{session?.date ? new Date(session.date).toLocaleDateString() : 'N/A'}</td>
+                              <td>
+                                {workflow.workflowType === 'tracking' ? 
+                                  workflow.trackingStartDate ? new Date(workflow.trackingStartDate).toLocaleDateString() : 'N/A' :
+                                  session?.date ? new Date(session.date).toLocaleDateString() : 'N/A'
+                                }
+                              </td>
                               <td>
                                 <div className="progress-cell">
                                   <div className="progress-bar-mini">
@@ -673,8 +691,11 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                                   <div className="expanded-content">
                                     <div className="workflow-details">
                                       <p><strong>Workflow:</strong> {workflow.templateName}</p>
-                                      <p><strong>Client:</strong> {session?.clientName || 'N/A'}</p>
+                                      <p><strong>Client:</strong> {workflow.workflowType === 'tracking' ? workflow.schoolName || 'N/A' : session?.clientName || 'N/A'}</p>
                                       <p><strong>Status:</strong> {workflow.status}</p>
+                                      {workflow.workflowType === 'tracking' && (
+                                        <p><strong>Academic Year:</strong> {workflow.academicYear || 'N/A'}</p>
+                                      )}
                                     </div>
                                     
                                     <div className="step-details">
@@ -727,10 +748,8 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                 <th>Date</th>
                 <th>Progress</th>
                 {getStepsForWorkflows(filteredWorkflows).map((step, index) => (
-                  <th key={index} className="step-header">
-                    <div className="step-header-content" title={step}>
-                      {getAbbreviatedStepName(step, columnWidths.abbreviationType)}
-                    </div>
+                  <th key={index} className="step-header" title={step}>
+                    {step}
                   </th>
                 ))}
               </tr>
@@ -754,17 +773,25 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                         </button>
                       </td>
                       <td className="sticky-column school-cell">
-                        {session?.schoolName || 'Unknown'}
+                        {workflow.workflowType === 'tracking' ? workflow.schoolName || 'Unknown' : session?.schoolName || 'Unknown'}
                       </td>
                       <td>
-                        {workflow.sessionType || session?.sessionTypes?.join(', ') || 'N/A'}
+                        {workflow.workflowType === 'tracking' ? 
+                          'Tracking' : 
+                          workflow.sessionType || session?.sessionTypes?.join(', ') || 'N/A'
+                        }
                         {workflow.templateName && (
                           <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
                             {workflow.templateName}
                           </div>
                         )}
                       </td>
-                      <td>{session?.date ? new Date(session.date).toLocaleDateString() : 'N/A'}</td>
+                      <td>
+                        {workflow.workflowType === 'tracking' ? 
+                          workflow.trackingStartDate ? new Date(workflow.trackingStartDate).toLocaleDateString() : 'N/A' :
+                          session?.date ? new Date(session.date).toLocaleDateString() : 'N/A'
+                        }
+                      </td>
                       <td>
                         <div className="progress-cell">
                           <div className="progress-bar-mini">
@@ -810,8 +837,11 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
                           <div className="expanded-content">
                             <div className="workflow-details">
                               <p><strong>Workflow:</strong> {workflow.templateName}</p>
-                              <p><strong>Client:</strong> {session?.clientName || 'N/A'}</p>
+                              <p><strong>Client:</strong> {workflow.workflowType === 'tracking' ? workflow.schoolName || 'N/A' : session?.clientName || 'N/A'}</p>
                               <p><strong>Status:</strong> {workflow.status}</p>
+                              {workflow.workflowType === 'tracking' && (
+                                <p><strong>Academic Year:</strong> {workflow.academicYear || 'N/A'}</p>
+                              )}
                             </div>
                             
                             <div className="step-details">

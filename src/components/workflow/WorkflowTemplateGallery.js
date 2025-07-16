@@ -1,10 +1,11 @@
 // src/components/workflow/WorkflowTemplateGallery.js
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { X, Plus, Eye, Copy, Settings, Clock, Users, ArrowRight, Wrench } from 'lucide-react';
+import { X, Plus, Eye, Copy, Settings, Clock, Users, ArrowRight, Wrench, Trash2, AlertCircle } from 'lucide-react';
 import { 
   createWorkflowTemplate,
-  getWorkflowTemplates 
+  getWorkflowTemplates,
+  deleteWorkflowTemplate
 } from '../../firebase/firestore';
 import { 
   getAllDefaultTemplates, 
@@ -13,6 +14,7 @@ import {
 } from '../../utils/workflowTemplates';
 import { useToast } from '../../contexts/ToastContext';
 import WorkflowTemplateBuilder from './WorkflowTemplateBuilder';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 
 const WorkflowTemplateGallery = ({
   isOpen,
@@ -27,6 +29,8 @@ const WorkflowTemplateGallery = ({
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [showTemplateBuilder, setShowTemplateBuilder] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState(null);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -110,12 +114,66 @@ const WorkflowTemplateGallery = ({
     setShowPreview(true);
   };
 
+  const handleDeleteTemplate = (template) => {
+    setTemplateToDelete(template);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteTemplate = async () => {
+    if (!templateToDelete) {
+      console.error('No template selected for deletion');
+      return;
+    }
+    
+    console.log('🗑️ Starting template deletion:', templateToDelete);
+    setLoading(true);
+    
+    try {
+      console.log('📝 Deleting template with ID:', templateToDelete.id);
+      await deleteWorkflowTemplate(templateToDelete.id);
+      console.log('✅ Template deleted successfully');
+      
+      // Refresh the custom templates list
+      console.log('🔄 Refreshing templates list...');
+      const templates = await getWorkflowTemplates(organizationID);
+      console.log('📋 Updated templates list:', templates.length, 'templates');
+      setCustomTemplates(templates);
+      
+      showToast(
+        'Template Deleted',
+        `${templateToDelete.name} has been deleted successfully`,
+        'success'
+      );
+      
+      console.log('🎉 Template deletion completed successfully');
+      setShowDeleteModal(false);
+      setTemplateToDelete(null);
+    } catch (error) {
+      console.error('💥 Error deleting template:', error);
+      console.error('Error details:', {
+        templateId: templateToDelete.id,
+        templateName: templateToDelete.name,
+        errorMessage: error.message,
+        errorCode: error.code,
+        error: error
+      });
+      
+      showToast(
+        'Deletion Failed', 
+        `Failed to delete ${templateToDelete.name}: ${error.message || 'Unknown error'}`,
+        'error'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStepTypeIcon = (type) => {
     const stepTypes = getStepTypes();
     return stepTypes.find(st => st.id === type)?.icon || '📋';
   };
 
-  const TemplateCard = ({ template, isDefault = false, onUse, onPreview }) => (
+  const TemplateCard = ({ template, isDefault = false, onUse, onPreview, onDelete }) => (
     <div style={{
       border: '1px solid #e5e7eb',
       borderRadius: '8px',
@@ -246,6 +304,31 @@ const WorkflowTemplateGallery = ({
           <Eye size={14} />
           Preview
         </button>
+        
+        {!isDefault && onDelete && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(template);
+            }}
+            style={{
+              padding: '0.5rem',
+              border: '1px solid #ef4444',
+              backgroundColor: 'white',
+              color: '#ef4444',
+              borderRadius: '0.375rem',
+              cursor: 'pointer',
+              fontSize: '0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            title="Delete Template"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
+        
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -560,6 +643,7 @@ const WorkflowTemplateGallery = ({
                     isDefault={false}
                     onUse={handleUseTemplate}
                     onPreview={handlePreviewTemplate}
+                    onDelete={handleDeleteTemplate}
                   />
                 ))
             }
@@ -626,6 +710,18 @@ const WorkflowTemplateGallery = ({
           }}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setTemplateToDelete(null);
+        }}
+        onConfirm={confirmDeleteTemplate}
+        templateName={templateToDelete?.name || ''}
+        loading={loading}
+      />
     </div>
   );
 

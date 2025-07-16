@@ -51,7 +51,10 @@
       "Bash(sed:*)",
       "Bash(mkdir:*)",
       "Bash(timeout 20s npm start)",
-      "Bash(timeout 25s npm start)"
+      "Bash(timeout 25s npm start)",
+      "Bash(git checkout:*)",
+      "WebFetch(domain:css-tricks.com)",
+      "WebFetch(domain:stackoverflow.com)"
     ],
     "deny": []
   }

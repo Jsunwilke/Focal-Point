@@ -80,37 +80,61 @@ const WorkflowOverview = () => {
 
     // School filter
     if (filters.school !== 'all') {
-      const session = sessionData[workflow.sessionId];
-      if (!session || session.schoolId !== filters.school) {
-        return false;
+      if (workflow.workflowType === 'tracking') {
+        // For tracking workflows, check schoolId directly
+        if (workflow.schoolId !== filters.school) {
+          return false;
+        }
+      } else {
+        // For session-based workflows, check via session data
+        const session = sessionData[workflow.sessionId];
+        if (!session || session.schoolId !== filters.school) {
+          return false;
+        }
       }
     }
 
     // Session type filter
     if (filters.sessionType !== 'all') {
-      const session = sessionData[workflow.sessionId];
-      if (!session || !session.sessionTypes?.includes(filters.sessionType)) {
-        return false;
+      if (workflow.workflowType === 'tracking') {
+        // Skip session type filtering for tracking workflows
+        return true;
+      } else {
+        // For session-based workflows, check session types
+        const session = sessionData[workflow.sessionId];
+        if (!session || !session.sessionTypes?.includes(filters.sessionType)) {
+          return false;
+        }
       }
     }
 
     // Date range filter
     if (filters.dateRange !== 'all') {
-      const session = sessionData[workflow.sessionId];
-      if (!session) return false;
+      let workflowDate;
       
-      const sessionDate = new Date(session.date);
+      if (workflow.workflowType === 'tracking') {
+        // For tracking workflows, use trackingStartDate or createdAt
+        workflowDate = workflow.trackingStartDate ? 
+          new Date(workflow.trackingStartDate) : 
+          workflow.createdAt ? new Date(workflow.createdAt.toDate()) : new Date();
+      } else {
+        // For session-based workflows, use session date
+        const session = sessionData[workflow.sessionId];
+        if (!session) return false;
+        workflowDate = new Date(session.date);
+      }
+      
       const now = new Date();
       
       switch (filters.dateRange) {
         case 'today':
-          return sessionDate.toDateString() === now.toDateString();
+          return workflowDate.toDateString() === now.toDateString();
         case 'week':
           const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          return sessionDate >= weekAgo;
+          return workflowDate >= weekAgo;
         case 'month':
           const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          return sessionDate >= monthAgo;
+          return workflowDate >= monthAgo;
         default:
           return true;
       }
@@ -119,13 +143,23 @@ const WorkflowOverview = () => {
     // Search filter
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
-      const session = sessionData[workflow.sessionId];
       
-      return (
-        workflow.templateName?.toLowerCase().includes(searchLower) ||
-        session?.schoolName?.toLowerCase().includes(searchLower) ||
-        session?.clientName?.toLowerCase().includes(searchLower)
-      );
+      if (workflow.workflowType === 'tracking') {
+        // For tracking workflows, search in template name and school name
+        return (
+          workflow.templateName?.toLowerCase().includes(searchLower) ||
+          workflow.schoolName?.toLowerCase().includes(searchLower) ||
+          workflow.academicYear?.toLowerCase().includes(searchLower)
+        );
+      } else {
+        // For session-based workflows, search in session data
+        const session = sessionData[workflow.sessionId];
+        return (
+          workflow.templateName?.toLowerCase().includes(searchLower) ||
+          session?.schoolName?.toLowerCase().includes(searchLower) ||
+          session?.clientName?.toLowerCase().includes(searchLower)
+        );
+      }
     }
 
     return true;
@@ -137,13 +171,31 @@ const WorkflowOverview = () => {
     
     switch (sortBy) {
       case 'date':
-        const dateA = sessionData[a.sessionId]?.date || '';
-        const dateB = sessionData[b.sessionId]?.date || '';
+        let dateA, dateB;
+        if (a.workflowType === 'tracking') {
+          dateA = a.trackingStartDate || a.createdAt?.toDate()?.toISOString() || '';
+        } else {
+          dateA = sessionData[a.sessionId]?.date || '';
+        }
+        if (b.workflowType === 'tracking') {
+          dateB = b.trackingStartDate || b.createdAt?.toDate()?.toISOString() || '';
+        } else {
+          dateB = sessionData[b.sessionId]?.date || '';
+        }
         compareValue = dateA.localeCompare(dateB);
         break;
       case 'school':
-        const schoolA = sessionData[a.sessionId]?.schoolName || '';
-        const schoolB = sessionData[b.sessionId]?.schoolName || '';
+        let schoolA, schoolB;
+        if (a.workflowType === 'tracking') {
+          schoolA = a.schoolName || '';
+        } else {
+          schoolA = sessionData[a.sessionId]?.schoolName || '';
+        }
+        if (b.workflowType === 'tracking') {
+          schoolB = b.schoolName || '';
+        } else {
+          schoolB = sessionData[b.sessionId]?.schoolName || '';
+        }
         compareValue = schoolA.localeCompare(schoolB);
         break;
       case 'progress':
@@ -240,6 +292,7 @@ const WorkflowOverview = () => {
           filters={filters}
           onFiltersChange={setFilters}
           sessionData={sessionData}
+          workflows={workflows}
         />
         
         <div className="controls-right">

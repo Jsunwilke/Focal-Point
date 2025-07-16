@@ -15,12 +15,14 @@ import {
   ArrowUpDown,
   Filter,
   Calendar,
+  FileText,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { getSchools, createSchool, updateSchool } from "../firebase/firestore";
 import Button from "../components/shared/Button";
 import AddSchoolModal from "../components/schools/AddSchoolModal";
 import SchoolSessionsModal from "../components/schools/SchoolSessionsModal";
+import CreateTrackingWorkflowModal from "../components/shared/CreateTrackingWorkflowModal";
 import "./SchoolManagement.css";
 
 const SchoolManagement = () => {
@@ -34,6 +36,8 @@ const SchoolManagement = () => {
   const [editingSchool, setEditingSchool] = useState(null);
   const [showSessionsModal, setShowSessionsModal] = useState(false);
   const [selectedSchool, setSelectedSchool] = useState(null);
+  const [showWorkflowModal, setShowWorkflowModal] = useState(false);
+  const [workflowSchool, setWorkflowSchool] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -148,6 +152,21 @@ const SchoolManagement = () => {
   const handleCloseSessionsModal = () => {
     setShowSessionsModal(false);
     setSelectedSchool(null);
+  };
+
+  const handleCreateWorkflow = (school) => {
+    setWorkflowSchool(school);
+    setShowWorkflowModal(true);
+  };
+
+  const handleCloseWorkflowModal = () => {
+    setShowWorkflowModal(false);
+    setWorkflowSchool(null);
+  };
+
+  const handleWorkflowSuccess = (workflowId) => {
+    console.log("✅ Workflow created successfully:", workflowId);
+    // Could show a success message or redirect to workflow view
   };
 
   const handleSearchChange = (e) => {
@@ -372,6 +391,13 @@ const SchoolManagement = () => {
                     <div className="school-card__menu">
                       <button
                         className="school-card__menu-btn"
+                        onClick={() => handleCreateWorkflow(school)}
+                        title="Create Tracking Workflow"
+                      >
+                        <FileText size={16} />
+                      </button>
+                      <button
+                        className="school-card__menu-btn"
                         onClick={() => handleViewSessions(school)}
                         title="View Sessions"
                       >
@@ -464,6 +490,16 @@ const SchoolManagement = () => {
         <SchoolSessionsModal
           school={selectedSchool}
           onClose={handleCloseSessionsModal}
+        />
+      )}
+
+      {showWorkflowModal && workflowSchool && (
+        <CreateTrackingWorkflowModal
+          isOpen={showWorkflowModal}
+          onClose={handleCloseWorkflowModal}
+          school={workflowSchool}
+          organizationID={organization?.id}
+          onSuccess={handleWorkflowSuccess}
         />
       )}
     </div>

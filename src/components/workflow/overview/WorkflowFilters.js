@@ -2,7 +2,7 @@
 import React from 'react';
 import { Search, X } from 'lucide-react';
 
-const WorkflowFilters = ({ filters, onFiltersChange, sessionData }) => {
+const WorkflowFilters = ({ filters, onFiltersChange, sessionData, workflows = [] }) => {
   const updateFilter = (key, value) => {
     onFiltersChange({
       ...filters,
@@ -10,11 +10,17 @@ const WorkflowFilters = ({ filters, onFiltersChange, sessionData }) => {
     });
   };
 
-  // Get unique schools from sessions
+  // Get unique schools from both sessions and tracking workflows
+  const sessionSchools = Object.values(sessionData)
+    .filter(session => session.schoolName)
+    .map(session => ({ id: session.schoolId, name: session.schoolName }));
+  
+  const trackingSchools = workflows
+    .filter(workflow => workflow.workflowType === 'tracking' && workflow.schoolName)
+    .map(workflow => ({ id: workflow.schoolId, name: workflow.schoolName }));
+  
   const schools = [...new Set(
-    Object.values(sessionData)
-      .filter(session => session.schoolName)
-      .map(session => ({ id: session.schoolId, name: session.schoolName }))
+    [...sessionSchools, ...trackingSchools]
       .map(school => JSON.stringify(school))
   )].map(str => JSON.parse(str));
 
