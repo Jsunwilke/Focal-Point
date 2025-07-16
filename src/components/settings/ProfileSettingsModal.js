@@ -16,6 +16,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import {
   updateUserProfile,
   updateUserPhotoWithCrop,
+  updateUserPhotoURL,
 } from "../../firebase/firestore";
 import {
   uploadUserPhotoWithCrop,

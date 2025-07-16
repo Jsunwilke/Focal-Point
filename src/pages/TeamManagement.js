@@ -19,6 +19,7 @@ import {
 } from "../firebase/firestore";
 import Button from "../components/shared/Button";
 import InviteUserModal from "../components/team/InviteUserModal";
+import EditTeamMemberModal from "../components/team/EditTeamMemberModal";
 import "./TeamManagement.css";
 
 const TeamManagement = () => {
@@ -28,6 +29,8 @@ const TeamManagement = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showInviteSuccess, setShowInviteSuccess] = useState(false);
   const [invitedUserData, setInvitedUserData] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedTeamMember, setSelectedTeamMember] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -112,6 +115,24 @@ const TeamManagement = () => {
 
   const clearSearch = () => {
     setSearchTerm("");
+  };
+
+  const handleEditTeamMember = (member) => {
+    // Only allow admins to edit team members
+    if (userProfile?.role !== "admin") {
+      return;
+    }
+    setSelectedTeamMember(member);
+    setShowEditModal(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setShowEditModal(false);
+    setSelectedTeamMember(null);
+  };
+
+  const handleTeamMemberUpdate = async () => {
+    await loadTeamMembers(); // Refresh the team members list
   };
 
   const getInvitationLink = (email) => {
@@ -267,7 +288,12 @@ const TeamManagement = () => {
           ) : (
             <div className="team-grid">
               {filteredAndSortedMembers.map((member) => (
-                <div key={member.id} className="team-card">
+                <div 
+                  key={member.id} 
+                  className={`team-card ${userProfile?.role === "admin" ? "team-card--clickable" : ""}`}
+                  onClick={() => handleEditTeamMember(member)}
+                  style={{ cursor: userProfile?.role === "admin" ? "pointer" : "default" }}
+                >
                   <div className="team-card__header">
                     <div className="team-card__avatar">
                       {member.firstName?.[0] || member.email[0]}
@@ -280,9 +306,17 @@ const TeamManagement = () => {
                       </h3>
                       <p className="team-card__email">{member.email}</p>
                     </div>
-                    <button className="team-card__menu">
-                      <MoreVertical size={16} />
-                    </button>
+                    {userProfile?.role === "admin" && (
+                      <button 
+                        className="team-card__menu"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditTeamMember(member);
+                        }}
+                      >
+                        <MoreVertical size={16} />
+                      </button>
+                    )}
                   </div>
 
                   <div className="team-card__details">
@@ -348,6 +382,15 @@ const TeamManagement = () => {
           onClose={() => setShowInviteModal(false)}
           onInvite={handleInviteUser}
           organization={organization}
+        />
+      )}
+
+      {showEditModal && selectedTeamMember && (
+        <EditTeamMemberModal
+          isOpen={showEditModal}
+          onClose={handleCloseEditModal}
+          teamMember={selectedTeamMember}
+          onUpdate={handleTeamMemberUpdate}
         />
       )}
 

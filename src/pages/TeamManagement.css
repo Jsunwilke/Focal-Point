@@ -224,6 +224,17 @@
   box-shadow: var(--shadow-md);
 }
 
+.team-card--clickable {
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.team-card--clickable:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+  border-color: var(--primary-color);
+}
+
 .team-card__header {
   display: flex;
   align-items: center;
