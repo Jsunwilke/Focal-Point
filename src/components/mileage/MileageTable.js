@@ -1,35 +1,42 @@
 // src/components/mileage/MileageTable.js
 import React, { useState, useMemo } from 'react';
 import { 
-  ChevronDown, 
-  ChevronRight, 
   MapPin, 
   Calendar, 
   DollarSign,
-  TrendingUp,
-  User,
   Navigation,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Edit
 } from 'lucide-react';
+import EditMileageModal from './EditMileageModal';
 import './MileageTable.css';
 
-const MileageTable = ({ mileageData, isAdmin, showAllUsers, currentUserId }) => {
-  const [expandedRows, setExpandedRows] = useState(new Set());
-  const [sortConfig, setSortConfig] = useState({ key: 'totalMiles', direction: 'desc' });
+const MileageTable = ({ mileageData, currentUserId, onDataRefresh }) => {
+  const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'desc' });
+  const [editingReport, setEditingReport] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
 
-  const { summary } = mileageData;
+  const { userBreakdown } = mileageData;
 
-  // Sort the employee breakdowns based on current sort configuration
-  const sortedEmployees = useMemo(() => {
-    const employees = [...summary.employeeBreakdowns];
+  // Sort the individual drive reports based on current sort configuration
+  const sortedReports = useMemo(() => {
+    if (!userBreakdown?.reports) return [];
     
-    employees.sort((a, b) => {
+    const reports = [...userBreakdown.reports];
+    
+    reports.sort((a, b) => {
       let aValue = a[sortConfig.key];
       let bValue = b[sortConfig.key];
       
-      // Handle different data types
+      // Handle date sorting
+      if (sortConfig.key === 'date') {
+        aValue = a.date?.toDate ? a.date.toDate() : new Date(a.date);
+        bValue = b.date?.toDate ? b.date.toDate() : new Date(b.date);
+      }
+      
+      // Handle other data types
       if (typeof aValue === 'string') {
         aValue = aValue.toLowerCase();
         bValue = bValue.toLowerCase();
@@ -42,8 +49,8 @@ const MileageTable = ({ mileageData, isAdmin, showAllUsers, currentUserId }) => 
       }
     });
     
-    return employees;
-  }, [summary.employeeBreakdowns, sortConfig]);
+    return reports;
+  }, [userBreakdown?.reports, sortConfig]);
 
   const handleSort = (key) => {
     let direction = 'asc';
@@ -53,15 +60,6 @@ const MileageTable = ({ mileageData, isAdmin, showAllUsers, currentUserId }) => 
     setSortConfig({ key, direction });
   };
 
-  const toggleRowExpansion = (userId) => {
-    const newExpandedRows = new Set(expandedRows);
-    if (newExpandedRows.has(userId)) {
-      newExpandedRows.delete(userId);
-    } else {
-      newExpandedRows.add(userId);
-    }
-    setExpandedRows(newExpandedRows);
-  };
 
   const getSortIcon = (key) => {
     if (sortConfig.key !== key) {
@@ -90,7 +88,31 @@ const MileageTable = ({ mileageData, isAdmin, showAllUsers, currentUserId }) => 
     return `$${(amount || 0).toFixed(2)}`;
   };
 
-  if (!summary || !summary.employeeBreakdowns || summary.employeeBreakdowns.length === 0) {
+  const handleEditMileage = (report) => {
+    setEditingReport({ ...report, employee: userBreakdown });
+    setShowEditModal(true);
+  };
+
+  const handleEditSuccess = () => {
+    setShowEditModal(false);
+    setEditingReport(null);
+    // Refresh the data
+    if (onDataRefresh) {
+      onDataRefresh();
+    }
+  };
+
+  const handleEditCancel = () => {
+    setShowEditModal(false);
+    setEditingReport(null);
+  };
+
+  const canEditMileage = () => {
+    // User can always edit their own mileage
+    return true;
+  };
+
+  if (!userBreakdown || !userBreakdown.reports || userBreakdown.reports.length === 0) {
     return (
       <div className="mileage-table-empty">
         <MapPin size={48} className="empty-icon" />
@@ -104,11 +126,11 @@ const MileageTable = ({ mileageData, isAdmin, showAllUsers, currentUserId }) => 
     <div className="mileage-table-container">
       <div className="mileage-table-header">
         <h3>
-          {showAllUsers && isAdmin ? 'Employee Mileage Breakdown' : 'Your Mileage Details'}
+          Your Mileage Details
         </h3>
         <span className="mileage-table-subtitle">
-          {sortedEmployees.length} {sortedEmployees.length === 1 ? 'employee' : 'employees'} • 
-          {summary.totalJobs} total jobs
+          {sortedReports.length} {sortedReports.length === 1 ? 'drive' : 'drives'} • 
+          {userBreakdown.totalJobs} total jobs
         </span>
       </div>
 
@@ -116,144 +138,86 @@ const MileageTable = ({ mileageData, isAdmin, showAllUsers, currentUserId }) => 
         <table className="mileage-table">
           <thead>
             <tr>
-              <th className="expand-column"></th>
               <th 
                 className="sortable-header"
-                onClick={() => handleSort('userName')}
+                onClick={() => handleSort('date')}
               >
-                <User size={16} />
-                Employee
-                {getSortIcon('userName')}
+                <div className="header-content">
+                  <Calendar size={16} />
+                  <span>Date</span>
+                  {getSortIcon('date')}
+                </div>
               </th>
               <th 
                 className="sortable-header"
-                onClick={() => handleSort('totalMiles')}
+                onClick={() => handleSort('schoolOrDestination')}
               >
-                <MapPin size={16} />
-                Total Miles
-                {getSortIcon('totalMiles')}
+                <div className="header-content">
+                  <MapPin size={16} />
+                  <span>Location</span>
+                  {getSortIcon('schoolOrDestination')}
+                </div>
               </th>
               <th 
                 className="sortable-header"
-                onClick={() => handleSort('totalJobs')}
+                onClick={() => handleSort('totalMileage')}
               >
-                <Navigation size={16} />
-                Jobs
-                {getSortIcon('totalJobs')}
+                <div className="header-content">
+                  <Navigation size={16} />
+                  <span>Miles</span>
+                  {getSortIcon('totalMileage')}
+                </div>
               </th>
               <th 
                 className="sortable-header"
-                onClick={() => handleSort('averageMilesPerJob')}
+                onClick={() => handleSort('compensation')}
               >
-                <TrendingUp size={16} />
-                Avg/Job
-                {getSortIcon('averageMilesPerJob')}
+                <div className="header-content">
+                  <DollarSign size={16} />
+                  <span>Compensation</span>
+                  {getSortIcon('compensation')}
+                </div>
               </th>
-              <th 
-                className="sortable-header"
-                onClick={() => handleSort('mileageRate')}
-              >
-                <DollarSign size={16} />
-                Rate
-                {getSortIcon('mileageRate')}
-              </th>
-              <th 
-                className="sortable-header"
-                onClick={() => handleSort('totalCompensation')}
-              >
-                <DollarSign size={16} />
-                Compensation
-                {getSortIcon('totalCompensation')}
-              </th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {sortedEmployees.map((employee) => (
-              <React.Fragment key={employee.userId}>
-                <tr className={`employee-row ${employee.userId === currentUserId ? 'current-user' : ''}`}>
-                  <td className="expand-cell">
-                    <button
-                      className="expand-button"
-                      onClick={() => toggleRowExpansion(employee.userId)}
-                      aria-label={`${expandedRows.has(employee.userId) ? 'Collapse' : 'Expand'} details for ${employee.userName}`}
-                    >
-                      {expandedRows.has(employee.userId) ? (
-                        <ChevronDown size={16} />
-                      ) : (
-                        <ChevronRight size={16} />
-                      )}
-                    </button>
+            {sortedReports.map((report, index) => {
+              const compensation = (report.totalMileage || 0) * (userBreakdown.mileageRate || 0);
+              return (
+                <tr key={report.id || index} className="drive-row">
+                  <td className="date-cell">
+                    <span className="date-value">{formatDate(report.date)}</span>
                   </td>
-                  <td className="employee-name">
-                    <div className="employee-info">
-                      <span className="name">{employee.userName}</span>
-                      {employee.userId === currentUserId && (
-                        <span className="current-user-badge">You</span>
-                      )}
-                    </div>
+                  <td className="location-cell">
+                    <span className="location-value">{report.schoolOrDestination || 'Unknown Location'}</span>
+                    {report.notes && (
+                      <div className="notes-preview" title={report.notes}>
+                        {report.notes}
+                      </div>
+                    )}
                   </td>
                   <td className="miles-cell">
-                    <span className="miles-value">{formatMiles(employee.totalMiles)}</span>
-                  </td>
-                  <td className="jobs-cell">
-                    <span className="jobs-value">{employee.totalJobs}</span>
-                  </td>
-                  <td className="average-cell">
-                    <span className="average-value">{formatMiles(employee.averageMilesPerJob)}</span>
-                  </td>
-                  <td className="rate-cell">
-                    <span className="rate-value">{formatCurrency(employee.mileageRate)}</span>
+                    <span className="miles-value">{formatMiles(report.totalMileage)}</span>
                   </td>
                   <td className="compensation-cell">
-                    <span className="compensation-value">{formatCurrency(employee.totalCompensation)}</span>
+                    <span className="compensation-value">{formatCurrency(compensation)}</span>
+                  </td>
+                  <td className="actions-cell">
+                    {canEditMileage() && (
+                      <button
+                        className="edit-mileage-btn"
+                        onClick={() => handleEditMileage(report)}
+                        title="Edit mileage for this drive"
+                      >
+                        <Edit size={14} />
+                        Edit
+                      </button>
+                    )}
                   </td>
                 </tr>
-                
-                {expandedRows.has(employee.userId) && (
-                  <tr className="expanded-row">
-                    <td colSpan="7">
-                      <div className="job-details">
-                        <h4>Job Details</h4>
-                        {employee.reports && employee.reports.length > 0 ? (
-                          <div className="job-list">
-                            {employee.reports.map((report, index) => (
-                              <div key={report.id || index} className="job-item">
-                                <div className="job-item-header">
-                                  <div className="job-date">
-                                    <Calendar size={14} />
-                                    {formatDate(report.date)}
-                                  </div>
-                                  <div className="job-location">
-                                    <MapPin size={14} />
-                                    {report.schoolOrDestination || 'Unknown Location'}
-                                  </div>
-                                </div>
-                                <div className="job-item-details">
-                                  <div className="job-miles">
-                                    <span className="label">Miles:</span>
-                                    <span className="value">{formatMiles(report.totalMileage)}</span>
-                                  </div>
-                                  <div className="job-compensation">
-                                    <span className="label">Compensation:</span>
-                                    <span className="value">
-                                      {formatCurrency((report.totalMileage || 0) * (employee.mileageRate || 0))}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="no-jobs">
-                            <p>No job details available for this employee.</p>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -262,18 +226,27 @@ const MileageTable = ({ mileageData, isAdmin, showAllUsers, currentUserId }) => 
         <div className="table-summary">
           <div className="summary-item">
             <span className="summary-label">Total Miles:</span>
-            <span className="summary-value">{formatMiles(summary.totalMiles)}</span>
+            <span className="summary-value">{formatMiles(userBreakdown.totalMiles)}</span>
           </div>
           <div className="summary-item">
             <span className="summary-label">Total Jobs:</span>
-            <span className="summary-value">{summary.totalJobs}</span>
+            <span className="summary-value">{userBreakdown.totalJobs}</span>
           </div>
           <div className="summary-item">
             <span className="summary-label">Total Compensation:</span>
-            <span className="summary-value">{formatCurrency(summary.totalCompensation)}</span>
+            <span className="summary-value">{formatCurrency(userBreakdown.totalCompensation)}</span>
           </div>
         </div>
       </div>
+
+      {/* Edit Mileage Modal */}
+      <EditMileageModal
+        isOpen={showEditModal}
+        onClose={handleEditCancel}
+        onSuccess={handleEditSuccess}
+        jobReport={editingReport}
+        mileageRate={userBreakdown?.mileageRate || 0}
+      />
     </div>
   );
 };

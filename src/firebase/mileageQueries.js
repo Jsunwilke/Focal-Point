@@ -206,6 +206,17 @@ export const generateMileageSummary = (dailyReports, teamMembers, startDate, end
   // Sort employee breakdowns by total miles (descending)
   summary.employeeBreakdowns.sort((a, b) => b.totalMiles - a.totalMiles);
 
+  // Sort each employee's reports by date (most recent first)
+  summary.employeeBreakdowns.forEach(employee => {
+    if (employee.reports) {
+      employee.reports.sort((a, b) => {
+        const dateA = a.date?.toDate ? a.date.toDate() : new Date(a.date);
+        const dateB = b.date?.toDate ? b.date.toDate() : new Date(b.date);
+        return dateB.getTime() - dateA.getTime();
+      });
+    }
+  });
+
   return summary;
 };
 
@@ -316,6 +327,87 @@ export const calculateDaysBetween = (startDate, endDate) => {
   const end = new Date(endDate);
   const timeDiff = end.getTime() - start.getTime();
   return Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1; // +1 to include both start and end days
+};
+
+/**
+ * Get user mileage data for the current month
+ * @param {string} organizationID - Organization ID
+ * @param {string} userId - User ID
+ * @returns {Promise<Object>} User-specific mileage data for current month
+ */
+export const getUserMileageDataForCurrentMonth = async (organizationID, userId) => {
+  try {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
+    const startDate = startOfMonth.toISOString().split('T')[0];
+    const endDate = endOfMonth.toISOString().split('T')[0];
+    
+    const mileageData = await getMileageData(organizationID, startDate, endDate, [userId]);
+    
+    // Return the user's specific data
+    const userBreakdown = mileageData.summary.employeeBreakdowns.find(emp => emp.userId === userId);
+    
+    return {
+      ...mileageData,
+      userBreakdown: userBreakdown || {
+        userId,
+        userName: 'Unknown',
+        reports: [],
+        totalMiles: 0,
+        totalJobs: 0,
+        totalCompensation: 0,
+        averageMilesPerJob: 0,
+        mileageRate: 0
+      },
+      monthName: now.toLocaleDateString('en-US', { month: 'long' }),
+      year: now.getFullYear()
+    };
+  } catch (error) {
+    console.error('Error fetching user mileage data for current month:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get user mileage data for the current year
+ * @param {string} organizationID - Organization ID
+ * @param {string} userId - User ID
+ * @returns {Promise<Object>} User-specific mileage data for current year
+ */
+export const getUserMileageDataForCurrentYear = async (organizationID, userId) => {
+  try {
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const endOfYear = new Date(now.getFullYear(), 11, 31);
+    
+    const startDate = startOfYear.toISOString().split('T')[0];
+    const endDate = endOfYear.toISOString().split('T')[0];
+    
+    const mileageData = await getMileageData(organizationID, startDate, endDate, [userId]);
+    
+    // Return the user's specific data
+    const userBreakdown = mileageData.summary.employeeBreakdowns.find(emp => emp.userId === userId);
+    
+    return {
+      ...mileageData,
+      userBreakdown: userBreakdown || {
+        userId,
+        userName: 'Unknown',
+        reports: [],
+        totalMiles: 0,
+        totalJobs: 0,
+        totalCompensation: 0,
+        averageMilesPerJob: 0,
+        mileageRate: 0
+      },
+      year: now.getFullYear()
+    };
+  } catch (error) {
+    console.error('Error fetching user mileage data for current year:', error);
+    throw error;
+  }
 };
 
 /**

@@ -14,6 +14,7 @@ import {
   deleteDoc,
   onSnapshot,
   orderBy,
+  Timestamp,
 } from "firebase/firestore";
 import { firestore } from "./config";
 
@@ -399,26 +400,89 @@ export const getDailyJobReports = async (
 
     // Add date filters if provided
     if (startDate) {
-      q = query(q, where("date", ">=", startDate));
+      // Convert string date to Firestore Timestamp for comparison
+      const startTimestamp = convertToFirestoreTimestamp(startDate);
+      console.log(`🔍 Filtering dates >= ${startDate} (converted to timestamp:`, startTimestamp, ')');
+      q = query(q, where("date", ">=", startTimestamp));
     }
     if (endDate) {
-      q = query(q, where("date", "<=", endDate));
+      // Convert string date to Firestore Timestamp for comparison
+      // Add 23:59:59 to include the entire end date
+      const endTimestamp = convertToFirestoreTimestamp(endDate, true);
+      console.log(`🔍 Filtering dates <= ${endDate} (converted to timestamp:`, endTimestamp, ')');
+      q = query(q, where("date", "<=", endTimestamp));
     }
 
+    console.log(`🔍 Querying dailyJobReports for organization: ${organizationID}`);
     const querySnapshot = await getDocs(q);
     const reports = [];
 
     querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      console.log(`📄 Found report: ${doc.id} with date:`, data.date, `totalMileage: ${data.totalMileage || 'N/A'}`);
       reports.push({
         id: doc.id,
-        ...doc.data(),
+        ...data,
       });
     });
+
+    console.log(`📊 Total reports found: ${reports.length}`);
+    const reportsWithMileage = reports.filter(r => r.totalMileage && r.totalMileage > 0);
+    console.log(`🚗 Reports with mileage: ${reportsWithMileage.length}`);
 
     return reports;
   } catch (error) {
     console.error("Error fetching daily job reports:", error);
     throw error;
+  }
+};
+
+/**
+ * Convert string date to Firestore Timestamp
+ * @param {string} dateString - Date string in YYYY-MM-DD format
+ * @param {boolean} endOfDay - If true, set to end of day (23:59:59)
+ * @returns {Timestamp} Firestore Timestamp
+ */
+const convertToFirestoreTimestamp = (dateString, endOfDay = false) => {
+  try {
+    // Handle different input types for backwards compatibility
+    if (!dateString) {
+      console.warn('No date string provided to convertToFirestoreTimestamp');
+      return Timestamp.now();
+    }
+    
+    // If it's already a Timestamp, return it
+    if (dateString instanceof Timestamp) {
+      return dateString;
+    }
+    
+    // If it's a Date object, convert it
+    if (dateString instanceof Date) {
+      return Timestamp.fromDate(dateString);
+    }
+    
+    // Parse the date string (YYYY-MM-DD)
+    const date = new Date(dateString);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      console.error('Invalid date string:', dateString);
+      return Timestamp.now();
+    }
+    
+    if (endOfDay) {
+      // Set to end of day for end date filtering
+      date.setHours(23, 59, 59, 999);
+    } else {
+      // Set to start of day for start date filtering
+      date.setHours(0, 0, 0, 0);
+    }
+    
+    return Timestamp.fromDate(date);
+  } catch (error) {
+    console.error('Error converting date string to Firestore Timestamp:', error);
+    // Fallback: return current timestamp
+    return Timestamp.now();
   }
 };
 

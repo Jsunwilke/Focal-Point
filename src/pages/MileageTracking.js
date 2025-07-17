@@ -4,17 +4,15 @@ import {
   Navigation, 
   Download, 
   RefreshCw, 
-  AlertTriangle, 
-  Shield,
-  Users,
+  AlertTriangle,
   MapPin,
   TrendingUp,
-  Filter,
-  Eye,
-  EyeOff
+  Users,
+  Calendar,
+  DollarSign
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { getMileageDataForPeriod, exportMileageToCSV } from '../firebase/mileageQueries';
+import { getUserMileageDataForPeriod, getUserMileageDataForCurrentMonth, getUserMileageDataForCurrentYear, exportMileageToCSV } from '../firebase/mileageQueries';
 import PayPeriodSelector from '../components/payroll/PayPeriodSelector';
 import MileageTable from '../components/mileage/MileageTable';
 import Button from '../components/shared/Button';
@@ -23,23 +21,28 @@ import './MileageTracking.css';
 const MileageTracking = () => {
   const { userProfile, organization, user } = useAuth();
   const [mileageData, setMileageData] = useState(null);
+  const [monthlyData, setMonthlyData] = useState(null);
+  const [yearlyData, setYearlyData] = useState(null);
   const [selectedPeriod, setSelectedPeriod] = useState(null);
   const [customDates, setCustomDates] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(false);
   const [error, setError] = useState('');
-  const [showAllUsers, setShowAllUsers] = useState(false);
-
-  // Check if user has admin/manager permissions
-  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager';
 
   useEffect(() => {
-    if (selectedPeriod && organization?.id) {
+    if (selectedPeriod && organization?.id && user?.uid) {
       loadMileageData();
     }
-  }, [selectedPeriod, customDates, organization, showAllUsers]);
+  }, [selectedPeriod, customDates, organization, user]);
+
+  useEffect(() => {
+    if (organization?.id && user?.uid) {
+      loadMonthlyAndYearlyStats();
+    }
+  }, [organization, user]);
 
   const loadMileageData = async () => {
-    if (!selectedPeriod || !organization?.id) return;
+    if (!selectedPeriod || !organization?.id || !user?.uid) return;
 
     setLoading(true);
     setError('');
@@ -53,22 +56,19 @@ const MileageTracking = () => {
           setLoading(false);
           return;
         }
-        data = await getMileageDataForPeriod(
+        data = await getUserMileageDataForPeriod(
           organization.id,
+          user.uid,
           organization.payPeriodSettings,
           'custom',
-          customDates,
-          // If not showing all users and not admin, filter to current user only
-          (!showAllUsers && !isAdmin) ? [user?.uid] : null
+          customDates
         );
       } else {
-        data = await getMileageDataForPeriod(
+        data = await getUserMileageDataForPeriod(
           organization.id,
+          user.uid,
           organization.payPeriodSettings,
-          selectedPeriod.value,
-          null,
-          // If not showing all users and not admin, filter to current user only
-          (!showAllUsers && !isAdmin) ? [user?.uid] : null
+          selectedPeriod.value
         );
       }
 
@@ -113,24 +113,26 @@ const MileageTracking = () => {
     setCustomDates(dates);
   };
 
-  const toggleViewMode = () => {
-    if (isAdmin) {
-      setShowAllUsers(!showAllUsers);
+  const loadMonthlyAndYearlyStats = async () => {
+    if (!organization?.id || !user?.uid) return;
+
+    setLoadingStats(true);
+    try {
+      const [monthlyResult, yearlyResult] = await Promise.all([
+        getUserMileageDataForCurrentMonth(organization.id, user.uid),
+        getUserMileageDataForCurrentYear(organization.id, user.uid)
+      ]);
+      
+      setMonthlyData(monthlyResult);
+      setYearlyData(yearlyResult);
+    } catch (err) {
+      console.error('Error loading monthly/yearly stats:', err);
+      // Don't show error for stats - just log it
+    } finally {
+      setLoadingStats(false);
     }
   };
 
-  // Only show admin access warning if user is not admin/manager
-  if (!isAdmin && !userProfile?.role) {
-    return (
-      <div className="mileage-tracking">
-        <div className="error-container">
-          <AlertTriangle size={48} className="error-icon" />
-          <h2>Access Denied</h2>
-          <p>You don't have permission to view mileage tracking data.</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="mileage-tracking">
@@ -141,34 +143,11 @@ const MileageTracking = () => {
             Mileage Tracking
           </h1>
           <p className="mileage-subtitle">
-            {isAdmin && showAllUsers 
-              ? 'Organization-wide mileage tracking and compensation'
-              : 'Your mileage tracking and compensation'
-            }
+            Your mileage tracking and compensation
           </p>
         </div>
         
         <div className="mileage-header__actions">
-          {isAdmin && (
-            <Button
-              variant="outline"
-              onClick={toggleViewMode}
-              disabled={loading}
-            >
-              {showAllUsers ? (
-                <>
-                  <Eye size={16} />
-                  All Users
-                </>
-              ) : (
-                <>
-                  <EyeOff size={16} />
-                  My Mileage
-                </>
-              )}
-            </Button>
-          )}
-          
           <Button
             variant="outline"
             onClick={handleRefresh}
@@ -199,6 +178,79 @@ const MileageTracking = () => {
         />
       </div>
 
+      {/* Monthly and Yearly Stats */}
+      {(monthlyData || yearlyData) && (
+        <div className="mileage-lifetime-stats">
+          <div className="mileage-lifetime-stats__header">
+            <h3>Lifetime Statistics</h3>
+          </div>
+          
+          <div className="mileage-stats mileage-stats--lifetime">
+            {monthlyData && (
+              <>
+                <div className="mileage-stat">
+                  <div className="mileage-stat__icon">
+                    <Calendar size={20} />
+                  </div>
+                  <div className="mileage-stat__content">
+                    <span className="mileage-stat__value">
+                      {monthlyData.userBreakdown.totalMiles.toFixed(1)}
+                    </span>
+                    <span className="mileage-stat__label">Miles in {monthlyData.monthName}</span>
+                  </div>
+                </div>
+                
+                <div className="mileage-stat">
+                  <div className="mileage-stat__icon">
+                    <DollarSign size={20} />
+                  </div>
+                  <div className="mileage-stat__content">
+                    <span className="mileage-stat__value">
+                      ${monthlyData.userBreakdown.totalCompensation.toFixed(2)}
+                    </span>
+                    <span className="mileage-stat__label">Reimbursement in {monthlyData.monthName}</span>
+                  </div>
+                </div>
+              </>
+            )}
+            
+            {yearlyData && (
+              <>
+                <div className="mileage-stat">
+                  <div className="mileage-stat__icon">
+                    <Calendar size={20} />
+                  </div>
+                  <div className="mileage-stat__content">
+                    <span className="mileage-stat__value">
+                      {yearlyData.userBreakdown.totalMiles.toFixed(1)}
+                    </span>
+                    <span className="mileage-stat__label">Miles in {yearlyData.year}</span>
+                  </div>
+                </div>
+                
+                <div className="mileage-stat">
+                  <div className="mileage-stat__icon">
+                    <DollarSign size={20} />
+                  </div>
+                  <div className="mileage-stat__content">
+                    <span className="mileage-stat__value">
+                      ${yearlyData.userBreakdown.totalCompensation.toFixed(2)}
+                    </span>
+                    <span className="mileage-stat__label">Reimbursement in {yearlyData.year}</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          
+          {loadingStats && (
+            <div className="loading-overlay">
+              <div className="loading-spinner"></div>
+            </div>
+          )}
+        </div>
+      )}
+
       {error && (
         <div className="error-message">
           <AlertTriangle size={16} />
@@ -210,7 +262,7 @@ const MileageTracking = () => {
         <div className="mileage-summary">
           <div className="mileage-summary__header">
             <h2>
-              {showAllUsers ? 'Organization Summary' : 'Your Summary'} - {mileageData.period.label}
+              Your Summary - {mileageData.period.label}
             </h2>
           </div>
           
@@ -277,9 +329,8 @@ const MileageTracking = () => {
         {!loading && mileageData && (
           <MileageTable
             mileageData={mileageData}
-            isAdmin={isAdmin}
-            showAllUsers={showAllUsers}
             currentUserId={user?.uid}
+            onDataRefresh={loadMileageData}
           />
         )}
 

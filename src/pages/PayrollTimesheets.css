@@ -195,6 +195,14 @@
   margin-bottom: var(--spacing-md);
 }
 
+.insight-value {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--primary-color);
+  text-align: center;
+  line-height: 1.2;
+}
+
 /* Top Performers */
 .top-performers-list {
   display: flex;
@@ -297,6 +305,60 @@
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
   font-style: italic;
+}
+
+/* Tab Navigation */
+.payroll-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: var(--spacing-xl);
+  background: var(--background-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.payroll-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--background-secondary);
+  border: none;
+  border-right: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.payroll-tab:last-child {
+  border-right: none;
+}
+
+.payroll-tab:hover {
+  background: var(--background-tertiary);
+  color: var(--text-primary);
+}
+
+.payroll-tab--active {
+  background: var(--primary-color);
+  color: white;
+  font-weight: var(--font-weight-semibold);
+}
+
+.payroll-tab--active:hover {
+  background: var(--primary-color);
+  color: white;
+}
+
+.payroll-tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Content Section */

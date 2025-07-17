@@ -9,24 +9,31 @@ import {
   Users,
   Clock,
   TrendingUp,
-  Settings
+  Settings,
+  Navigation,
+  MapPin,
+  DollarSign
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getPayrollDataForPeriod } from '../firebase/payrollQueries';
+import { getUserMileageDataForPeriod, exportMileageToCSV } from '../firebase/mileageQueries';
 import PayPeriodSelector from '../components/payroll/PayPeriodSelector';
 import PayrollTable from '../components/payroll/PayrollTable';
+import MileageTable from '../components/mileage/MileageTable';
 import PayrollExportModal from '../components/payroll/PayrollExportModal';
 import Button from '../components/shared/Button';
 import './PayrollTimesheets.css';
 
 const PayrollTimesheets = () => {
-  const { userProfile, organization } = useAuth();
+  const { userProfile, organization, user } = useAuth();
   const [payrollData, setPayrollData] = useState(null);
+  const [mileageData, setMileageData] = useState(null);
   const [selectedPeriod, setSelectedPeriod] = useState(null);
   const [customDates, setCustomDates] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showExportModal, setShowExportModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('time'); // 'time' or 'mileage'
 
   // Check if user has admin/manager permissions
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager';
@@ -34,6 +41,7 @@ const PayrollTimesheets = () => {
   useEffect(() => {
     if (selectedPeriod && organization?.id) {
       loadPayrollData();
+      loadMileageData();
     }
   }, [selectedPeriod, customDates, organization]);
 
@@ -75,13 +83,65 @@ const PayrollTimesheets = () => {
     }
   };
 
+  const loadMileageData = async () => {
+    if (!selectedPeriod || !organization?.id || !user?.uid) return;
+
+    try {
+      let data;
+      
+      if (selectedPeriod.value === 'custom') {
+        if (!customDates || !customDates.startDate || !customDates.endDate) {
+          return; // Don't load mileage data if custom dates are incomplete
+        }
+        
+        data = await getUserMileageDataForPeriod(
+          organization.id,
+          user.uid,
+          organization.payPeriodSettings,
+          'custom',
+          customDates
+        );
+      } else {
+        data = await getUserMileageDataForPeriod(
+          organization.id,
+          user.uid,
+          organization.payPeriodSettings,
+          selectedPeriod.value
+        );
+      }
+
+      setMileageData(data);
+    } catch (err) {
+      console.error('Error loading mileage data:', err);
+      // Don't set error for mileage data - just log it
+    }
+  };
+
   const handleRefresh = () => {
     loadPayrollData();
+    loadMileageData();
   };
 
   const handleExport = () => {
-    if (payrollData) {
+    if (activeTab === 'time' && payrollData) {
       setShowExportModal(true);
+    } else if (activeTab === 'mileage' && mileageData) {
+      // For mileage, export directly to CSV
+      try {
+        const csvData = exportMileageToCSV(mileageData);
+        const blob = new Blob([csvData], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `mileage-report-${mileageData.period.startDate}-to-${mileageData.period.endDate}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } catch (err) {
+        console.error('Error exporting mileage data:', err);
+        setError('Failed to export mileage data');
+      }
     }
   };
 
@@ -117,10 +177,10 @@ const PayrollTimesheets = () => {
         <div className="payroll-header-content">
           <h1 className="payroll-title">
             <Receipt size={28} />
-            Payroll Timesheets
+            Payroll & Mileage
           </h1>
           <p className="payroll-subtitle">
-            Review employee hours and export timesheet data for payroll processing
+            Review employee hours, mileage, and export comprehensive payroll data
           </p>
         </div>
         
@@ -137,10 +197,14 @@ const PayrollTimesheets = () => {
           <Button
             variant="primary"
             onClick={handleExport}
-            disabled={!payrollData || loading}
+            disabled={
+              loading || 
+              (activeTab === 'time' && !payrollData) || 
+              (activeTab === 'mileage' && !mileageData)
+            }
           >
             <Download size={16} />
-            Export
+            Export {activeTab === 'time' ? 'Payroll' : 'Mileage'}
           </Button>
         </div>
       </div>
@@ -174,6 +238,26 @@ const PayrollTimesheets = () => {
         />
       </div>
 
+      {/* Tab Navigation */}
+      <div className="payroll-tabs">
+        <button
+          className={`payroll-tab ${activeTab === 'time' ? 'payroll-tab--active' : ''}`}
+          onClick={() => setActiveTab('time')}
+          disabled={loading}
+        >
+          <Clock size={16} />
+          Time Tracking
+        </button>
+        <button
+          className={`payroll-tab ${activeTab === 'mileage' ? 'payroll-tab--active' : ''}`}
+          onClick={() => setActiveTab('mileage')}
+          disabled={loading}
+        >
+          <Navigation size={16} />
+          Mileage
+        </button>
+      </div>
+
       {/* Error Display */}
       {error && (
         <div className="payroll-error">
@@ -189,14 +273,18 @@ const PayrollTimesheets = () => {
       )}
 
       {/* Insights Section */}
-      {payrollData && payrollData.summary && !loading && (
+      {((activeTab === 'time' && payrollData && payrollData.summary) || 
+        (activeTab === 'mileage' && mileageData && mileageData.summary)) && !loading && (
         <div className="payroll-insights">
           <h3 className="insights-title">
             <TrendingUp size={20} />
-            Period Insights
+            {activeTab === 'time' ? 'Time Tracking' : 'Mileage'} Insights
           </h3>
           
           <div className="insights-grid">
+            {activeTab === 'time' && payrollData && payrollData.summary && (
+              <>
+                {/* Time Tracking Insights */}
             {/* Top Performers */}
             {payrollData.summary.insights.topPerformers.length > 0 && (
               <div className="insight-card">
@@ -258,20 +346,96 @@ const PayrollTimesheets = () => {
                 </div>
               </div>
             )}
+                </>
+            )}
+            
+            {activeTab === 'mileage' && mileageData && mileageData.summary && (
+              <>
+                {/* Mileage Insights */}
+                <div className="insight-card">
+                  <h4 className="insight-card-title">
+                    <MapPin size={16} />
+                    Total Miles
+                  </h4>
+                  <div className="insight-value">
+                    {mileageData.summary.totalMiles.toFixed(1)} miles
+                  </div>
+                </div>
+
+                <div className="insight-card">
+                  <h4 className="insight-card-title">
+                    <DollarSign size={16} />
+                    Total Compensation
+                  </h4>
+                  <div className="insight-value">
+                    ${mileageData.summary.totalCompensation.toFixed(2)}
+                  </div>
+                </div>
+
+                <div className="insight-card">
+                  <h4 className="insight-card-title">
+                    <Users size={16} />
+                    Total Jobs
+                  </h4>
+                  <div className="insight-value">
+                    {mileageData.summary.totalJobs} jobs
+                  </div>
+                </div>
+
+                <div className="insight-card">
+                  <h4 className="insight-card-title">
+                    <Navigation size={16} />
+                    Average Miles/Job
+                  </h4>
+                  <div className="insight-value">
+                    {mileageData.summary.averageMilesPerJob.toFixed(1)} miles
+                  </div>
+                </div>
+
+                {/* Top Mileage Performers */}
+                {mileageData.summary.employeeBreakdowns.length > 0 && (
+                  <div className="insight-card">
+                    <h4 className="insight-card-title">
+                      <Users size={16} />
+                      Top Mileage
+                    </h4>
+                    <div className="top-performers-list">
+                      {mileageData.summary.employeeBreakdowns.slice(0, 3).map((employee, index) => (
+                        <div key={index} className="performer-item">
+                          <span className="performer-rank">#{index + 1}</span>
+                          <span className="performer-name">{employee.userName}</span>
+                          <span className="performer-hours">{employee.totalMiles.toFixed(1)} mi</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
 
       {/* Main Data Table */}
       <div className="payroll-content">
-        <PayrollTable
-          payrollData={payrollData}
-          loading={loading}
-          onEmployeeSelect={(employee) => {
-            // Future: Navigate to individual employee detail view
-            console.log('Selected employee:', employee);
-          }}
-        />
+        {activeTab === 'time' && (
+          <PayrollTable
+            payrollData={payrollData}
+            loading={loading}
+            onEmployeeSelect={(employee) => {
+              // Future: Navigate to individual employee detail view
+              console.log('Selected employee:', employee);
+            }}
+          />
+        )}
+        
+        {activeTab === 'mileage' && (
+          <MileageTable
+            mileageData={mileageData}
+            currentUserId={user?.uid}
+            onDataRefresh={loadMileageData}
+          />
+        )}
       </div>
 
       {/* Export Modal */}

@@ -21,6 +21,7 @@
   color: var(--text-secondary);
 }
 
+
 .mileage-table-wrapper {
   overflow-x: auto;
 }
@@ -29,13 +30,16 @@
   width: 100%;
   border-collapse: collapse;
   background-color: var(--bg-primary);
+  display: table;
+  table-layout: fixed;
 }
 
 .mileage-table th,
 .mileage-table td {
-  padding: 12px 16px;
+  padding: 8px 12px;
   text-align: left;
   border-bottom: 1px solid var(--border-light);
+  display: table-cell;
 }
 
 .mileage-table th {
@@ -46,6 +50,9 @@
   position: sticky;
   top: 0;
   z-index: 10;
+  white-space: nowrap;
+  vertical-align: middle;
+  display: table-cell;
 }
 
 .sortable-header {
@@ -59,10 +66,10 @@
   background-color: var(--bg-muted);
 }
 
-.sortable-header {
-  display: flex;
+.mileage-table thead th.sortable-header .header-content {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .sort-icon {
@@ -75,177 +82,87 @@
   color: var(--accent-primary);
 }
 
-.expand-column {
-  width: 40px;
-  text-align: center;
-}
 
-.expand-cell {
-  text-align: center;
-  padding: 8px;
-}
-
-.expand-button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  color: var(--text-secondary);
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.expand-button:hover {
-  background-color: var(--bg-muted);
-  color: var(--text-primary);
-}
-
-.employee-row {
+.drive-row {
   transition: background-color 0.2s ease;
 }
 
-.employee-row:hover {
+.drive-row:hover {
   background-color: var(--bg-muted);
 }
 
-.employee-row.current-user {
-  background-color: var(--accent-light);
-  border-left: 3px solid var(--accent-primary);
-}
-
-.employee-name {
+.date-cell {
   font-weight: 500;
 }
 
-.employee-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.location-cell {
+  position: relative;
 }
 
-.current-user-badge {
-  background-color: var(--accent-primary);
-  color: white;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 10px;
-  text-transform: uppercase;
+.location-value {
+  font-weight: 500;
+  color: var(--text-primary);
 }
 
+.notes-preview {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.actions-cell {
+  text-align: center;
+}
+
+.date-cell,
 .miles-cell,
-.jobs-cell,
-.average-cell,
-.rate-cell,
 .compensation-cell {
   font-family: var(--font-mono);
   font-weight: 500;
 }
 
-.miles-value,
-.jobs-value,
-.average-value {
+.date-value,
+.miles-value {
   color: var(--text-primary);
 }
 
-.rate-value,
 .compensation-value {
   color: var(--success-color);
   font-weight: 600;
 }
 
-.expanded-row {
-  background-color: var(--bg-secondary);
-}
 
-.expanded-row td {
-  padding: 0;
-  border-bottom: 1px solid var(--border-light);
-}
-
-.job-details {
-  padding: 20px 24px;
-}
-
-.job-details h4 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 16px 0;
-}
-
-.job-list {
-  display: grid;
-  gap: 12px;
-}
-
-.job-item {
-  background-color: var(--bg-primary);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  padding: 16px;
-}
-
-.job-item-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 12px;
-}
-
-.job-date,
-.job-location {
+.edit-mileage-btn {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.job-location {
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.job-item-details {
-  display: flex;
-  gap: 24px;
-}
-
-.job-miles,
-.job-compensation {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.job-miles .label,
-.job-compensation .label {
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.job-miles .value {
-  font-family: var(--font-mono);
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.job-compensation .value {
-  font-family: var(--font-mono);
+  padding: 6px 12px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--success-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.no-jobs {
-  text-align: center;
-  padding: 20px;
-  color: var(--text-secondary);
-  font-style: italic;
+.edit-mileage-btn:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
+
+.edit-mileage-btn svg {
+  flex-shrink: 0;
+}
+
 
 .mileage-table-footer {
   padding: 20px 24px;
@@ -317,16 +234,6 @@
     padding: 8px 12px;
   }
   
-  .job-item-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  
-  .job-item-details {
-    flex-direction: column;
-    gap: 8px;
-  }
   
   .table-summary {
     flex-direction: column;
@@ -350,28 +257,11 @@
     padding: 6px 8px;
   }
   
-  .job-details {
-    padding: 16px;
-  }
-  
-  .job-item {
-    padding: 12px;
-  }
-  
-  .current-user-badge {
-    display: none;
-  }
 }
 
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
-  .employee-row.current-user {
-    background-color: rgba(var(--accent-primary-rgb), 0.1);
-  }
-  
-  .rate-value,
-  .compensation-value,
-  .job-compensation .value {
+  .compensation-value {
     color: var(--success-color-dark);
   }
 }

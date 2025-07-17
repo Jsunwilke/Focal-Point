@@ -54,7 +54,12 @@
       "Bash(timeout 25s npm start)",
       "Bash(git checkout:*)",
       "WebFetch(domain:css-tricks.com)",
-      "WebFetch(domain:stackoverflow.com)"
+      "WebFetch(domain:stackoverflow.com)",
+      "Bash(timeout 30 npm run build)",
+      "Bash(pkill:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(GENERATE_SOURCEMAP=false npm start)"
     ],
     "deny": []
   }
