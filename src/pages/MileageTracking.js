@@ -63,6 +63,15 @@ const MileageTracking = () => {
           'custom',
           customDates
         );
+      } else if (selectedPeriod.value.startsWith('historical-')) {
+        data = await getUserMileageDataForPeriod(
+          organization.id,
+          user.uid,
+          organization.payPeriodSettings,
+          selectedPeriod.value,
+          null,
+          selectedPeriod
+        );
       } else {
         data = await getUserMileageDataForPeriod(
           organization.id,

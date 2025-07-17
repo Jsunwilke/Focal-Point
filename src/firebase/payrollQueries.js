@@ -58,9 +58,10 @@ export const getPayrollData = async (organizationID, startDate, endDate, userIds
  * Get payroll data for a specific pay period using organization's pay period settings
  * @param {string} organizationID - Organization ID
  * @param {Object} payPeriodSettings - Organization's pay period configuration
- * @param {string} periodType - 'current', 'previous', or 'custom'
+ * @param {string} periodType - 'current', 'previous', 'custom', or 'historical-X'
  * @param {Object} customDates - For custom periods: { startDate, endDate }
  * @param {Array<string>} userIds - Optional array of specific user IDs
+ * @param {Object} periodData - For historical periods: period object with startDate, endDate, label
  * @returns {Promise<Object>} Payroll data for the specified period
  */
 export const getPayrollDataForPeriod = async (
@@ -68,43 +69,54 @@ export const getPayrollDataForPeriod = async (
   payPeriodSettings, 
   periodType = 'current', 
   customDates = null,
-  userIds = null
+  userIds = null,
+  periodData = null
 ) => {
   let startDate, endDate, periodLabel;
 
   try {
-    switch (periodType) {
-      case 'current':
-        const currentPeriod = getCurrentPayPeriod(payPeriodSettings);
-        if (!currentPeriod) {
-          throw new Error('No current pay period found. Please check pay period settings.');
-        }
-        startDate = currentPeriod.start;
-        endDate = currentPeriod.end;
-        periodLabel = `Current Period: ${currentPeriod.label}`;
-        break;
+    if (periodType.startsWith('historical-')) {
+      // Handle historical periods
+      if (!periodData || !periodData.startDate || !periodData.endDate) {
+        throw new Error('Period data is required for historical period type.');
+      }
+      startDate = periodData.startDate;
+      endDate = periodData.endDate;
+      periodLabel = `Historical Period: ${periodData.label || `${formatDateForDisplay(startDate)} - ${formatDateForDisplay(endDate)}`}`;
+    } else {
+      switch (periodType) {
+        case 'current':
+          const currentPeriod = getCurrentPayPeriod(payPeriodSettings);
+          if (!currentPeriod) {
+            throw new Error('No current pay period found. Please check pay period settings.');
+          }
+          startDate = currentPeriod.start;
+          endDate = currentPeriod.end;
+          periodLabel = `Current Period: ${currentPeriod.label}`;
+          break;
 
-      case 'previous':
-        const previousPeriod = getPreviousPayPeriod(payPeriodSettings);
-        if (!previousPeriod) {
-          throw new Error('No previous pay period found. Please check pay period settings.');
-        }
-        startDate = previousPeriod.start;
-        endDate = previousPeriod.end;
-        periodLabel = `Previous Period: ${previousPeriod.label}`;
-        break;
+        case 'previous':
+          const previousPeriod = getPreviousPayPeriod(payPeriodSettings);
+          if (!previousPeriod) {
+            throw new Error('No previous pay period found. Please check pay period settings.');
+          }
+          startDate = previousPeriod.start;
+          endDate = previousPeriod.end;
+          periodLabel = `Previous Period: ${previousPeriod.label}`;
+          break;
 
-      case 'custom':
-        if (!customDates || !customDates.startDate || !customDates.endDate) {
-          throw new Error('Custom date range is required for custom period type.');
-        }
-        startDate = customDates.startDate;
-        endDate = customDates.endDate;
-        periodLabel = `Custom Period: ${formatDateForDisplay(startDate)} - ${formatDateForDisplay(endDate)}`;
-        break;
+        case 'custom':
+          if (!customDates || !customDates.startDate || !customDates.endDate) {
+            throw new Error('Custom date range is required for custom period type.');
+          }
+          startDate = customDates.startDate;
+          endDate = customDates.endDate;
+          periodLabel = `Custom Period: ${formatDateForDisplay(startDate)} - ${formatDateForDisplay(endDate)}`;
+          break;
 
-      default:
-        throw new Error('Invalid period type. Must be "current", "previous", or "custom".');
+        default:
+          throw new Error('Invalid period type. Must be "current", "previous", or "custom".');
+      }
     }
 
     const payrollData = await getPayrollData(organizationID, startDate, endDate, userIds);

@@ -66,6 +66,15 @@ const PayrollTimesheets = () => {
           'custom',
           customDates
         );
+      } else if (selectedPeriod.value.startsWith('historical-')) {
+        data = await getPayrollDataForPeriod(
+          organization.id,
+          organization.payPeriodSettings,
+          selectedPeriod.value,
+          null,
+          null,
+          selectedPeriod
+        );
       } else {
         data = await getPayrollDataForPeriod(
           organization.id,
@@ -100,6 +109,15 @@ const PayrollTimesheets = () => {
           organization.payPeriodSettings,
           'custom',
           customDates
+        );
+      } else if (selectedPeriod.value.startsWith('historical-')) {
+        data = await getUserMileageDataForPeriod(
+          organization.id,
+          user.uid,
+          organization.payPeriodSettings,
+          selectedPeriod.value,
+          null,
+          selectedPeriod
         );
       } else {
         data = await getUserMileageDataForPeriod(

@@ -393,44 +393,68 @@ export const getDailyJobReports = async (
   endDate = null
 ) => {
   try {
-    let q = query(
+    // Fetch all reports for the organization (no date filtering at database level)
+    const q = query(
       collection(firestore, "dailyJobReports"),
       where("organizationID", "==", organizationID)
     );
 
-    // Add date filters if provided
-    if (startDate) {
-      // Convert string date to Firestore Timestamp for comparison
-      const startTimestamp = convertToFirestoreTimestamp(startDate);
-      console.log(`🔍 Filtering dates >= ${startDate} (converted to timestamp:`, startTimestamp, ')');
-      q = query(q, where("date", ">=", startTimestamp));
-    }
-    if (endDate) {
-      // Convert string date to Firestore Timestamp for comparison
-      // Add 23:59:59 to include the entire end date
-      const endTimestamp = convertToFirestoreTimestamp(endDate, true);
-      console.log(`🔍 Filtering dates <= ${endDate} (converted to timestamp:`, endTimestamp, ')');
-      q = query(q, where("date", "<=", endTimestamp));
-    }
-
-    console.log(`🔍 Querying dailyJobReports for organization: ${organizationID}`);
+    console.log(`🔍 Querying all dailyJobReports for organization: ${organizationID}`);
     const querySnapshot = await getDocs(q);
-    const reports = [];
+    const allReports = [];
 
     querySnapshot.forEach((doc) => {
       const data = doc.data();
-      console.log(`📄 Found report: ${doc.id} with date:`, data.date, `totalMileage: ${data.totalMileage || 'N/A'}`);
-      reports.push({
+      allReports.push({
         id: doc.id,
         ...data,
       });
     });
 
-    console.log(`📊 Total reports found: ${reports.length}`);
-    const reportsWithMileage = reports.filter(r => r.totalMileage && r.totalMileage > 0);
+    console.log(`📊 Total reports found: ${allReports.length}`);
+
+    // Client-side date filtering to handle both old and new date formats
+    let filteredReports = allReports;
+    
+    if (startDate || endDate) {
+      // Convert filter dates to Date objects for comparison
+      const startDateObj = startDate ? new Date(startDate + 'T00:00:00.000Z') : null;
+      const endDateObj = endDate ? new Date(endDate + 'T23:59:59.999Z') : null;
+      
+      console.log(`🔍 Client-side filtering from ${startDate} to ${endDate}`);
+      
+      filteredReports = allReports.filter(report => {
+        const reportDate = parseReportDate(report.date);
+        
+        if (!reportDate) {
+          console.warn(`⚠️ Could not parse date for report ${report.id}:`, report.date);
+          return false; // Exclude reports with unparseable dates
+        }
+        
+        // Apply date range filters
+        if (startDateObj && reportDate < startDateObj) {
+          return false;
+        }
+        if (endDateObj && reportDate > endDateObj) {
+          return false;
+        }
+        
+        return true;
+      });
+      
+      console.log(`📊 Reports after date filtering: ${filteredReports.length}`);
+    }
+
+    // Log sample of found reports with their parsed dates
+    filteredReports.slice(0, 5).forEach(report => {
+      const parsedDate = parseReportDate(report.date);
+      console.log(`📄 Report ${report.id}: original date=${report.date}, parsed=${parsedDate}, mileage=${report.totalMileage || 'N/A'}`);
+    });
+
+    const reportsWithMileage = filteredReports.filter(r => r.totalMileage && r.totalMileage > 0);
     console.log(`🚗 Reports with mileage: ${reportsWithMileage.length}`);
 
-    return reports;
+    return filteredReports;
   } catch (error) {
     console.error("Error fetching daily job reports:", error);
     throw error;
@@ -443,6 +467,59 @@ export const getDailyJobReports = async (
  * @param {boolean} endOfDay - If true, set to end of day (23:59:59)
  * @returns {Timestamp} Firestore Timestamp
  */
+/**
+ * Parse a report date from various formats into a JavaScript Date object
+ * Handles: ISO strings, Firebase Timestamps, human-readable strings
+ * @param {*} dateValue - Date value from the database
+ * @returns {Date|null} Parsed Date object or null if invalid
+ */
+const parseReportDate = (dateValue) => {
+  try {
+    if (!dateValue) {
+      return null;
+    }
+    
+    // If it's already a Date object, return it
+    if (dateValue instanceof Date) {
+      return dateValue;
+    }
+    
+    // If it's a Firebase Timestamp, convert to Date
+    if (dateValue && typeof dateValue.toDate === 'function') {
+      return dateValue.toDate();
+    }
+    
+    // If it's a string, try to parse it
+    if (typeof dateValue === 'string') {
+      // Try ISO format first (2024-02-25T00:00:00.000Z)
+      if (dateValue.includes('T') && (dateValue.includes('Z') || dateValue.includes('+'))) {
+        const isoDate = new Date(dateValue);
+        if (!isNaN(isoDate.getTime())) {
+          return isoDate;
+        }
+      }
+      
+      // Try human-readable format (July 16, 2025 at 2:28:21 PM UTC-5)
+      const humanDate = new Date(dateValue);
+      if (!isNaN(humanDate.getTime())) {
+        return humanDate;
+      }
+    }
+    
+    // Fallback: try direct Date constructor
+    const fallbackDate = new Date(dateValue);
+    if (!isNaN(fallbackDate.getTime())) {
+      return fallbackDate;
+    }
+    
+    console.warn('Could not parse date value:', dateValue);
+    return null;
+  } catch (error) {
+    console.error('Error parsing report date:', error, 'Value:', dateValue);
+    return null;
+  }
+};
+
 const convertToFirestoreTimestamp = (dateString, endOfDay = false) => {
   try {
     // Handle different input types for backwards compatibility
