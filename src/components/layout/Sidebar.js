@@ -17,6 +17,7 @@ import {
   Workflow,
   ChevronLeft,
   ChevronRight,
+  Scan,
 } from "lucide-react";
 import "./Sidebar.css";
 
@@ -85,6 +86,13 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       label: "Sports",
       icon: Trophy,
       path: "/sports",
+      enabled: true,
+    },
+    {
+      id: "tracking",
+      label: "Tracking",
+      icon: Scan,
+      path: "/tracking",
       enabled: true,
     },
     {

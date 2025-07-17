@@ -24,6 +24,7 @@ import TemplatesList from "./pages/TemplatesList";
 import TemplateBuilder from "./pages/TemplateBuilder";
 import WorkflowDashboard from "./components/workflow/WorkflowDashboard";
 import WorkflowSettings from "./pages/WorkflowSettings";
+import Tracking from "./pages/Tracking";
 import "./App.css";
 
 const AppContent = () => {
@@ -108,6 +109,7 @@ const AppContent = () => {
                       <Route path="/team" element={<TeamManagement />} />
                       <Route path="/schools" element={<SchoolManagement />} />
                       <Route path="/sports" element={<Sports />} />
+                      <Route path="/tracking" element={<Tracking />} />
                       <Route path="/daily-reports" element={<DailyReports />} />
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/settings/templates" element={<TemplatesList />} />
