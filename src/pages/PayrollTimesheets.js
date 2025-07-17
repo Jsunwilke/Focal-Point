@@ -16,10 +16,11 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getPayrollDataForPeriod } from '../firebase/payrollQueries';
-import { getUserMileageDataForPeriod, exportMileageToCSV } from '../firebase/mileageQueries';
+import { getMileageDataForPeriod, getUserMileageDataForPeriod, exportMileageToCSV } from '../firebase/mileageQueries';
 import PayPeriodSelector from '../components/payroll/PayPeriodSelector';
 import PayrollTable from '../components/payroll/PayrollTable';
 import MileageTable from '../components/mileage/MileageTable';
+import PayrollMileageTable from '../components/mileage/PayrollMileageTable';
 import PayrollExportModal from '../components/payroll/PayrollExportModal';
 import Button from '../components/shared/Button';
 import './PayrollTimesheets.css';
@@ -93,7 +94,7 @@ const PayrollTimesheets = () => {
   };
 
   const loadMileageData = async () => {
-    if (!selectedPeriod || !organization?.id || !user?.uid) return;
+    if (!selectedPeriod || !organization?.id) return;
 
     try {
       let data;
@@ -103,26 +104,24 @@ const PayrollTimesheets = () => {
           return; // Don't load mileage data if custom dates are incomplete
         }
         
-        data = await getUserMileageDataForPeriod(
+        data = await getMileageDataForPeriod(
           organization.id,
-          user.uid,
           organization.payPeriodSettings,
           'custom',
           customDates
         );
       } else if (selectedPeriod.value.startsWith('historical-')) {
-        data = await getUserMileageDataForPeriod(
+        data = await getMileageDataForPeriod(
           organization.id,
-          user.uid,
           organization.payPeriodSettings,
           selectedPeriod.value,
+          null,
           null,
           selectedPeriod
         );
       } else {
-        data = await getUserMileageDataForPeriod(
+        data = await getMileageDataForPeriod(
           organization.id,
-          user.uid,
           organization.payPeriodSettings,
           selectedPeriod.value
         );
@@ -448,10 +447,9 @@ const PayrollTimesheets = () => {
         )}
         
         {activeTab === 'mileage' && (
-          <MileageTable
+          <PayrollMileageTable
             mileageData={mileageData}
-            currentUserId={user?.uid}
-            onDataRefresh={loadMileageData}
+            loading={loading}
           />
         )}
       </div>

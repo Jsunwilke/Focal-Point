@@ -1,0 +1,358 @@
+/* src/components/mileage/PayrollMileageTable.css */
+
+.payroll-mileage-table {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.payroll-mileage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+.payroll-mileage-header-info {
+  flex: 1;
+}
+
+.payroll-mileage-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.payroll-mileage-subtitle {
+  margin: 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.expand-all-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+  transition: all 0.2s ease;
+}
+
+.expand-all-btn:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+.payroll-mileage-table-container {
+  overflow-x: auto;
+}
+
+.payroll-mileage-table-element {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.payroll-mileage-table-element thead {
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.payroll-mileage-table-element th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.payroll-mileage-table-element th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease;
+}
+
+.payroll-mileage-table-element th.sortable:hover {
+  background: #f3f4f6;
+}
+
+.payroll-mileage-table-element th.sorted {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sort-icon {
+  color: #9ca3af;
+  transition: color 0.2s ease;
+}
+
+.sort-icon--active {
+  color: #2563eb;
+}
+
+.expand-column {
+  width: 40px;
+  padding: 12px 8px !important;
+}
+
+.expand-cell {
+  width: 40px;
+  padding: 12px 8px;
+  text-align: center;
+}
+
+.expand-icon {
+  color: #6b7280;
+  transition: color 0.2s ease;
+}
+
+.employee-summary-row {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.employee-summary-row:hover {
+  background: #f9fafb;
+}
+
+.employee-summary-row:hover .expand-icon {
+  color: #2563eb;
+}
+
+.employee-summary-row.expanded {
+  background: #f0f9ff;
+  border-bottom-color: #bfdbfe;
+}
+
+.employee-summary-row td {
+  padding: 16px;
+  vertical-align: middle;
+  font-size: 14px;
+}
+
+.employee-name {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.miles-cell,
+.jobs-cell {
+  color: #374151;
+  font-weight: 500;
+}
+
+.compensation-cell {
+  color: #059669;
+  font-weight: 600;
+}
+
+.employee-details-row {
+  background: #f8fafc;
+}
+
+.employee-details-cell {
+  padding: 0 !important;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.employee-details {
+  padding: 20px 24px;
+}
+
+.details-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.details-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.details-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.details-table-container {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.details-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.details-table thead {
+  background: #f9fafb;
+}
+
+.details-table th {
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 500;
+  color: #6b7280;
+  font-size: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.details-table th svg {
+  margin-right: 4px;
+}
+
+.details-table td {
+  padding: 12px;
+  font-size: 13px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.details-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.details-table .date-cell {
+  color: #374151;
+  font-weight: 500;
+}
+
+.details-table .location-cell {
+  color: #1f2937;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.details-table .miles-cell {
+  color: #374151;
+  font-weight: 500;
+  text-align: right;
+}
+
+.details-table .compensation-cell {
+  color: #059669;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* Loading and Empty States */
+.payroll-mileage-table--loading,
+.payroll-mileage-table--empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #f3f4f6;
+  border-top: 3px solid #2563eb;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.empty-icon {
+  color: #d1d5db;
+  margin-bottom: 16px;
+}
+
+.payroll-mileage-table--empty h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.payroll-mileage-table--empty p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.payroll-mileage-table--loading p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .payroll-mileage-header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+  
+  .expand-all-btn {
+    align-self: flex-end;
+  }
+  
+  .payroll-mileage-table-element th,
+  .payroll-mileage-table-element td {
+    padding: 8px 12px;
+  }
+  
+  .employee-details {
+    padding: 16px;
+  }
+  
+  .details-table th,
+  .details-table td {
+    padding: 8px;
+  }
+  
+  .details-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 640px) {
+  .payroll-mileage-table-container {
+    overflow-x: scroll;
+  }
+  
+  .payroll-mileage-table-element {
+    min-width: 500px;
+  }
+}
