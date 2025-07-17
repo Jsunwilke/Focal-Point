@@ -59,7 +59,9 @@
       "Bash(pkill:*)",
       "Bash(npm:*)",
       "Bash(npx:*)",
-      "Bash(GENERATE_SOURCEMAP=false npm start)"
+      "Bash(GENERATE_SOURCEMAP=false npm start)",
+      "Bash(timeout 15 npm start)",
+      "Bash(kill:*)"
     ],
     "deny": []
   }

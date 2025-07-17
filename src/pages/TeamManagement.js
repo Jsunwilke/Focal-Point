@@ -12,6 +12,7 @@ import {
   Search,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { useToast } from "../contexts/ToastContext";
 import {
   getTeamMembers,
   inviteUser,
@@ -24,6 +25,7 @@ import "./TeamManagement.css";
 
 const TeamManagement = () => {
   const { userProfile, organization } = useAuth();
+  const { showToast } = useToast();
   const [teamMembers, setTeamMembers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -144,8 +146,7 @@ const TeamManagement = () => {
     const link = getInvitationLink(email);
     try {
       await navigator.clipboard.writeText(link);
-      // You could add a toast notification here
-      alert("Invitation link copied to clipboard!");
+      showToast("Success", "Invitation link copied to clipboard!", "success");
     } catch (err) {
       console.error("Failed to copy link:", err);
       // Fallback: show the link in a dialog
@@ -363,7 +364,10 @@ const TeamManagement = () => {
                       <Button
                         variant="outline"
                         size="small"
-                        onClick={() => copyInvitationLink(member.email)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copyInvitationLink(member.email);
+                        }}
                       >
                         <Mail size={14} />
                         Copy Invitation Link
@@ -402,17 +406,18 @@ const TeamManagement = () => {
             setShowInviteSuccess(false);
             setInvitedUserData(null);
           }}
+          showToast={showToast}
         />
       )}
     </div>
   );
 };
 
-const InviteSuccessModal = ({ userData, invitationLink, onClose }) => {
+const InviteSuccessModal = ({ userData, invitationLink, onClose, showToast }) => {
   const copyLink = async () => {
     try {
       await navigator.clipboard.writeText(invitationLink);
-      alert("Link copied to clipboard!");
+      showToast("Success", "Link copied to clipboard!", "success");
     } catch (err) {
       console.error("Failed to copy link:", err);
       prompt("Copy this invitation link:", invitationLink);
