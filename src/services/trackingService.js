@@ -484,7 +484,7 @@ export const searchJobBoxes = async (organizationID, searchTerm, searchField = '
 export const addBatchRecords = async (organizationID, batchData) => {
   try {
 
-    const { jobBoxNumber, cardNumbers, userId, school, shiftData } = batchData;
+    const { jobBoxNumber, cardNumbers, userId, school, shiftData, includeJobBox = true } = batchData;
     const timestamp = new Date();
     const results = {
       jobBox: null,
@@ -494,10 +494,18 @@ export const addBatchRecords = async (organizationID, batchData) => {
 
 
     // Validate required fields
-    if (!jobBoxNumber || !cardNumbers || !Array.isArray(cardNumbers) || cardNumbers.length === 0) {
+    if (!cardNumbers || !Array.isArray(cardNumbers) || cardNumbers.length === 0) {
       return {
         success: false,
-        message: 'Job box number and card numbers are required'
+        message: 'Card numbers are required'
+      };
+    }
+
+    // Only require job box number if includeJobBox is true
+    if (includeJobBox && !jobBoxNumber) {
+      return {
+        success: false,
+        message: 'Job box number is required when including job box'
       };
     }
 
@@ -508,41 +516,50 @@ export const addBatchRecords = async (organizationID, batchData) => {
       };
     }
 
-    // Create job box record first
-    try {
-      const jobBoxRecord = createJobBoxRecord({
-        boxNumber: jobBoxNumber,
-        userId: userId,
-        school: school || 'Unknown School',
-        status: 'Packed', // Default status for batch created job boxes
-        organizationID: organizationID,
-        timestamp: timestamp,
-        shiftUid: shiftData?.id || null
-      });
+    if (!school) {
+      return {
+        success: false,
+        message: 'School selection is required'
+      };
+    }
 
-      const jobBoxDocRef = await addDoc(collection(firestore, 'jobBoxes'), jobBoxRecord);
-      results.jobBox = { success: true, id: jobBoxDocRef.id };
-      
-      // Update session with job box assignment if shiftData exists
-      if (shiftData?.id && jobBoxDocRef.id) {
-        try {
-          await updateSession(shiftData.id, {
-            hasJobBoxAssigned: true,
-            jobBoxRecordId: jobBoxDocRef.id
-          });
-        } catch (sessionUpdateError) {
-          secureLogger.error('Error updating session with job box assignment', {
-            sessionId: shiftData.id,
-            error: sessionUpdateError.message
-          });
-          // Don't fail the whole operation if session update fails
-          results.errors.push(`Job box created but failed to update session: ${sessionUpdateError.message}`);
+    // Create job box record only if includeJobBox is true
+    if (includeJobBox) {
+      try {
+        const jobBoxRecord = createJobBoxRecord({
+          boxNumber: jobBoxNumber,
+          userId: userId,
+          school: school || 'Unknown School',
+          status: 'Packed', // Default status for batch created job boxes
+          organizationID: organizationID,
+          timestamp: timestamp,
+          shiftUid: shiftData?.id || null
+        });
+
+        const jobBoxDocRef = await addDoc(collection(firestore, 'jobBoxes'), jobBoxRecord);
+        results.jobBox = { success: true, id: jobBoxDocRef.id };
+        
+        // Update session with job box assignment if shiftData exists
+        if (shiftData?.id && jobBoxDocRef.id) {
+          try {
+            await updateSession(shiftData.id, {
+              hasJobBoxAssigned: true,
+              jobBoxRecordId: jobBoxDocRef.id
+            });
+          } catch (sessionUpdateError) {
+            secureLogger.error('Error updating session with job box assignment', {
+              sessionId: shiftData.id,
+              error: sessionUpdateError.message
+            });
+            // Don't fail the whole operation if session update fails
+            results.errors.push(`Job box created but failed to update session: ${sessionUpdateError.message}`);
+          }
         }
+      } catch (error) {
+        secureLogger.error('Error creating job box record', error);
+        results.jobBox = { success: false, error: 'Failed to create job box record' };
+        results.errors.push(`Job box ${jobBoxNumber}: ${error.message}`);
       }
-    } catch (error) {
-      secureLogger.error('Error creating job box record', error);
-      results.jobBox = { success: false, error: 'Failed to create job box record' };
-      results.errors.push(`Job box ${jobBoxNumber}: ${error.message}`);
     }
 
     // Create SD card records
@@ -584,38 +601,63 @@ export const addBatchRecords = async (organizationID, batchData) => {
     // Calculate success rate
     const successfulCards = results.sdCards.filter(card => card.success).length;
     const totalCards = cardNumbers.length;
-    const jobBoxSuccess = results.jobBox?.success || false;
+    const jobBoxSuccess = includeJobBox ? (results.jobBox?.success || false) : true;
 
-    if (jobBoxSuccess && successfulCards === totalCards) {
-      return {
-        success: true,
-        message: `Successfully created 1 job box and ${successfulCards} SD card records`,
-        results: results
-      };
-    } else if (successfulCards > 0 || jobBoxSuccess) {
-      secureLogger.warn('Batch creation partially successful', { 
-        jobBoxSuccess, 
-        successfulCards, 
-        totalCards,
-        errorCount: results.errors.length 
-      });
-      return {
-        success: true,
-        message: `Partially successful: ${jobBoxSuccess ? '1 job box' : '0 job boxes'} and ${successfulCards}/${totalCards} SD cards created`,
-        results: results,
-        warnings: results.errors
-      };
+    // Different success messages based on whether job box was included
+    if (includeJobBox) {
+      if (jobBoxSuccess && successfulCards === totalCards) {
+        return {
+          success: true,
+          message: `Successfully created 1 job box and ${successfulCards} SD card records`,
+          results: results
+        };
+      } else if (successfulCards > 0 || jobBoxSuccess) {
+        secureLogger.warn('Batch creation partially successful', { 
+          jobBoxSuccess, 
+          successfulCards, 
+          totalCards,
+          errorCount: results.errors.length 
+        });
+        return {
+          success: true,
+          message: `Partially successful: ${jobBoxSuccess ? '1 job box' : '0 job boxes'} and ${successfulCards}/${totalCards} SD cards created`,
+          results: results,
+          warnings: results.errors
+        };
+      }
     } else {
-      secureLogger.error('Batch creation failed completely', { 
-        errorCount: results.errors.length 
-      });
-      return {
-        success: false,
-        message: 'Failed to create any records',
-        results: results,
-        errors: results.errors
-      };
+      // No job box mode - only check SD card success
+      if (successfulCards === totalCards) {
+        return {
+          success: true,
+          message: `Successfully created ${successfulCards} SD card records`,
+          results: results
+        };
+      } else if (successfulCards > 0) {
+        secureLogger.warn('SD card creation partially successful', { 
+          successfulCards, 
+          totalCards,
+          errorCount: results.errors.length 
+        });
+        return {
+          success: true,
+          message: `Partially successful: ${successfulCards}/${totalCards} SD cards created`,
+          results: results,
+          warnings: results.errors
+        };
+      }
     }
+
+    // Complete failure
+    secureLogger.error('Batch creation failed completely', { 
+      errorCount: results.errors.length 
+    });
+    return {
+      success: false,
+      message: 'Failed to create any records',
+      results: results,
+      errors: results.errors
+    };
   } catch (error) {
     secureLogger.error('Error in batch record creation', error);
     return {

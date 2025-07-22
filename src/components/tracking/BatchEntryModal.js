@@ -21,6 +21,7 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
     jobBoxNumber: '',
     cardNumbers: ''
   });
+  const [includeJobBox, setIncludeJobBox] = useState(true);
   const [loading, setLoading] = useState(false);
   const [shiftsLoading, setShiftsLoading] = useState(true);
   const [schoolsLoading, setSchoolsLoading] = useState(true);
@@ -155,13 +156,16 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
       const schoolsData = await getSchools(organizationID);
       
       
-      // Map to match expected format
+      // Map to match expected format and sort alphabetically
       const schoolsList = schoolsData?.map(school => ({
         id: school.id,
         name: school.name || school.value,
         value: school.value || school.name,
         ...school
       })) || [];
+      
+      // Sort schools alphabetically by name
+      schoolsList.sort((a, b) => a.name.localeCompare(b.name));
       
       setSchools(schoolsList);
 
@@ -238,6 +242,29 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
     }
   };
 
+  const handleToggleChange = () => {
+    setIncludeJobBox(!includeJobBox);
+    // Clear relevant fields when toggling
+    setFormData(prev => ({
+      ...prev,
+      shiftId: '',
+      schoolId: '',
+      schoolName: '',
+      jobBoxNumber: ''
+    }));
+  };
+
+  const handleSchoolChange = (e) => {
+    const schoolId = e.target.value;
+    const selectedSchool = schools.find(school => school.id === schoolId);
+    
+    setFormData(prev => ({
+      ...prev,
+      schoolId: schoolId,
+      schoolName: selectedSchool?.name || ''
+    }));
+  };
+
   const parseCardNumbers = (cardNumbersText) => {
     if (!cardNumbersText || typeof cardNumbersText !== 'string') {
       return [];
@@ -254,34 +281,48 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
   };
 
   const validateForm = () => {
-    if (!formData.shiftId) {
-      setNotificationData({
-        type: 'error',
-        title: 'Validation Error',
-        message: 'Please select a shift.'
-      });
-      setShowNotificationModal(true);
-      return false;
-    }
+    // When including job box, validate shift and job box number
+    if (includeJobBox) {
+      if (!formData.shiftId) {
+        setNotificationData({
+          type: 'error',
+          title: 'Validation Error',
+          message: 'Please select a shift.'
+        });
+        setShowNotificationModal(true);
+        return false;
+      }
 
-    if (!formData.jobBoxNumber) {
-      setNotificationData({
-        type: 'error',
-        title: 'Validation Error',
-        message: 'Please enter a job box number.'
-      });
-      setShowNotificationModal(true);
-      return false;
-    }
+      if (!formData.jobBoxNumber) {
+        setNotificationData({
+          type: 'error',
+          title: 'Validation Error',
+          message: 'Please enter a job box number.'
+        });
+        setShowNotificationModal(true);
+        return false;
+      }
 
-    if (!validateInput(formData.jobBoxNumber, 'boxNumber')) {
-      setNotificationData({
-        type: 'error',
-        title: 'Validation Error',
-        message: 'Job box number contains invalid characters.'
-      });
-      setShowNotificationModal(true);
-      return false;
+      if (!validateInput(formData.jobBoxNumber, 'boxNumber')) {
+        setNotificationData({
+          type: 'error',
+          title: 'Validation Error',
+          message: 'Job box number contains invalid characters.'
+        });
+        setShowNotificationModal(true);
+        return false;
+      }
+    } else {
+      // When not including job box, validate school selection
+      if (!formData.schoolId || !formData.schoolName) {
+        setNotificationData({
+          type: 'error',
+          title: 'Validation Error',
+          message: 'Please select a school.'
+        });
+        setShowNotificationModal(true);
+        return false;
+      }
     }
 
     const cardNumbers = parseCardNumbers(formData.cardNumbers);
@@ -344,14 +385,15 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
 
     try {
       const cardNumbers = parseCardNumbers(formData.cardNumbers);
-      const selectedShift = shifts.find(shift => shift.id === formData.shiftId);
+      const selectedShift = includeJobBox ? shifts.find(shift => shift.id === formData.shiftId) : null;
       
       const batchData = {
-        jobBoxNumber: formData.jobBoxNumber,
+        jobBoxNumber: includeJobBox ? formData.jobBoxNumber : null,
         cardNumbers: cardNumbers,
         userId: userProfile?.id, // userProfile has 'id', not 'uid'
         school: formData.schoolName,
-        shiftData: selectedShift
+        shiftData: selectedShift,
+        includeJobBox: includeJobBox
       };
 
 
@@ -362,7 +404,9 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
         setNotificationData({
           type: 'success',
           title: 'Success',
-          message: `Created 1 job box and ${cardNumbers.length} SD card records successfully.`,
+          message: includeJobBox 
+            ? `Created 1 job box and ${cardNumbers.length} SD card records successfully.`
+            : `Created ${cardNumbers.length} SD card records successfully.`,
           autoClose: true
         });
         setShowNotificationModal(true);
@@ -505,75 +549,113 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
 
         <form onSubmit={handleSubmit} className="modal__form">
           <div className="modal__content">
+            {/* Toggle for including job box */}
             <div className="form-group">
-              <label htmlFor="shiftId" className="form-label">
-                Select Shift <span className="required">*</span>
+              <label className="toggle-label">
+                <span>Include Job Box</span>
+                <div className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    id="includeJobBox"
+                    checked={includeJobBox}
+                    onChange={handleToggleChange}
+                    disabled={loading}
+                  />
+                  <span className="toggle-slider"></span>
+                </div>
               </label>
-              <select
-                id="shiftId"
-                name="shiftId"
-                value={formData.shiftId}
-                onChange={handleShiftChange}
-                className="form-control"
-                required
-                disabled={loading || shiftsLoading}
-              >
-                <option value="">
-                  {shiftsLoading ? 'Loading shifts...' : 
-                   shifts.length === 0 ? 'No shifts available' : 
-                   'Select a shift...'}
-                </option>
-                {shifts.map(shift => (
-                  <option key={shift.id} value={shift.id}>
-                    {formatShiftDisplay(shift)}
+            </div>
+
+            {/* Conditional fields based on toggle */}
+            {includeJobBox ? (
+              <>
+                <div className="form-group">
+                  <label htmlFor="shiftId" className="form-label">
+                    Select Shift <span className="required">*</span>
+                  </label>
+                  <select
+                    id="shiftId"
+                    name="shiftId"
+                    value={formData.shiftId}
+                    onChange={handleShiftChange}
+                    className="form-control"
+                    required
+                    disabled={loading || shiftsLoading}
+                  >
+                    <option value="">
+                      {shiftsLoading ? 'Loading shifts...' : 
+                       shifts.length === 0 ? 'No shifts available' : 
+                       'Select a shift...'}
+                    </option>
+                    {shifts.map(shift => (
+                      <option key={shift.id} value={shift.id}>
+                        {formatShiftDisplay(shift)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group form-group--half">
+                    <label htmlFor="schoolName" className="form-label">
+                      School
+                    </label>
+                    <input
+                      type="text"
+                      id="schoolName"
+                      name="schoolName"
+                      value={schoolsLoading ? 'Loading schools...' : formData.schoolName}
+                      className="form-control"
+                      disabled={true}
+                      placeholder={schoolsLoading ? 'Loading...' : 'Auto-selected'}
+                    />
+                  </div>
+
+                  <div className="form-group form-group--half">
+                    <label htmlFor="jobBoxNumber" className="form-label">
+                      Job Box Number <span className="required">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="jobBoxNumber"
+                      name="jobBoxNumber"
+                      value={formData.jobBoxNumber}
+                      onChange={handleInputChange}
+                      className="form-control"
+                      placeholder="e.g., 3001"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="form-group">
+                <label htmlFor="schoolId" className="form-label">
+                  Select School <span className="required">*</span>
+                </label>
+                <select
+                  id="schoolId"
+                  name="schoolId"
+                  value={formData.schoolId}
+                  onChange={handleSchoolChange}
+                  className="form-control"
+                  required
+                  disabled={loading || schoolsLoading}
+                >
+                  <option value="">
+                    {schoolsLoading ? 'Loading schools...' : 
+                     schools.length === 0 ? 'No schools available' : 
+                     'Select a school...'}
                   </option>
-                ))}
-              </select>
-              <small className="form-text">
-                {shiftsLoading ? 'Loading available shifts...' :
-                 shifts.length === 0 ? 'No shifts found for the next 2 weeks. Try creating some sessions first.' :
-                 `${shifts.length} shifts available from the next 2 weeks`}
-              </small>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="schoolName" className="form-label">
-                School
-              </label>
-              <input
-                type="text"
-                id="schoolName"
-                name="schoolName"
-                value={schoolsLoading ? 'Loading schools...' : formData.schoolName}
-                className="form-control"
-                disabled={true}
-                placeholder={schoolsLoading ? 'Loading...' : 'Auto-selected based on shift'}
-              />
-              <small className="form-text">
-                {schoolsLoading ? 'Loading school information...' : 
-                 'Automatically populated when you select a shift'}
-              </small>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="jobBoxNumber" className="form-label">
-                Job Box Number <span className="required">*</span>
-              </label>
-              <input
-                type="text"
-                id="jobBoxNumber"
-                name="jobBoxNumber"
-                value={formData.jobBoxNumber}
-                onChange={handleInputChange}
-                className="form-control"
-                placeholder="e.g., 3001"
-                required
-                disabled={loading}
-              />
-              <small className="form-text">
-                This will create a job box record with "Packed" status
-              </small>
-            </div>
+                  {schools.map(school => (
+                    <option key={school.id} value={school.id}>
+                      {school.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="form-group">
               <label htmlFor="cardNumbers" className="form-label">
@@ -585,14 +667,11 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
                 value={formData.cardNumbers}
                 onChange={handleInputChange}
                 className="form-control card-numbers-textarea"
-                placeholder="Enter card numbers separated by commas, spaces, or new lines&#10;e.g., 1001, 1002, 1003&#10;or&#10;1001&#10;1002&#10;1003"
-                rows={4}
+                placeholder="Enter card numbers (e.g., 1001, 1002, 1003)"
+                rows={3}
                 required
                 disabled={loading}
               />
-              <small className="form-text">
-                Each card will create an SD card record with "Job Box" status
-              </small>
             </div>
           </div>
           <div className="modal__actions">
