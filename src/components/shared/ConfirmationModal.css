@@ -1,6 +1,13 @@
 /* Confirmation Modal Styles */
 .confirmation-modal {
   border: 1px solid var(--border-color);
+  max-height: auto !important;
+  height: auto !important;
+}
+
+.confirmation-modal .modal__content {
+  padding: var(--spacing-md) var(--spacing-lg);
+  flex: none;
 }
 
 .confirmation-title {
@@ -16,11 +23,7 @@
   color: var(--text-primary);
 }
 
-.modal-body {
-  padding: 1rem 0;
-}
-
-.modal-body p {
+.modal__content p {
   margin: 0;
   color: var(--text-secondary);
   font-size: 1rem;

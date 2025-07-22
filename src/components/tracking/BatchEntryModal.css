@@ -223,6 +223,48 @@
   100% { transform: rotate(360deg); }
 }
 
+/* Loading Overlay */
+.modal-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  border-radius: var(--radius-lg);
+}
+
+.modal-loading-content {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.modal-loading-text {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.modal-loading-subtext {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Spinner icon in button */
+.spinner-icon {
+  animation: spin 1s linear infinite;
+  margin-right: 0.5rem;
+}
+
 /* Form Validation */
 .batch-entry-modal .form-control:invalid {
   border-color: var(--danger-color, #dc3545);

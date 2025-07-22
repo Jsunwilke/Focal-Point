@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { X } from 'lucide-react';
+import { X, Loader } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { addBatchRecords } from '../../services/trackingService';
 import { getDocs, collection, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { firestore } from '../../firebase/config';
 import NotificationModal from '../shared/NotificationModal';
+import LoadingSpinner from '../shared/LoadingSpinner';
 import { sanitizeString, validateInput, defaultRateLimiter } from '../../utils/inputSanitizer';
 import secureLogger from '../../utils/secureLogger';
 import '../shared/Modal.css';
@@ -48,19 +49,11 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
       const twoWeeksFromNow = new Date();
       twoWeeksFromNow.setDate(now.getDate() + 14);
       
-      secureLogger.debug('Loading shifts for organization', { 
-        hasOrganizationID: !!organizationID,
-        organizationID: organizationID,
-        dateRange: `${today.toDateString()} to ${twoWeeksFromNow.toDateString()}`
-      });
 
       // Use single query now that sessions have hasJobBoxAssigned field
       const { getSessions } = await import('../../firebase/firestore');
       const allSessions = await getSessions(organizationID);
       
-      secureLogger.debug('Sessions loaded', { 
-        sessionsCount: allSessions?.length || 0
-      });
 
       if (!allSessions || allSessions.length === 0) {
         setShifts([]);
@@ -73,11 +66,6 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
         try {
           // Check if session already has job box assigned using the session field
           if (session.hasJobBoxAssigned === true) {
-            secureLogger.debug('Excluding session with existing job box', {
-              sessionId: session.id,
-              schoolName: session.schoolName,
-              jobBoxRecordId: session.jobBoxRecordId
-            });
             return false;
           }
 
@@ -106,14 +94,6 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
           const isFromToday = sessionDate >= today;
           const isWithinTwoWeeks = sessionDate <= twoWeeksFromNow;
           
-          secureLogger.debug('Session date check', {
-            sessionId: session.id,
-            sessionDate: sessionDate.toDateString(),
-            isFromToday,
-            isWithinTwoWeeks,
-            schoolName: session.schoolName,
-            hasJobBox: session.hasJobBoxAssigned === true
-          });
           
           return isFromToday && isWithinTwoWeeks;
         } catch (error) {
@@ -127,18 +107,6 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
       
       setShifts(availableShifts);
       
-      const assignedCount = allSessions.filter(s => s.hasJobBoxAssigned === true).length;
-      secureLogger.debug('Filtered available shifts', { 
-        futureCount: availableShifts.length,
-        totalSessions: allSessions.length,
-        assignedCount: assignedCount,
-        dateExcludedCount: allSessions.length - availableShifts.length - assignedCount,
-        sampleShift: availableShifts[0] ? {
-          id: availableShifts[0].id,
-          schoolName: availableShifts[0].schoolName,
-          date: availableShifts[0].date
-        } : null
-      });
 
       if (availableShifts.length === 0) {
         const assignedCount = allSessions.filter(s => s.hasJobBoxAssigned === true).length;
@@ -177,10 +145,6 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
   const loadSchools = async () => {
     setSchoolsLoading(true);
     try {
-      secureLogger.debug('Loading schools for organization', { 
-        hasOrganizationID: !!organizationID,
-        organizationID: organizationID
-      });
       
       if (!organizationID) {
         throw new Error('No organization ID provided');
@@ -190,10 +154,6 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
       const { getSchools } = await import('../../firebase/firestore');
       const schoolsData = await getSchools(organizationID);
       
-      secureLogger.debug('Schools data received', { 
-        count: schoolsData?.length || 0,
-        hasData: !!schoolsData
-      });
       
       // Map to match expected format
       const schoolsList = schoolsData?.map(school => ({
@@ -204,7 +164,6 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
       })) || [];
       
       setSchools(schoolsList);
-      secureLogger.debug('Loaded and formatted schools', { count: schoolsList.length });
 
       if (schoolsList.length === 0) {
         secureLogger.warn('No schools found for organization', { organizationID });
@@ -265,10 +224,18 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: sanitizeString(value)
-    }));
+    // For textarea (cardNumbers), don't apply sanitization that might strip newlines
+    if (name === 'cardNumbers') {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value // Keep raw value to preserve newlines and spaces
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: sanitizeString(value)
+      }));
+    }
   };
 
   const parseCardNumbers = (cardNumbersText) => {
@@ -276,9 +243,9 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
       return [];
     }
     
-    // Split by comma, newline, or spaces and clean up
+    // Split by comma, newline, or multiple spaces and clean up
     const numbers = cardNumbersText
-      .split(/[,\n\s]+/)
+      .split(/[,\n]+|\s{2,}/) // Split by comma, newline, or 2+ spaces (to allow single spaces in card numbers)
       .map(num => sanitizeString(num.trim()))
       .filter(num => num.length > 0)
       .filter((num, index, arr) => arr.indexOf(num) === index); // Remove duplicates
@@ -382,23 +349,12 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
       const batchData = {
         jobBoxNumber: formData.jobBoxNumber,
         cardNumbers: cardNumbers,
-        userId: userProfile.uid,
+        userId: userProfile?.id, // userProfile has 'id', not 'uid'
         school: formData.schoolName,
         shiftData: selectedShift
       };
 
-      secureLogger.debug('Creating batch records', { 
-        jobBoxNumber: !!formData.jobBoxNumber,
-        cardCount: cardNumbers.length,
-        hasSchool: !!formData.schoolName
-      });
 
-      secureLogger.debug('About to call addBatchRecords with organizationID', {
-        organizationID: organizationID,
-        organizationIDType: typeof organizationID,
-        organizationIDTruthy: !!organizationID,
-        organizationIDLength: organizationID?.length
-      });
 
       const result = await addBatchRecords(organizationID, batchData);
 
@@ -517,7 +473,7 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
         padding: "20px",
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) {
+        if (e.target === e.currentTarget && !loading) {
           onClose();
         }
       }}
@@ -653,10 +609,28 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
               className="btn btn-primary"
               disabled={loading || shiftsLoading || schoolsLoading}
             >
-              {loading ? 'Creating Records...' : 'Create Batch Records'}
+              {loading ? (
+                <>
+                  <Loader size={16} className="spinner-icon" />
+                  Creating Records...
+                </>
+              ) : (
+                'Create Batch Records'
+              )}
             </button>
           </div>
         </form>
+        
+        {/* Loading Overlay */}
+        {loading && (
+          <div className="modal-loading-overlay">
+            <div className="modal-loading-content">
+              <LoadingSpinner size="large" color="primary" />
+              <p className="modal-loading-text">Creating batch records...</p>
+              <p className="modal-loading-subtext">Please wait while we process your request</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

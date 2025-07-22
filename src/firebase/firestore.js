@@ -932,7 +932,10 @@ export const getSession = async (sessionId) => {
     }
     return null;
   } catch (error) {
-    console.error("Error fetching session:", error);
+    // Don't log permission errors - these are expected when accessing sessions from other orgs
+    if (error.code !== 'permission-denied') {
+      console.error("Error fetching session:", error);
+    }
     throw error;
   }
 };
@@ -2363,7 +2366,6 @@ export const getWorkflowsForUser = async (userId, organizationID, status = null)
     // Get all workflows for the organization first
     const allWorkflows = await getWorkflowsForOrganization(organizationID, status);
     
-    console.log("🔍 getWorkflowsForUser: Found", allWorkflows.length, "total workflows for organization");
     
     // For now, return all workflows for the organization
     // Later we can add more sophisticated filtering based on user roles/permissions
@@ -2386,7 +2388,6 @@ export const getWorkflowsForUser = async (userId, organizationID, status = null)
       return hasAssignedSteps || hasUnassignedSteps;
     });
 
-    console.log("🎯 getWorkflowsForUser: Filtered to", userWorkflows.length, "workflows for user");
     
     return userWorkflows;
   } catch (error) {

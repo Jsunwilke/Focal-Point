@@ -1,6 +1,13 @@
 /* Notification Modal Styles */
 .notification-modal {
   border: 1px solid var(--border-color);
+  max-height: auto !important;
+  height: auto !important;
+}
+
+.notification-modal .modal__content {
+  padding: var(--spacing-md) var(--spacing-lg);
+  flex: none;
 }
 
 .notification-title {

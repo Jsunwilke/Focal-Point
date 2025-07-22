@@ -60,22 +60,22 @@ const ConfirmationModal = ({
       }}
     >
       <div 
-        className="modal-content confirmation-modal"
+        className="modal modal--small confirmation-modal"
         style={{
           position: 'relative',
           margin: 0,
-          transform: 'none',
-          maxWidth: '400px',
-          width: '90%'
+          transform: 'none'
         }}
       >
-        <div className="modal-header">
-          <div className="confirmation-title">
-            {getIcon()}
-            <h3>{title}</h3>
+        <div className="modal__header">
+          <div className="modal__header-content">
+            <div className="confirmation-title">
+              {getIcon()}
+              <h3 className="modal__title">{title}</h3>
+            </div>
           </div>
           <button 
-            className="modal-close" 
+            className="modal__close" 
             onClick={onClose}
             aria-label="Close modal"
           >
@@ -83,11 +83,11 @@ const ConfirmationModal = ({
           </button>
         </div>
 
-        <div className="modal-body">
+        <div className="modal__content">
           <p>{message}</p>
         </div>
 
-        <div className="modal-actions">
+        <div className="modal__actions">
           <button 
             type="button" 
             className="btn btn-secondary" 

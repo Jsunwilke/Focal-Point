@@ -8,6 +8,14 @@ import {
   getSession,
   deleteWorkflowInstance
 } from '../firebase/firestore';
+import { 
+  collection, 
+  query, 
+  where, 
+  onSnapshot,
+  orderBy 
+} from 'firebase/firestore';
+import { firestore } from '../firebase/config';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
 
@@ -48,25 +56,11 @@ export const WorkflowProvider = ({ children }) => {
   // Load user workflows
   const loadUserWorkflows = useCallback(async () => {
     if (!userProfile?.id || !organization?.id) {
-      console.log("🔄 WORKFLOW CONTEXT: Missing userProfile.id or organization.id", {
-        userProfileId: userProfile?.id,
-        organizationId: organization?.id
-      });
       return;
     }
     
-    console.log("🔄 WORKFLOW CONTEXT: Loading workflows for user:", userProfile.id, "in organization:", organization.id);
-    
     try {
       const workflows = await getWorkflowsForUser(userProfile.id, organization.id, 'active');
-      console.log("📋 WORKFLOW CONTEXT: Found", workflows.length, "workflows for user");
-      
-      if (workflows.length > 0) {
-        console.log("📄 WORKFLOW CONTEXT: Workflow details:");
-        workflows.forEach((workflow, index) => {
-          console.log(`  ${index + 1}. ${workflow.templateName} (ID: ${workflow.id}) - Session: ${workflow.sessionId} - Status: ${workflow.status}`);
-        });
-      }
       
       // Load templates for each workflow if not already loaded
       const templatePromises = workflows.map(async (workflow) => {
@@ -98,7 +92,17 @@ export const WorkflowProvider = ({ children }) => {
           workflows.forEach(workflow => {
             if (workflow.sessionId && !sessionIds.has(workflow.sessionId)) {
               sessionIds.add(workflow.sessionId);
-              sessionPromises.push(getSession(workflow.sessionId));
+              // Wrap getSession in a promise that catches permission errors
+              sessionPromises.push(
+                getSession(workflow.sessionId).catch(error => {
+                  // Silently ignore permission errors - the session might belong to a different org
+                  if (error.code === 'permission-denied') {
+                    return null;
+                  }
+                  // Re-throw other errors
+                  throw error;
+                })
+              );
             }
           });
           
@@ -118,7 +122,10 @@ export const WorkflowProvider = ({ children }) => {
             setSessionData(prev => ({ ...prev, ...newSessionData }));
           }
         } catch (error) {
-          console.error('Error loading session data:', error);
+          // Only log non-permission errors
+          if (error.code !== 'permission-denied') {
+            console.error('Error loading session data:', error);
+          }
         }
       }
       
@@ -357,16 +364,80 @@ export const WorkflowProvider = ({ children }) => {
     }
   }, [userProfile?.id, organization?.id]);
 
-  // Set up periodic refresh for notifications
+  // Set up real-time listener for workflows
   useEffect(() => {
-    if (!userProfile?.id || !organization?.id) return;
-    
-    const interval = setInterval(() => {
-      loadUserWorkflows();
-    }, 30000); // Check every 30 seconds
-    
-    return () => clearInterval(interval);
-  }, [userProfile?.id, organization?.id, loadUserWorkflows]);
+    if (!organization?.id || !userProfile?.id) return;
+
+    // Query for active workflows in the organization
+    const workflowsQuery = query(
+      collection(firestore, 'workflows'),
+      where('organizationID', '==', organization.id),
+      where('status', '==', 'active'),
+      orderBy('createdAt', 'desc')
+    );
+
+    // Set up the listener
+    const unsubscribe = onSnapshot(
+      workflowsQuery,
+      async (snapshot) => {
+        // Process workflow changes
+        const workflows = [];
+        snapshot.forEach((doc) => {
+          workflows.push({ id: doc.id, ...doc.data() });
+        });
+
+        // Filter for user's workflows
+        const userWorkflows = workflows.filter(workflow => {
+          if (!workflow.stepProgress) return false;
+          
+          const hasAssignedSteps = Object.values(workflow.stepProgress).some(step => 
+            step.assignedTo === userProfile.id
+          );
+          
+          const hasUnassignedSteps = Object.values(workflow.stepProgress).some(step => 
+            !step.assignedTo || step.assignedTo === null
+          );
+          
+          return hasAssignedSteps || hasUnassignedSteps;
+        });
+
+        // Load templates for new workflows
+        const templatePromises = userWorkflows.map(async (workflow) => {
+          if (!workflowTemplates[workflow.templateId]) {
+            const template = await getWorkflowTemplate(workflow.templateId);
+            return { templateId: workflow.templateId, template };
+          }
+          return null;
+        });
+        
+        const templateResults = await Promise.all(templatePromises);
+        const newTemplates = {};
+        templateResults.forEach(result => {
+          if (result) {
+            newTemplates[result.templateId] = result.template;
+          }
+        });
+        
+        // Update state
+        setWorkflowTemplates(prev => ({ ...prev, ...newTemplates }));
+        setUserWorkflows(userWorkflows);
+        
+        // Check for notifications on changes
+        if (snapshot.docChanges().length > 0) {
+          checkForNotifications(userWorkflows);
+        }
+      },
+      (error) => {
+        console.error('Error in workflows listener:', error);
+        // Fall back to manual load if listener fails
+        loadUserWorkflows();
+      }
+    );
+
+    // Cleanup listener on unmount
+    return () => unsubscribe();
+  }, [organization?.id, userProfile?.id, workflowTemplates, checkForNotifications, loadUserWorkflows]);
+
 
   const value = {
     // Data

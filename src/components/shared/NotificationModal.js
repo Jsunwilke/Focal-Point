@@ -72,22 +72,22 @@ const NotificationModal = ({
       }}
     >
       <div 
-        className={`modal-content notification-modal ${getTypeClass()}`}
+        className={`modal modal--small notification-modal ${getTypeClass()}`}
         style={{
           position: 'relative',
           margin: 0,
-          transform: 'none',
-          maxWidth: '400px',
-          width: '90%'
+          transform: 'none'
         }}
       >
-        <div className="modal-header">
-          <div className="notification-title">
-            {getIcon()}
-            <h3>{title}</h3>
+        <div className="modal__header">
+          <div className="modal__header-content">
+            <div className="notification-title">
+              {getIcon()}
+              <h3 className="modal__title">{title}</h3>
+            </div>
           </div>
           <button 
-            className="modal-close" 
+            className="modal__close" 
             onClick={onClose}
             aria-label="Close notification"
           >
@@ -95,11 +95,11 @@ const NotificationModal = ({
           </button>
         </div>
 
-        <div className="modal-body">
+        <div className="modal__content">
           <p>{message}</p>
         </div>
 
-        <div className="modal-actions">
+        <div className="modal__actions modal__actions--center">
           <button 
             type="button" 
             className="btn btn-primary" 

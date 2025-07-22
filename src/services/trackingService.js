@@ -192,10 +192,6 @@ export const addJobBoxRecord = async (recordData) => {
           hasJobBoxAssigned: true,
           jobBoxRecordId: docRef.id
         });
-        secureLogger.debug('Session updated with job box assignment', { 
-          sessionId: recordData.shiftUid,
-          jobBoxId: docRef.id
-        });
       } catch (sessionUpdateError) {
         secureLogger.error('Error updating session with job box assignment', {
           sessionId: recordData.shiftUid,
@@ -279,10 +275,6 @@ export const deleteJobBoxRecord = async (recordId) => {
         await updateSession(shiftUid, {
           hasJobBoxAssigned: false,
           jobBoxRecordId: null
-        });
-        secureLogger.debug('Session job box assignment cleared', { 
-          sessionId: shiftUid,
-          deletedJobBoxId: recordId
         });
       } catch (sessionUpdateError) {
         secureLogger.error('Error clearing session job box assignment', {
@@ -491,15 +483,6 @@ export const searchJobBoxes = async (organizationID, searchTerm, searchField = '
 // Batch record creation
 export const addBatchRecords = async (organizationID, batchData) => {
   try {
-    // Log function parameters immediately 
-    secureLogger.debug('addBatchRecords function called', {
-      organizationID: organizationID,
-      organizationIDType: typeof organizationID,
-      organizationIDTruthy: !!organizationID,
-      organizationIDLength: organizationID?.length,
-      hasBatchData: !!batchData,
-      batchDataKeys: batchData ? Object.keys(batchData) : []
-    });
 
     const { jobBoxNumber, cardNumbers, userId, school, shiftData } = batchData;
     const timestamp = new Date();
@@ -509,108 +492,24 @@ export const addBatchRecords = async (organizationID, batchData) => {
       errors: []
     };
 
-    secureLogger.debug('Creating batch records', { 
-      hasJobBoxNumber: !!jobBoxNumber,
-      cardCount: cardNumbers?.length || 0,
-      hasSchool: !!school,
-      hasUserId: !!userId
-    });
 
-    // Validate required fields with detailed logging
-    try {
-      secureLogger.debug('Validating batch data', {
-        jobBoxNumber: jobBoxNumber,
-        cardNumbersType: typeof cardNumbers,
-        cardNumbersIsArray: Array.isArray(cardNumbers),
-        cardNumbersLength: cardNumbers?.length,
-        userId: !!userId,
-        organizationID: !!organizationID
-      });
-
-      secureLogger.debug('Starting validation checks...');
-
-      if (!jobBoxNumber || !cardNumbers || !Array.isArray(cardNumbers) || cardNumbers.length === 0) {
-        secureLogger.error('Validation failed: missing required fields', {
-          hasJobBoxNumber: !!jobBoxNumber,
-          hasCardNumbers: !!cardNumbers,
-          isCardNumbersArray: Array.isArray(cardNumbers),
-          cardNumbersLength: cardNumbers?.length || 0
-        });
-        return {
-          success: false,
-          message: 'Job box number and card numbers are required'
-        };
-      }
-
-      secureLogger.debug('Primary fields validation passed');
-
-      // Add detailed logging for user/org validation
-      secureLogger.debug('Checking user/org validation', {
-        userId: userId,
-        organizationID: organizationID,
-        userIdType: typeof userId,
-        organizationIDType: typeof organizationID,
-        userIdTruthy: !!userId,
-        organizationIDTruthy: !!organizationID,
-        userIdLength: userId?.length,
-        organizationIDLength: organizationID?.length
-      });
-
-      // Check specific falsy conditions
-      const userIdFalsy = !userId;
-      const orgIdFalsy = !organizationID;
-      const userIdEmpty = userId === '';
-      const orgIdEmpty = organizationID === '';
-      const userIdUndefinedString = userId === 'undefined';
-      const orgIdUndefinedString = organizationID === 'undefined';
-      const userIdNullString = userId === 'null';
-      const orgIdNullString = organizationID === 'null';
-
-      // Simple debug to see actual values
-      console.log('DEBUG VALUES:', { userId, organizationID });
-
-      if (!userId || !organizationID) {
-        secureLogger.error('Validation failed: missing user/org info', {
-          hasUserId: !!userId,
-          hasOrganizationID: !!organizationID,
-          userId: userId,
-          organizationID: organizationID,
-          userIdType: typeof userId,
-          organizationIDType: typeof organizationID,
-          failedBecauseUserId: !userId,
-          failedBecauseOrgId: !organizationID
-        });
-        
-        secureLogger.debug('About to return validation failure');
-        return {
-          success: false,
-          message: 'User and organization information are required'
-        };
-      }
-
-      secureLogger.debug('User/org validation passed successfully!');
-      secureLogger.debug('All validation passed, proceeding to create job box record');
-    } catch (validationError) {
-      secureLogger.error('Error during validation process', {
-        error: validationError.message,
-        stack: validationError.stack
-      });
+    // Validate required fields
+    if (!jobBoxNumber || !cardNumbers || !Array.isArray(cardNumbers) || cardNumbers.length === 0) {
       return {
         success: false,
-        message: 'Validation error occurred'
+        message: 'Job box number and card numbers are required'
+      };
+    }
+
+    if (!userId || !organizationID) {
+      return {
+        success: false,
+        message: 'User and organization information are required'
       };
     }
 
     // Create job box record first
-    secureLogger.debug('About to create job box record', {
-      hasJobBoxNumber: !!jobBoxNumber,
-      hasUserId: !!userId,
-      hasOrganizationID: !!organizationID,
-      hasTimestamp: !!timestamp
-    });
-    
     try {
-      secureLogger.debug('Calling createJobBoxRecord...');
       const jobBoxRecord = createJobBoxRecord({
         boxNumber: jobBoxNumber,
         userId: userId,
@@ -621,64 +520,30 @@ export const addBatchRecords = async (organizationID, batchData) => {
         shiftUid: shiftData?.id || null
       });
 
-      secureLogger.debug('Job box record object created', {
-        hasRecord: !!jobBoxRecord,
-        boxNumber: jobBoxRecord?.boxNumber,
-        hasUserId: !!jobBoxRecord?.userId
-      });
-
-      secureLogger.debug('About to add job box document to Firestore...');
       const jobBoxDocRef = await addDoc(collection(firestore, 'jobBoxes'), jobBoxRecord);
       results.jobBox = { success: true, id: jobBoxDocRef.id };
-      secureLogger.debug('Job box record created', { hasId: !!jobBoxDocRef.id });
       
       // Update session with job box assignment if shiftData exists
       if (shiftData?.id && jobBoxDocRef.id) {
-        secureLogger.debug('Attempting to update session with job box assignment', {
-          sessionId: shiftData.id,
-          jobBoxId: jobBoxDocRef.id
-        });
         try {
           await updateSession(shiftData.id, {
             hasJobBoxAssigned: true,
             jobBoxRecordId: jobBoxDocRef.id
           });
-          secureLogger.debug('Session updated with job box assignment successfully', { 
-            sessionId: shiftData.id,
-            jobBoxId: jobBoxDocRef.id
-          });
         } catch (sessionUpdateError) {
           secureLogger.error('Error updating session with job box assignment', {
             sessionId: shiftData.id,
-            jobBoxId: jobBoxDocRef.id,
-            error: sessionUpdateError.message,
-            errorCode: sessionUpdateError.code,
-            errorStack: sessionUpdateError.stack
+            error: sessionUpdateError.message
           });
           // Don't fail the whole operation if session update fails
           results.errors.push(`Job box created but failed to update session: ${sessionUpdateError.message}`);
         }
-      } else {
-        secureLogger.debug('Skipping session update', {
-          hasShiftId: !!shiftData?.id,
-          hasJobBoxId: !!jobBoxDocRef.id
-        });
       }
     } catch (error) {
-      secureLogger.error('Error creating job box record', {
-        jobBoxNumber: jobBoxNumber,
-        error: error.message,
-        errorCode: error.code,
-        errorStack: error.stack
-      });
+      secureLogger.error('Error creating job box record', error);
       results.jobBox = { success: false, error: 'Failed to create job box record' };
       results.errors.push(`Job box ${jobBoxNumber}: ${error.message}`);
     }
-
-    secureLogger.debug('Job box creation completed, starting SD card creation', {
-      jobBoxSuccess: !!results.jobBox?.success,
-      cardCount: cardNumbers.length
-    });
 
     // Create SD card records
     for (const cardNumber of cardNumbers) {
@@ -722,11 +587,6 @@ export const addBatchRecords = async (organizationID, batchData) => {
     const jobBoxSuccess = results.jobBox?.success || false;
 
     if (jobBoxSuccess && successfulCards === totalCards) {
-      secureLogger.debug('Batch creation completed successfully', { 
-        jobBoxSuccess, 
-        successfulCards, 
-        totalCards 
-      });
       return {
         success: true,
         message: `Successfully created 1 job box and ${successfulCards} SD card records`,
