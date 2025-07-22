@@ -1,0 +1,64 @@
+/* Confirmation Modal Styles */
+.confirmation-modal {
+  border: 1px solid var(--border-color);
+}
+
+.confirmation-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.confirmation-title h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 1rem 0;
+}
+
+.modal-body p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+/* Button variants */
+.btn-danger {
+  background: #dc2626;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+}
+
+.btn-warning {
+  background: #f59e0b;
+  color: white;
+}
+
+.btn-warning:hover {
+  background: #d97706;
+}
+
+/* Icon styling */
+.text-red-500 {
+  color: #dc2626;
+}
+
+.text-yellow-500 {
+  color: #f59e0b;
+}
+
+.text-blue-500 {
+  color: #3b82f6;
+}
+
+.text-green-500 {
+  color: #10b981;
+}

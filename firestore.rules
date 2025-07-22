@@ -161,6 +161,18 @@ service cloud.firestore {
                        isAdminOrManager(request.auth.uid) &&
                        belongsToSameOrg(request.auth.uid, resource.data.organizationID);
       
+      // Allow job box assignment updates by any user in the organization
+      allow update: if request.auth != null && 
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
+                       // Only allow updating job box assignment fields
+                       request.resource.data.keys().difference(resource.data.keys()).hasOnly(['hasJobBoxAssigned', 'jobBoxRecordId']) &&
+                       // Validate field types and values
+                       request.resource.data.hasJobBoxAssigned is bool &&
+                       (request.resource.data.jobBoxRecordId == null || 
+                        request.resource.data.jobBoxRecordId is string) &&
+                       // Prevent changing other session data
+                       request.resource.data.organizationID == resource.data.organizationID;
+      
       // Admins can delete sessions
       allow delete: if request.auth != null && 
                        isAdmin(request.auth.uid) &&
@@ -169,6 +181,10 @@ service cloud.firestore {
 
     // Daily Job Reports collection
     match /dailyJobReports/{reportId} {
+      // Users can read their own reports by userId
+      allow read: if request.auth != null && 
+                     resource.data.userId == request.auth.uid;
+      
       // Users can read reports from their organization
       allow read: if request.auth != null && 
                      belongsToSameOrg(request.auth.uid, resource.data.organizationID);
@@ -202,6 +218,14 @@ service cloud.firestore {
       allow create: if request.auth != null && 
                        isAdminOrManager(request.auth.uid) &&
                        belongsToSameOrg(request.auth.uid, request.resource.data.organizationID);
+      
+      // Users can add location photos to schools in their organization
+      allow update: if request.auth != null && 
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
+                       // Only allow updating the locationPhotos field
+                       request.resource.data.keys().difference(resource.data.keys()).hasOnly(['locationPhotos']) &&
+                       // Ensure locationPhotos is an array
+                       request.resource.data.locationPhotos is list;
       
       // Admins/Managers can update schools
       allow update: if request.auth != null && 
@@ -239,6 +263,16 @@ service cloud.firestore {
       allow delete: if request.auth != null && 
                        isAdmin(request.auth.uid) &&
                        belongsToSameOrg(request.auth.uid, resource.data.organizationID);
+    }
+
+    // Sports Jobs Locks subcollection for entry-level locking
+    match /sportsJobs/{jobId}/locks/{lockId} {
+      // Allow authenticated users to read/write locks for sports jobs in their organization
+      // This enables the entry locking system to prevent simultaneous editing conflicts
+      allow read, write: if request.auth != null && 
+                           request.auth.uid != null &&
+                           // Ensure user belongs to the same organization as the parent sports job
+                           belongsToSameOrg(request.auth.uid, get(/databases/$(database)/documents/sportsJobs/$(jobId)).data.organizationID);
     }
 
     // Player Search Index collection

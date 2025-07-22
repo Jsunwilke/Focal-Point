@@ -4,6 +4,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { addSDCardRecord, addJobBoxRecord, SD_CARD_STATUSES, JOB_BOX_STATUSES } from '../../services/trackingService';
 import { getDocs, collection, query, where } from 'firebase/firestore';
 import { firestore } from '../../firebase/config';
+import NotificationModal from '../shared/NotificationModal';
+import { sanitizeFormData, validateInput, defaultRateLimiter } from '../../utils/inputSanitizer';
+import '../shared/NotificationModal.css';
 
 const ManualEntryModal = ({ type, organizationID, onClose, onSave }) => {
   const [formData, setFormData] = useState({
@@ -18,6 +21,8 @@ const ManualEntryModal = ({ type, organizationID, onClose, onSave }) => {
   const [loading, setLoading] = useState(false);
   const [schools, setSchools] = useState([]);
   const [users, setUsers] = useState([]);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [notificationData, setNotificationData] = useState(null);
   const { userProfile } = useAuth();
 
   useEffect(() => {
@@ -38,7 +43,12 @@ const ManualEntryModal = ({ type, organizationID, onClose, onSave }) => {
       }));
       setSchools(schoolsList);
     } catch (error) {
-      console.error('Error loading schools:', error);
+      setNotificationData({
+        type: 'error',
+        title: 'Error',
+        message: 'Unable to load schools. Please try again.'
+      });
+      setShowNotificationModal(true);
     }
   };
 
@@ -55,25 +65,60 @@ const ManualEntryModal = ({ type, organizationID, onClose, onSave }) => {
       }));
       setUsers(usersList);
     } catch (error) {
-      console.error('Error loading users:', error);
+      setNotificationData({
+        type: 'error',
+        title: 'Error',
+        message: 'Unable to load users. Please try again.'
+      });
+      setShowNotificationModal(true);
     }
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    
+    // Validate input based on field type
+    let isValid = true;
+    if (name === 'cardNumber') {
+      isValid = validateInput(value, 'cardNumber');
+    } else if (name === 'boxNumber') {
+      isValid = validateInput(value, 'boxNumber');
+    } else if (name === 'school') {
+      isValid = validateInput(value, 'school');
+    }
+    
+    // Only update if input is valid
+    if (isValid) {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
+    // Check rate limiting
+    const rateLimitId = `${userProfile.uid}-${organizationID}`;
+    if (!defaultRateLimiter.isAllowed(rateLimitId)) {
+      setNotificationData({
+        type: 'warning',
+        title: 'Rate Limit Exceeded',
+        message: 'Too many requests. Please wait a moment before trying again.'
+      });
+      setShowNotificationModal(true);
+      setLoading(false);
+      return;
+    }
+
     try {
+      // Sanitize form data before processing
+      const sanitizedData = sanitizeFormData(formData);
+      
       const recordData = {
-        ...formData,
+        ...sanitizedData,
         userId: userProfile.uid,
         organizationID: organizationID,
         timestamp: new Date()
@@ -82,14 +127,24 @@ const ManualEntryModal = ({ type, organizationID, onClose, onSave }) => {
       let result;
       if (type === 'sdcard') {
         if (!formData.cardNumber || !formData.school || !formData.status) {
-          alert('Please fill in all required fields');
+          setNotificationData({
+            type: 'warning',
+            title: 'Required Fields',
+            message: 'Please fill in all required fields (Card Number, School, Status).'
+          });
+          setShowNotificationModal(true);
           setLoading(false);
           return;
         }
         result = await addSDCardRecord(recordData);
       } else {
         if (!formData.boxNumber || !formData.school || !formData.status) {
-          alert('Please fill in all required fields');
+          setNotificationData({
+            type: 'warning',
+            title: 'Required Fields',
+            message: 'Please fill in all required fields (Box Number, School, Status).'
+          });
+          setShowNotificationModal(true);
           setLoading(false);
           return;
         }
@@ -99,11 +154,20 @@ const ManualEntryModal = ({ type, organizationID, onClose, onSave }) => {
       if (result.success) {
         onSave();
       } else {
-        alert('Error saving record: ' + result.error);
+        setNotificationData({
+          type: 'error',
+          title: 'Save Failed',
+          message: 'Unable to save the record. Please try again.'
+        });
+        setShowNotificationModal(true);
       }
     } catch (error) {
-      console.error('Error saving record:', error);
-      alert('Error saving record');
+      setNotificationData({
+        type: 'error',
+        title: 'Save Error',
+        message: 'Unable to save the record. Please check your connection and try again.'
+      });
+      setShowNotificationModal(true);
     } finally {
       setLoading(false);
     }
@@ -228,6 +292,15 @@ const ManualEntryModal = ({ type, organizationID, onClose, onSave }) => {
           </div>
         </form>
       </div>
+
+      <NotificationModal
+        isOpen={showNotificationModal}
+        onClose={() => setShowNotificationModal(false)}
+        title={notificationData?.title}
+        message={notificationData?.message}
+        type={notificationData?.type}
+        autoClose={notificationData?.autoClose}
+      />
     </div>
   );
 };

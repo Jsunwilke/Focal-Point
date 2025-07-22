@@ -6,6 +6,7 @@ import {
   sendPasswordResetEmail,
 } from "firebase/auth";
 import { auth } from "./config";
+import secureLogger from '../utils/secureLogger';
 
 export const signInUser = async (email, password) => {
   try {
@@ -16,7 +17,7 @@ export const signInUser = async (email, password) => {
     );
     return userCredential.user;
   } catch (error) {
-    console.error("Sign in error:", error);
+    secureLogger.error("Sign in error", error);
     throw error;
   }
 };
@@ -30,7 +31,7 @@ export const createUser = async (email, password) => {
     );
     return userCredential.user;
   } catch (error) {
-    console.error("Create user error:", error);
+    secureLogger.error("Create user error", error);
     throw error;
   }
 };
@@ -39,7 +40,7 @@ export const signOutUser = async () => {
   try {
     await signOut(auth);
   } catch (error) {
-    console.error("Sign out error:", error);
+    secureLogger.error("Sign out error", error);
     throw error;
   }
 };
@@ -48,7 +49,7 @@ export const resetPassword = async (email) => {
   try {
     await sendPasswordResetEmail(auth, email);
   } catch (error) {
-    console.error("Reset password error:", error);
+    secureLogger.error("Reset password error", error);
     throw error;
   }
 };

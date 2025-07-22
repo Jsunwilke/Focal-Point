@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { Form, Button, Alert } from "react-bootstrap";
 import * as XLSX from "xlsx";
+import DOMPurify from "dompurify";
 import { generateUniqueId } from "../../../utils/calculations";
 import { useToast } from "../../../contexts/ToastContext";
 
@@ -170,7 +171,13 @@ const FileUploadPreview = ({ rosterData, setRosterData }) => {
       const isPhone = i === phoneIndex;
       const isImages = i === imagesIndex;
 
-      let headerText = headers[i] || "";
+      let headerText = String(headers[i] || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+      
       if (isLastName) headerText += " (Name)";
       if (isFirstName) headerText += " (Subject ID)";
       if (isTeacher) headerText += " (Special)";
@@ -209,7 +216,13 @@ const FileUploadPreview = ({ rosterData, setRosterData }) => {
           j === imagesIndex;
         const cellClass = isHighlighted ? "text-primary fw-bold" : "";
 
-        html += `<td class="${cellClass}">${row[j] || ""}</td>`;
+        const cellContent = String(row[j] || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+        html += `<td class="${cellClass}">${cellContent}</td>`;
       }
 
       html += "</tr>";
@@ -223,7 +236,12 @@ const FileUploadPreview = ({ rosterData, setRosterData }) => {
       } more rows</p>`;
     }
 
-    return html;
+    // Sanitize the final HTML with DOMPurify as an additional security layer
+    return DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: ['table', 'thead', 'tbody', 'tr', 'th', 'td', 'p'],
+      ALLOWED_ATTR: ['class'],
+      KEEP_CONTENT: true
+    });
   };
 
   const handleFileSelect = async (event) => {
@@ -239,6 +257,18 @@ const FileUploadPreview = ({ rosterData, setRosterData }) => {
       showToast(
         "Error",
         "File is too large. Please select a file smaller than 10MB.",
+        "error"
+      );
+      fileInputRef.current.value = "";
+      return;
+    }
+
+    // Additional security: Check for suspicious file names
+    const suspiciousPatterns = /[<>:"|?*\x00-\x1f]|^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+    if (suspiciousPatterns.test(file.name)) {
+      showToast(
+        "Error",
+        "Invalid file name. Please rename your file and try again.",
         "error"
       );
       fileInputRef.current.value = "";
@@ -275,6 +305,11 @@ const FileUploadPreview = ({ rosterData, setRosterData }) => {
         cellStyles: false,
         cellFormulas: false,
         sheetStubs: false,
+        bookVBA: false, // Disable VBA macros
+        cellNF: false, // Disable number formats
+        cellDates: false, // Disable date parsing
+        password: "", // Ensure no password processing
+        WTF: false // Disable "What The Format" parsing
       });
 
       // Get the first sheet

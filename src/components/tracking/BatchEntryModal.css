@@ -1,0 +1,247 @@
+/* Batch Entry Modal Styles - Inherit from shared Modal.css */
+.batch-entry-modal .modal-header {
+  background: var(--primary-color, #007bff);
+  color: white;
+  padding: 1.5rem;
+  border-radius: var(--radius-lg, 8px) var(--radius-lg, 8px) 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.batch-entry-modal .modal-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.batch-entry-modal .modal-close-btn {
+  background: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.batch-entry-modal .modal-close-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.batch-entry-modal .modal-close-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.batch-entry-modal .modal-body {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.batch-entry-modal .modal-form {
+  padding: 2rem;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.batch-entry-modal .form-group {
+  margin-bottom: 0;
+}
+
+.batch-entry-modal .form-label {
+  display: block;
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.batch-entry-modal .required {
+  color: var(--red-500, #ef4444);
+}
+
+.batch-entry-modal .form-control {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  font-family: inherit;
+  background: var(--background, white);
+  color: var(--text-primary, #1e293b);
+}
+
+.batch-entry-modal .form-control:focus {
+  outline: none;
+  border-color: var(--blue-500, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.batch-entry-modal .form-control:disabled {
+  background-color: var(--gray-50, #f9fafb);
+  color: var(--gray-500, #6b7280);
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.batch-entry-modal .card-numbers-textarea {
+  min-height: 120px;
+  resize: vertical;
+  font-family: 'Courier New', monospace;
+  line-height: 1.5;
+}
+
+.batch-entry-modal .form-text {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-muted, #6c757d);
+  line-height: 1.4;
+}
+
+.batch-entry-modal .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.5rem 2rem;
+  border-top: 1px solid var(--border, #e5e7eb);
+  background: var(--gray-50, #f9fafb);
+  border-radius: 0 0 var(--radius-lg, 8px) var(--radius-lg, 8px);
+  margin-top: auto;
+}
+
+.batch-entry-modal .btn {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 80px;
+  height: 38px;
+}
+
+.batch-entry-modal .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.batch-entry-modal .btn-secondary {
+  background: var(--background, white);
+  color: var(--text-secondary, #6b7280);
+  border: 1px solid var(--border, #d1d5db);
+}
+
+.batch-entry-modal .btn-secondary:hover:not(:disabled) {
+  background: var(--gray-50, #f9fafb);
+  border-color: var(--gray-300, #d1d5db);
+}
+
+.batch-entry-modal .btn-primary {
+  background: var(--blue-600, #2563eb);
+  color: white;
+  border: 1px solid var(--blue-600, #2563eb);
+}
+
+.batch-entry-modal .btn-primary:hover:not(:disabled) {
+  background: var(--blue-700, #1d4ed8);
+  border-color: var(--blue-700, #1d4ed8);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .batch-entry-modal {
+    width: 95vw;
+    margin: 1rem;
+  }
+  
+  .batch-entry-modal .modal-form {
+    padding: 1.5rem;
+    max-height: 80vh;
+  }
+  
+  .batch-entry-modal .modal-header {
+    padding: 1rem 1.5rem;
+  }
+  
+  .batch-entry-modal .modal-header h2 {
+    font-size: 1.25rem;
+  }
+  
+  .batch-entry-modal .modal-actions {
+    flex-direction: column;
+  }
+  
+  .batch-entry-modal .btn {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+  
+  .batch-entry-modal .card-numbers-textarea {
+    min-height: 100px;
+  }
+}
+
+/* Loading State */
+.batch-entry-modal .form-control:disabled,
+.batch-entry-modal .btn:disabled {
+  position: relative;
+}
+
+.batch-entry-modal .btn-primary:disabled::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border: 2px solid transparent;
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Form Validation */
+.batch-entry-modal .form-control:invalid {
+  border-color: var(--danger-color, #dc3545);
+}
+
+.batch-entry-modal .form-control:invalid:focus {
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+}
+
+/* Custom Select Styling */
+.batch-entry-modal select.form-control {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1rem;
+  padding-right: 2.5rem;
+  appearance: none;
+}
+
+.batch-entry-modal select.form-control:disabled {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%9ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+}

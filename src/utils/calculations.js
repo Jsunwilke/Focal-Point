@@ -1,3 +1,7 @@
+// Import secure API client for external calls
+import secureApiClient from './secureApiClient';
+import secureLogger from './secureLogger';
+
 // Helper function to count valid athletes (those with last names)
 export const countValidAthletes = (roster) => {
   if (!roster || !Array.isArray(roster)) return 0;
@@ -224,25 +228,12 @@ const toRadians = (degrees) => {
   return degrees * (Math.PI / 180);
 };
 
-// Geocode address to coordinates
+// Geocode address to coordinates using secure API client
 export const geocodeAddress = async (address) => {
   try {
-    // For web browsers, we'll use a simple geocoding service
-    // In production, you'd want to use Google Maps API or similar
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`
-    );
-    const data = await response.json();
-    
-    if (data && data.length > 0) {
-      return {
-        latitude: parseFloat(data[0].lat),
-        longitude: parseFloat(data[0].lon)
-      };
-    }
-    return null;
+    return await secureApiClient.geocodeAddress(address);
   } catch (error) {
-    console.error("Geocoding error:", error);
+    secureLogger.error("Geocoding error", error);
     return null;
   }
 };
@@ -293,7 +284,7 @@ export const calculateRoundTripMileage = async (userAddress, schoolAddresses, un
 
     return Math.round(totalDistance * 10) / 10; // Round to 1 decimal place
   } catch (error) {
-    console.error("Mileage calculation error:", error);
+    secureLogger.error("Mileage calculation error", error);
     return 0;
   }
 };
@@ -365,7 +356,7 @@ export const calculateSmartFieldValue = async (field, context) => {
                 currentLng = coords.longitude;
               }
             } catch (error) {
-              console.error('Geocoding error for school:', location.address, error);
+              secureLogger.error('Geocoding error for school', error);
             }
           }
         }
@@ -431,7 +422,7 @@ export const calculateSmartFieldValue = async (field, context) => {
                 }
               },
               (error) => {
-                console.error('Geolocation error:', error);
+                secureLogger.error('Geolocation error', error);
                 resolve(fallbackValue || "Location unavailable");
               },
               {
@@ -445,7 +436,7 @@ export const calculateSmartFieldValue = async (field, context) => {
         return fallbackValue || "Geolocation not supported";
 
       case "weatherConditions":
-        // Get weather conditions using a free weather API
+        // Get weather conditions using secure API client
         try {
           // First get current location for weather
           if (navigator.geolocation) {
@@ -455,36 +446,15 @@ export const calculateSmartFieldValue = async (field, context) => {
                   const { latitude, longitude } = position.coords;
                   
                   try {
-                    // Using Open-Meteo free weather API (no API key required)
-                    const response = await fetch(
-                      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true&temperature_unit=fahrenheit`
-                    );
-                    const data = await response.json();
-                    
-                    if (data.current_weather) {
-                      const temp = Math.round(data.current_weather.temperature);
-                      const weatherCode = data.current_weather.weathercode;
-                      
-                      // Basic weather condition mapping
-                      const conditions = {
-                        0: "Clear", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
-                        45: "Foggy", 48: "Foggy", 51: "Light Drizzle", 53: "Drizzle", 55: "Heavy Drizzle",
-                        61: "Light Rain", 63: "Rain", 65: "Heavy Rain", 71: "Light Snow", 73: "Snow", 75: "Heavy Snow",
-                        80: "Rain Showers", 81: "Heavy Showers", 95: "Thunderstorm", 96: "Thunderstorm with Hail"
-                      };
-                      
-                      const condition = conditions[weatherCode] || "Unknown";
-                      resolve(`${condition}, ${temp}°F`);
-                    } else {
-                      resolve(fallbackValue || "Weather unavailable");
-                    }
+                    const weather = await secureApiClient.getWeatherConditions(latitude, longitude);
+                    resolve(weather);
                   } catch (error) {
-                    console.error('Weather API error:', error);
+                    secureLogger.error('Weather API error', error);
                     resolve(fallbackValue || "Weather unavailable");
                   }
                 },
                 (error) => {
-                  console.error('Geolocation error for weather:', error);
+                  secureLogger.error('Geolocation error for weather', error);
                   resolve(fallbackValue || "Location required for weather");
                 }
               );
@@ -493,7 +463,7 @@ export const calculateSmartFieldValue = async (field, context) => {
             return fallbackValue || "Geolocation not supported";
           }
         } catch (error) {
-          console.error('Weather calculation error:', error);
+          secureLogger.error('Weather calculation error', error);
           return fallbackValue || "Weather unavailable";
         }
 
@@ -506,7 +476,7 @@ export const calculateSmartFieldValue = async (field, context) => {
         return fallbackValue;
     }
   } catch (error) {
-    console.error("Smart field calculation error:", error);
+    secureLogger.error("Smart field calculation error", error);
     return fallbackValue;
   }
 };

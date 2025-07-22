@@ -17,6 +17,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { firestore } from "./config";
+import secureLogger from '../utils/secureLogger';
 
 // Get user profile
 export const getUserProfile = async (uid) => {
@@ -27,7 +28,7 @@ export const getUserProfile = async (uid) => {
     }
     return null;
   } catch (error) {
-    console.error("Error fetching user profile:", error);
+    secureLogger.error("Error fetching user profile", error);
     throw error;
   }
 };
@@ -43,7 +44,7 @@ export const getOrganization = async (organizationID) => {
     }
     return null;
   } catch (error) {
-    console.error("Error fetching organization:", error);
+    secureLogger.error("Error fetching organization", error);
     throw error;
   }
 };
@@ -58,7 +59,7 @@ export const createUserProfile = async (uid, data) => {
       isActive: true,
     });
   } catch (error) {
-    console.error("Error creating user profile:", error);
+    secureLogger.error("Error creating user profile", error);
     throw error;
   }
 };
@@ -70,9 +71,9 @@ export const updateUserProfile = async (uid, data) => {
       ...data,
       updatedAt: serverTimestamp(),
     });
-    console.log("User profile updated successfully");
+    secureLogger.debug("User profile updated successfully");
   } catch (error) {
-    console.error("Error updating user profile:", error);
+    secureLogger.error("Error updating user profile", error);
     throw error;
   }
 };
@@ -86,9 +87,9 @@ export const updateUserPhotoWithCrop = async (uid, photoData) => {
       photoCropSettings: photoData.cropSettings,
       updatedAt: serverTimestamp(),
     });
-    console.log("User photo and crop settings updated successfully");
+    secureLogger.debug("User photo and crop settings updated successfully");
   } catch (error) {
-    console.error("Error updating user photo with crop settings:", error);
+    secureLogger.error("Error updating user photo with crop settings", error);
     throw error;
   }
 };
@@ -100,9 +101,9 @@ export const updateUserPhotoURL = async (uid, photoURL) => {
       photoURL,
       updatedAt: serverTimestamp(),
     });
-    console.log("User photo URL updated successfully");
+    secureLogger.debug("User photo URL updated successfully");
   } catch (error) {
-    console.error("Error updating user photo URL:", error);
+    secureLogger.error("Error updating user photo URL", error);
     throw error;
   }
 };
@@ -118,7 +119,7 @@ export const createOrganization = async (organizationData) => {
     });
     return orgRef.id;
   } catch (error) {
-    console.error("Error creating organization:", error);
+    secureLogger.error("Error creating organization", error);
     throw error;
   }
 };
@@ -712,6 +713,8 @@ export const createSession = async (organizationID, sessionData) => {
       ...sessionData,
       organizationID,
       status: sessionData.status || "scheduled",
+      hasJobBoxAssigned: false,
+      jobBoxRecordId: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });

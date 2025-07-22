@@ -3,13 +3,20 @@ import { Plus, Search, Trash2, Table, Grid } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getJobBoxRecords, deleteJobBoxRecord, JOB_BOX_STATUSES, searchJobBoxes, resolveUserNames } from '../../services/trackingService';
 import ManualEntryModal from './ManualEntryModal';
+import BatchEntryModal from './BatchEntryModal';
 import LoadingSpinner from '../shared/LoadingSpinner';
 import RecordTable from './RecordTable';
+import ConfirmationModal from '../shared/ConfirmationModal';
+import NotificationModal from '../shared/NotificationModal';
+import { sanitizeSearchTerm, defaultRateLimiter } from '../../utils/inputSanitizer';
+import '../shared/ConfirmationModal.css';
+import '../shared/NotificationModal.css';
 
 const JobBoxTab = ({ organizationID }) => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showBatchModal, setShowBatchModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchField, setSearchField] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -17,6 +24,10 @@ const JobBoxTab = ({ organizationID }) => {
     // Default to table on desktop, cards on mobile
     return window.innerWidth > 768 ? 'table' : 'cards';
   });
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmModalData, setConfirmModalData] = useState(null);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [notificationData, setNotificationData] = useState(null);
   const { userProfile } = useAuth(); // eslint-disable-line no-unused-vars
 
   useEffect(() => {
@@ -31,51 +42,112 @@ const JobBoxTab = ({ organizationID }) => {
         const recordsWithNames = await resolveUserNames(result.data, organizationID);
         setRecords(recordsWithNames);
       } else {
-        console.error('Failed to load job box records:', result.error);
+        setNotificationData({
+          type: 'error',
+          title: 'Error',
+          message: 'Failed to load job box records. Please try again.'
+        });
+        setShowNotificationModal(true);
       }
     } catch (error) {
-      console.error('Error loading job box records:', error);
+      setNotificationData({
+        type: 'error',
+        title: 'Error',
+        message: 'Unable to load job box records. Please check your connection and try again.'
+      });
+      setShowNotificationModal(true);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSearch = async () => {
-    if (!searchTerm.trim()) {
+    const sanitizedSearchTerm = sanitizeSearchTerm(searchTerm);
+    
+    if (!sanitizedSearchTerm.trim()) {
       loadRecords();
+      return;
+    }
+
+    // Check rate limiting
+    const rateLimitId = `${userProfile.uid}-search-${organizationID}`;
+    if (!defaultRateLimiter.isAllowed(rateLimitId)) {
+      setNotificationData({
+        type: 'warning',
+        title: 'Rate Limit Exceeded',
+        message: 'Too many search requests. Please wait a moment before searching again.'
+      });
+      setShowNotificationModal(true);
       return;
     }
 
     setLoading(true);
     try {
-      const result = await searchJobBoxes(organizationID, searchTerm, searchField);
+      const result = await searchJobBoxes(organizationID, sanitizedSearchTerm, searchField);
       if (result.success) {
         const recordsWithNames = await resolveUserNames(result.data, organizationID);
         setRecords(recordsWithNames);
       } else {
-        console.error('Search failed:', result.error);
+        setNotificationData({
+          type: 'error',
+          title: 'Search Failed',
+          message: 'Unable to search job boxes. Please try again.'
+        });
+        setShowNotificationModal(true);
       }
     } catch (error) {
-      console.error('Error searching job boxes:', error);
+      setNotificationData({
+        type: 'error',
+        title: 'Search Error',
+        message: 'Unable to search job boxes. Please check your connection and try again.'
+      });
+      setShowNotificationModal(true);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (recordId) => {
-    if (window.confirm('Are you sure you want to delete this record?')) {
-      try {
-        const result = await deleteJobBoxRecord(recordId);
-        if (result.success) {
-          setRecords(records.filter(record => record.id !== recordId));
-        } else {
-          alert('Failed to delete record: ' + result.error);
-        }
-      } catch (error) {
-        console.error('Error deleting record:', error);
-        alert('Error deleting record');
+  const handleDelete = (recordId) => {
+    setConfirmModalData({
+      title: 'Delete Record',
+      message: 'Are you sure you want to delete this job box record? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      type: 'danger',
+      onConfirm: () => performDelete(recordId)
+    });
+    setShowConfirmModal(true);
+  };
+
+  const performDelete = async (recordId) => {
+    try {
+      const result = await deleteJobBoxRecord(recordId);
+      if (result.success) {
+        setRecords(records.filter(record => record.id !== recordId));
+        setNotificationData({
+          type: 'success',
+          title: 'Success',
+          message: 'Job box record deleted successfully.',
+          autoClose: true
+        });
+        setShowNotificationModal(true);
+      } else {
+        setNotificationData({
+          type: 'error',
+          title: 'Delete Failed',
+          message: 'Unable to delete the record. Please try again.'
+        });
+        setShowNotificationModal(true);
       }
+    } catch (error) {
+      setNotificationData({
+        type: 'error',
+        title: 'Delete Error',
+        message: 'Unable to delete the record. Please check your connection and try again.'
+      });
+      setShowNotificationModal(true);
     }
+    setShowConfirmModal(false);
   };
 
   const handleAddRecord = () => {
@@ -84,6 +156,15 @@ const JobBoxTab = ({ organizationID }) => {
 
   const handleRecordAdded = () => {
     setShowAddModal(false);
+    loadRecords();
+  };
+
+  const handleBatchAdd = () => {
+    setShowBatchModal(true);
+  };
+
+  const handleBatchRecordsAdded = () => {
+    setShowBatchModal(false);
     loadRecords();
   };
 
@@ -133,6 +214,13 @@ const JobBoxTab = ({ organizationID }) => {
               <Grid size={16} />
             </button>
           </div>
+          <button 
+            className="btn btn-secondary"
+            onClick={handleBatchAdd}
+          >
+            <Plus size={16} />
+            Batch Add
+          </button>
           <button 
             className="btn btn-primary"
             onClick={handleAddRecord}
@@ -255,6 +343,34 @@ const JobBoxTab = ({ organizationID }) => {
           onSave={handleRecordAdded}
         />
       )}
+
+      {showBatchModal && (
+        <BatchEntryModal
+          organizationID={organizationID}
+          onClose={() => setShowBatchModal(false)}
+          onSave={handleBatchRecordsAdded}
+        />
+      )}
+
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={confirmModalData?.onConfirm}
+        title={confirmModalData?.title}
+        message={confirmModalData?.message}
+        confirmText={confirmModalData?.confirmText}
+        cancelText={confirmModalData?.cancelText}
+        type={confirmModalData?.type}
+      />
+
+      <NotificationModal
+        isOpen={showNotificationModal}
+        onClose={() => setShowNotificationModal(false)}
+        title={notificationData?.title}
+        message={notificationData?.message}
+        type={notificationData?.type}
+        autoClose={notificationData?.autoClose}
+      />
     </div>
   );
 };

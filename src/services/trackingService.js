@@ -2,6 +2,7 @@ import {
   collection, 
   addDoc, 
   getDocs, 
+  getDoc,
   deleteDoc, 
   doc, 
   query, 
@@ -10,6 +11,8 @@ import {
   limit
 } from 'firebase/firestore';
 import { firestore } from '../firebase/config';
+import { updateSession } from '../firebase/firestore';
+import secureLogger from '../utils/secureLogger';
 
 // User resolution cache
 let userCache = null;
@@ -42,7 +45,7 @@ export const getUsersForOrganization = async (organizationID) => {
 
     return users;
   } catch (error) {
-    console.error('Error fetching users:', error);
+    secureLogger.error('Error fetching users', error);
     return [];
   }
 };
@@ -56,7 +59,7 @@ export const resolveUserName = async (userId, organizationID) => {
     }
     return 'Unknown User';
   } catch (error) {
-    console.error('Error resolving user name:', error);
+    secureLogger.error('Error resolving user name', error);
     return 'Unknown User';
   }
 };
@@ -74,7 +77,7 @@ export const resolveUserNames = async (records, organizationID) => {
       photographerName: userLookup[record.userId] || 'Unknown User'
     }));
   } catch (error) {
-    console.error('Error resolving user names:', error);
+    secureLogger.error('Error resolving user names', error);
     return records.map(record => ({
       ...record,
       photographerName: 'Unknown User'
@@ -112,8 +115,12 @@ export const addSDCardRecord = async (recordData) => {
     const docRef = await addDoc(collection(firestore, 'records'), record);
     return { success: true, id: docRef.id };
   } catch (error) {
-    console.error('Error adding SD card record:', error);
-    return { success: false, error: error.message };
+    // Log technical details for debugging but return user-friendly message
+    secureLogger.error('Error adding SD card record', error);
+    return { 
+      success: false, 
+      error: 'Unable to save SD card record. Please check your connection and try again.' 
+    };
   }
 };
 
@@ -150,8 +157,11 @@ export const getSDCardRecords = async (organizationID, filters = {}) => {
 
     return { success: true, data: records };
   } catch (error) {
-    console.error('Error fetching SD card records:', error);
-    return { success: false, error: error.message };
+    secureLogger.error('Error fetching SD card records', error);
+    return { 
+      success: false, 
+      error: 'Unable to load SD card records. Please check your connection and try again.' 
+    };
   }
 };
 
@@ -160,8 +170,11 @@ export const deleteSDCardRecord = async (recordId) => {
     await deleteDoc(doc(firestore, 'records', recordId));
     return { success: true };
   } catch (error) {
-    console.error('Error deleting SD card record:', error);
-    return { success: false, error: error.message };
+    secureLogger.error('Error deleting SD card record', error);
+    return { 
+      success: false, 
+      error: 'Unable to delete SD card record. Please check your connection and try again.' 
+    };
   }
 };
 
@@ -170,10 +183,36 @@ export const addJobBoxRecord = async (recordData) => {
   try {
     const record = createJobBoxRecord(recordData);
     const docRef = await addDoc(collection(firestore, 'jobBoxes'), record);
+    
+    // Update session with job box assignment if shiftUid exists
+    if (recordData.shiftUid && docRef.id) {
+      try {
+        const { updateSession } = await import('../firebase/firestore');
+        await updateSession(recordData.shiftUid, {
+          hasJobBoxAssigned: true,
+          jobBoxRecordId: docRef.id
+        });
+        secureLogger.debug('Session updated with job box assignment', { 
+          sessionId: recordData.shiftUid,
+          jobBoxId: docRef.id
+        });
+      } catch (sessionUpdateError) {
+        secureLogger.error('Error updating session with job box assignment', {
+          sessionId: recordData.shiftUid,
+          jobBoxId: docRef.id,
+          error: sessionUpdateError.message
+        });
+        // Continue - don't fail the whole operation if session update fails
+      }
+    }
+    
     return { success: true, id: docRef.id };
   } catch (error) {
-    console.error('Error adding job box record:', error);
-    return { success: false, error: error.message };
+    secureLogger.error('Error adding job box record', error);
+    return { 
+      success: false, 
+      error: 'Unable to save job box record. Please check your connection and try again.' 
+    };
   }
 };
 
@@ -210,18 +249,58 @@ export const getJobBoxRecords = async (organizationID, filters = {}) => {
 
     return { success: true, data: records };
   } catch (error) {
-    console.error('Error fetching job box records:', error);
-    return { success: false, error: error.message };
+    secureLogger.error('Error fetching job box records', error);
+    return { 
+      success: false, 
+      error: 'Unable to load job box records. Please check your connection and try again.' 
+    };
   }
 };
 
 export const deleteJobBoxRecord = async (recordId) => {
   try {
-    await deleteDoc(doc(firestore, 'jobBoxes', recordId));
+    // Get the job box record before deletion to extract shiftUid
+    const jobBoxRef = doc(firestore, 'jobBoxes', recordId);
+    const jobBoxDoc = await getDoc(jobBoxRef);
+    
+    let shiftUid = null;
+    if (jobBoxDoc.exists()) {
+      const jobBoxData = jobBoxDoc.data();
+      shiftUid = jobBoxData.shiftUid;
+    }
+    
+    // Delete the job box record
+    await deleteDoc(jobBoxRef);
+    
+    // Clear session job box assignment if shiftUid exists
+    if (shiftUid) {
+      try {
+        const { updateSession } = await import('../firebase/firestore');
+        await updateSession(shiftUid, {
+          hasJobBoxAssigned: false,
+          jobBoxRecordId: null
+        });
+        secureLogger.debug('Session job box assignment cleared', { 
+          sessionId: shiftUid,
+          deletedJobBoxId: recordId
+        });
+      } catch (sessionUpdateError) {
+        secureLogger.error('Error clearing session job box assignment', {
+          sessionId: shiftUid,
+          deletedJobBoxId: recordId,
+          error: sessionUpdateError.message
+        });
+        // Continue - don't fail the whole operation if session update fails
+      }
+    }
+    
     return { success: true };
   } catch (error) {
-    console.error('Error deleting job box record:', error);
-    return { success: false, error: error.message };
+    secureLogger.error('Error deleting job box record', error);
+    return { 
+      success: false, 
+      error: 'Unable to delete job box record. Please check your connection and try again.' 
+    };
   }
 };
 
@@ -259,7 +338,7 @@ export const getLatestSDCardStatuses = async (organizationID) => {
 
     return { success: true, data: Object.values(cardGroups) };
   } catch (error) {
-    console.error('Error getting latest SD card statuses:', error);
+    secureLogger.error('Error getting latest SD card statuses', error);
     return { success: false, error: error.message };
   }
 };
@@ -279,7 +358,7 @@ export const getLatestJobBoxStatuses = async (organizationID) => {
 
     return { success: true, data: Object.values(boxGroups) };
   } catch (error) {
-    console.error('Error getting latest job box statuses:', error);
+    secureLogger.error('Error getting latest job box statuses', error);
     return { success: false, error: error.message };
   }
 };
@@ -339,8 +418,11 @@ export const searchSDCards = async (organizationID, searchTerm, searchField = 'a
 
     return result;
   } catch (error) {
-    console.error('Error searching SD cards:', error);
-    return { success: false, error: error.message };
+    secureLogger.error('Error searching SD cards', error);
+    return { 
+      success: false, 
+      error: 'Unable to search SD cards. Please check your connection and try again.' 
+    };
   }
 };
 
@@ -398,7 +480,288 @@ export const searchJobBoxes = async (organizationID, searchTerm, searchField = '
 
     return result;
   } catch (error) {
-    console.error('Error searching job boxes:', error);
-    return { success: false, error: error.message };
+    secureLogger.error('Error searching job boxes', error);
+    return { 
+      success: false, 
+      error: 'Unable to search job boxes. Please check your connection and try again.' 
+    };
+  }
+};
+
+// Batch record creation
+export const addBatchRecords = async (organizationID, batchData) => {
+  try {
+    // Log function parameters immediately 
+    secureLogger.debug('addBatchRecords function called', {
+      organizationID: organizationID,
+      organizationIDType: typeof organizationID,
+      organizationIDTruthy: !!organizationID,
+      organizationIDLength: organizationID?.length,
+      hasBatchData: !!batchData,
+      batchDataKeys: batchData ? Object.keys(batchData) : []
+    });
+
+    const { jobBoxNumber, cardNumbers, userId, school, shiftData } = batchData;
+    const timestamp = new Date();
+    const results = {
+      jobBox: null,
+      sdCards: [],
+      errors: []
+    };
+
+    secureLogger.debug('Creating batch records', { 
+      hasJobBoxNumber: !!jobBoxNumber,
+      cardCount: cardNumbers?.length || 0,
+      hasSchool: !!school,
+      hasUserId: !!userId
+    });
+
+    // Validate required fields with detailed logging
+    try {
+      secureLogger.debug('Validating batch data', {
+        jobBoxNumber: jobBoxNumber,
+        cardNumbersType: typeof cardNumbers,
+        cardNumbersIsArray: Array.isArray(cardNumbers),
+        cardNumbersLength: cardNumbers?.length,
+        userId: !!userId,
+        organizationID: !!organizationID
+      });
+
+      secureLogger.debug('Starting validation checks...');
+
+      if (!jobBoxNumber || !cardNumbers || !Array.isArray(cardNumbers) || cardNumbers.length === 0) {
+        secureLogger.error('Validation failed: missing required fields', {
+          hasJobBoxNumber: !!jobBoxNumber,
+          hasCardNumbers: !!cardNumbers,
+          isCardNumbersArray: Array.isArray(cardNumbers),
+          cardNumbersLength: cardNumbers?.length || 0
+        });
+        return {
+          success: false,
+          message: 'Job box number and card numbers are required'
+        };
+      }
+
+      secureLogger.debug('Primary fields validation passed');
+
+      // Add detailed logging for user/org validation
+      secureLogger.debug('Checking user/org validation', {
+        userId: userId,
+        organizationID: organizationID,
+        userIdType: typeof userId,
+        organizationIDType: typeof organizationID,
+        userIdTruthy: !!userId,
+        organizationIDTruthy: !!organizationID,
+        userIdLength: userId?.length,
+        organizationIDLength: organizationID?.length
+      });
+
+      // Check specific falsy conditions
+      const userIdFalsy = !userId;
+      const orgIdFalsy = !organizationID;
+      const userIdEmpty = userId === '';
+      const orgIdEmpty = organizationID === '';
+      const userIdUndefinedString = userId === 'undefined';
+      const orgIdUndefinedString = organizationID === 'undefined';
+      const userIdNullString = userId === 'null';
+      const orgIdNullString = organizationID === 'null';
+
+      // Simple debug to see actual values
+      console.log('DEBUG VALUES:', { userId, organizationID });
+
+      if (!userId || !organizationID) {
+        secureLogger.error('Validation failed: missing user/org info', {
+          hasUserId: !!userId,
+          hasOrganizationID: !!organizationID,
+          userId: userId,
+          organizationID: organizationID,
+          userIdType: typeof userId,
+          organizationIDType: typeof organizationID,
+          failedBecauseUserId: !userId,
+          failedBecauseOrgId: !organizationID
+        });
+        
+        secureLogger.debug('About to return validation failure');
+        return {
+          success: false,
+          message: 'User and organization information are required'
+        };
+      }
+
+      secureLogger.debug('User/org validation passed successfully!');
+      secureLogger.debug('All validation passed, proceeding to create job box record');
+    } catch (validationError) {
+      secureLogger.error('Error during validation process', {
+        error: validationError.message,
+        stack: validationError.stack
+      });
+      return {
+        success: false,
+        message: 'Validation error occurred'
+      };
+    }
+
+    // Create job box record first
+    secureLogger.debug('About to create job box record', {
+      hasJobBoxNumber: !!jobBoxNumber,
+      hasUserId: !!userId,
+      hasOrganizationID: !!organizationID,
+      hasTimestamp: !!timestamp
+    });
+    
+    try {
+      secureLogger.debug('Calling createJobBoxRecord...');
+      const jobBoxRecord = createJobBoxRecord({
+        boxNumber: jobBoxNumber,
+        userId: userId,
+        school: school || 'Unknown School',
+        status: 'Packed', // Default status for batch created job boxes
+        organizationID: organizationID,
+        timestamp: timestamp,
+        shiftUid: shiftData?.id || null
+      });
+
+      secureLogger.debug('Job box record object created', {
+        hasRecord: !!jobBoxRecord,
+        boxNumber: jobBoxRecord?.boxNumber,
+        hasUserId: !!jobBoxRecord?.userId
+      });
+
+      secureLogger.debug('About to add job box document to Firestore...');
+      const jobBoxDocRef = await addDoc(collection(firestore, 'jobBoxes'), jobBoxRecord);
+      results.jobBox = { success: true, id: jobBoxDocRef.id };
+      secureLogger.debug('Job box record created', { hasId: !!jobBoxDocRef.id });
+      
+      // Update session with job box assignment if shiftData exists
+      if (shiftData?.id && jobBoxDocRef.id) {
+        secureLogger.debug('Attempting to update session with job box assignment', {
+          sessionId: shiftData.id,
+          jobBoxId: jobBoxDocRef.id
+        });
+        try {
+          await updateSession(shiftData.id, {
+            hasJobBoxAssigned: true,
+            jobBoxRecordId: jobBoxDocRef.id
+          });
+          secureLogger.debug('Session updated with job box assignment successfully', { 
+            sessionId: shiftData.id,
+            jobBoxId: jobBoxDocRef.id
+          });
+        } catch (sessionUpdateError) {
+          secureLogger.error('Error updating session with job box assignment', {
+            sessionId: shiftData.id,
+            jobBoxId: jobBoxDocRef.id,
+            error: sessionUpdateError.message,
+            errorCode: sessionUpdateError.code,
+            errorStack: sessionUpdateError.stack
+          });
+          // Don't fail the whole operation if session update fails
+          results.errors.push(`Job box created but failed to update session: ${sessionUpdateError.message}`);
+        }
+      } else {
+        secureLogger.debug('Skipping session update', {
+          hasShiftId: !!shiftData?.id,
+          hasJobBoxId: !!jobBoxDocRef.id
+        });
+      }
+    } catch (error) {
+      secureLogger.error('Error creating job box record', {
+        jobBoxNumber: jobBoxNumber,
+        error: error.message,
+        errorCode: error.code,
+        errorStack: error.stack
+      });
+      results.jobBox = { success: false, error: 'Failed to create job box record' };
+      results.errors.push(`Job box ${jobBoxNumber}: ${error.message}`);
+    }
+
+    secureLogger.debug('Job box creation completed, starting SD card creation', {
+      jobBoxSuccess: !!results.jobBox?.success,
+      cardCount: cardNumbers.length
+    });
+
+    // Create SD card records
+    for (const cardNumber of cardNumbers) {
+      if (!cardNumber || typeof cardNumber !== 'string' || cardNumber.trim() === '') {
+        results.errors.push(`Invalid card number: ${cardNumber}`);
+        continue;
+      }
+
+      try {
+        const sdCardRecord = createSDCardRecord({
+          cardNumber: cardNumber.trim(),
+          userId: userId,
+          school: school || 'Unknown School',
+          status: 'Job Box', // Default status for batch created SD cards
+          organizationID: organizationID,
+          timestamp: timestamp,
+          uploadedFromJasonsHouse: null,
+          uploadedFromAndysHouse: null
+        });
+
+        const cardDocRef = await addDoc(collection(firestore, 'records'), sdCardRecord);
+        results.sdCards.push({ 
+          cardNumber: cardNumber.trim(), 
+          success: true, 
+          id: cardDocRef.id 
+        });
+      } catch (error) {
+        secureLogger.error('Error creating SD card record', error);
+        results.sdCards.push({ 
+          cardNumber: cardNumber.trim(), 
+          success: false, 
+          error: error.message 
+        });
+        results.errors.push(`SD card ${cardNumber.trim()}: ${error.message}`);
+      }
+    }
+
+    // Calculate success rate
+    const successfulCards = results.sdCards.filter(card => card.success).length;
+    const totalCards = cardNumbers.length;
+    const jobBoxSuccess = results.jobBox?.success || false;
+
+    if (jobBoxSuccess && successfulCards === totalCards) {
+      secureLogger.debug('Batch creation completed successfully', { 
+        jobBoxSuccess, 
+        successfulCards, 
+        totalCards 
+      });
+      return {
+        success: true,
+        message: `Successfully created 1 job box and ${successfulCards} SD card records`,
+        results: results
+      };
+    } else if (successfulCards > 0 || jobBoxSuccess) {
+      secureLogger.warn('Batch creation partially successful', { 
+        jobBoxSuccess, 
+        successfulCards, 
+        totalCards,
+        errorCount: results.errors.length 
+      });
+      return {
+        success: true,
+        message: `Partially successful: ${jobBoxSuccess ? '1 job box' : '0 job boxes'} and ${successfulCards}/${totalCards} SD cards created`,
+        results: results,
+        warnings: results.errors
+      };
+    } else {
+      secureLogger.error('Batch creation failed completely', { 
+        errorCount: results.errors.length 
+      });
+      return {
+        success: false,
+        message: 'Failed to create any records',
+        results: results,
+        errors: results.errors
+      };
+    }
+  } catch (error) {
+    secureLogger.error('Error in batch record creation', error);
+    return {
+      success: false,
+      message: 'Unable to create batch records. Please check your connection and try again.',
+      error: error.message
+    };
   }
 };
