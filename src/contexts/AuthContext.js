@@ -26,6 +26,7 @@ export const AuthProvider = ({ children }) => {
   const [userProfile, setUserProfile] = useState(null);
   const [organization, setOrganization] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [organizationLoading, setOrganizationLoading] = useState(false);
 
   // Load user profile - exposed as a function so it can be called after updates
   const loadUserProfile = async (uid = null) => {
@@ -62,6 +63,19 @@ export const AuthProvider = ({ children }) => {
       return null;
     }
 
+    // Prevent concurrent organization loads
+    if (organizationLoading) {
+      secureLogger.debug("Organization already loading, skipping duplicate request");
+      return null;
+    }
+
+    // Check if we already have this organization loaded
+    if (organization?.id === orgId) {
+      secureLogger.debug("Organization already loaded, skipping");
+      return organization;
+    }
+
+    setOrganizationLoading(true);
     try {
       const org = await getOrganization(orgId);
       secureLogger.debug("getOrganization completed", { 
@@ -74,6 +88,8 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       secureLogger.error("Error in loadOrganization", error);
       return null;
+    } finally {
+      setOrganizationLoading(false);
     }
   };
 
@@ -127,10 +143,12 @@ export const AuthProvider = ({ children }) => {
 
   // Reload user profile when userProfile changes (for organization loading)
   useEffect(() => {
-    if (userProfile?.organizationID && !organization) {
+    // Only load organization if we have a profile with organizationID and no organization loaded
+    // This prevents double loading since auth state change already loads the organization
+    if (userProfile?.organizationID && !organization && !loading && !organizationLoading) {
       loadOrganization(userProfile.organizationID);
     }
-  }, [userProfile]);
+  }, [userProfile, organization, loading, organizationLoading]);
 
   // Sign in
   const signin = async (email, password) => {

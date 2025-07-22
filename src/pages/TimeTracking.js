@@ -327,9 +327,25 @@ const TimeTracking = () => {
 
   const getTotalHours = () => {
     const completedEntries = timeEntries.filter(entry => entry.status === 'clocked-out');
-    const hours = calculateTotalHours(completedEntries);
-    const currentHours = currentEntry && view === 'personal' ? elapsedTime : 0;
-    return hours + currentHours;
+    const activeEntries = timeEntries.filter(entry => entry.status === 'clocked-in');
+    
+    // Calculate completed hours
+    const completedHours = calculateTotalHours(completedEntries);
+    
+    // Calculate active hours
+    let activeHours = 0;
+    activeEntries.forEach(entry => {
+      if (entry.clockInTime) {
+        const clockInTime = entry.clockInTime.toDate 
+          ? entry.clockInTime.toDate() 
+          : new Date(entry.clockInTime);
+        const now = new Date();
+        const elapsed = (now.getTime() - clockInTime.getTime()) / (1000 * 60 * 60); // hours
+        activeHours += elapsed;
+      }
+    });
+    
+    return completedHours + activeHours;
   };
 
   const getStatistics = () => {
@@ -386,7 +402,7 @@ const TimeTracking = () => {
               <Clock size={24} />
             </div>
             <div className="stat-content">
-              <div className="stat-value">{formatDuration(stats.totalHours)}</div>
+              <div className="stat-value">{formatDuration(getTotalHours())}</div>
               <div className="stat-label">Total Hours ({dateRange})</div>
             </div>
           </div>

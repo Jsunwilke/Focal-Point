@@ -10,7 +10,7 @@ import {
   getTodayTimeEntries,
   calculateTotalHours,
   formatDuration,
-  getSessions
+  getTodaySessions
 } from '../../firebase/firestore';
 import TimeTrackingModal from '../shared/TimeTrackingModal';
 import './TimeTrackingWidget.css';
@@ -55,13 +55,10 @@ const TimeTrackingWidget = () => {
       if (!user || !organization) return;
 
       try {
-        const sessionsData = await getSessions(organization.id);
-        // Filter sessions for today and where current user is assigned as photographer
-        const today = new Date().toISOString().split('T')[0];
+        // Use optimized query that only fetches today's sessions
+        const sessionsData = await getTodaySessions(organization.id);
+        // Filter for sessions where current user is assigned as photographer
         const todaySessions = sessionsData.filter(session => {
-          // Must be today's session
-          if (session.date !== today) return false;
-          
           // Check if user is assigned to this session
           if (session.photographers && Array.isArray(session.photographers)) {
             // Multiple photographers format

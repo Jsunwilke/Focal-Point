@@ -680,6 +680,30 @@ export const getSessions = async (organizationID) => {
   }
 };
 
+// Get today's sessions only - optimized query
+export const getTodaySessions = async (organizationID) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const q = query(
+      collection(firestore, "sessions"),
+      where("organizationID", "==", organizationID),
+      where("date", "==", today)
+    );
+    const querySnapshot = await getDocs(q);
+    const sessions = [];
+    querySnapshot.forEach((doc) => {
+      sessions.push({
+        id: doc.id,
+        ...doc.data(),
+      });
+    });
+    return sessions;
+  } catch (error) {
+    console.error("Error fetching today's sessions:", error);
+    throw error;
+  }
+};
+
 // Get sessions for a specific school
 export const getSessionsForSchool = async (schoolId, organizationID) => {
   try {
