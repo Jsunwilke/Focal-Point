@@ -18,6 +18,7 @@ const CalendarView = ({
   onSessionClick, // New prop for handling session clicks
   onTimeOffClick, // New prop for handling time off clicks
   onHeaderDateClick, // New prop for handling header date clicks
+  onAddSession, // New prop for handling add session button clicks
 }) => {
   const renderView = () => {
     switch (viewMode) {
@@ -37,6 +38,7 @@ const CalendarView = ({
             onSessionClick={onSessionClick} // Pass the click handler
             onTimeOffClick={onTimeOffClick} // Pass the time off click handler
             onHeaderDateClick={onHeaderDateClick} // Pass the header date click handler
+            onAddSession={onAddSession} // Pass the add session handler
           />
         );
       case "month":
@@ -68,7 +70,9 @@ const CalendarView = ({
             isAdmin={isAdmin}
             onUpdateSession={onUpdateSession}
             onSessionClick={onSessionClick} // Pass the click handler
+            onTimeOffClick={onTimeOffClick} // Pass the time off click handler
             onHeaderDateClick={onHeaderDateClick} // Pass the header date click handler
+            onAddSession={onAddSession} // Pass the add session handler
           />
         );
     }

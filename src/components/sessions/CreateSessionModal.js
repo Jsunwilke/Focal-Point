@@ -8,17 +8,17 @@ import { getOrganizationSessionTypes, getSessionTypeColor } from "../../utils/se
 
 import secureLogger from "../../utils/secureLogger";
 
-const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userProfile }) => {
+const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userProfile, initialPhotographerId, initialDate }) => {
   const [loading, setLoading] = useState(false);
   const [schools, setSchools] = useState([]);
   const [formData, setFormData] = useState({
     schoolId: "",
-    date: "",
+    date: initialDate || "",
     startTime: "09:00",
     endTime: "15:00",
     sessionTypes: [], // No session types selected by default
     customSessionType: "", // Custom session type when "other" is selected
-    photographerIds: [], // Changed to array for multiple photographers
+    photographerIds: initialPhotographerId ? [initialPhotographerId] : [], // Pre-populate if provided
     photographerNotes: {}, // New field for photographer-specific notes
     notes: "",
     status: "scheduled",
@@ -39,6 +39,17 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
     };
     loadSchools();
   }, [isOpen, organization?.id]);
+
+  // Update form data when initial values change
+  useEffect(() => {
+    if (isOpen) {
+      setFormData(prev => ({
+        ...prev,
+        date: initialDate || prev.date,
+        photographerIds: initialPhotographerId ? [initialPhotographerId] : prev.photographerIds
+      }));
+    }
+  }, [isOpen, initialDate, initialPhotographerId]);
 
   // Get session types from organization configuration
   const sessionTypes = getOrganizationSessionTypes(organization).map(type => ({

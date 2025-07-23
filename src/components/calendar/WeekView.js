@@ -1,5 +1,6 @@
 // src/components/calendar/WeekView.js - Clean version with Multiple Photographers Support
 import React, { useState } from "react";
+import { Plus } from "lucide-react";
 import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
 
 const WeekView = ({
@@ -16,9 +17,14 @@ const WeekView = ({
   onSessionClick, // New prop for handling session clicks
   onTimeOffClick, // New prop for handling time off clicks
   onHeaderDateClick, // New prop for handling header date clicks
+  onAddSession, // New prop for handling add session clicks
 }) => {
   const [draggedSession, setDraggedSession] = useState(null);
   const [dragOver, setDragOver] = useState({
+    photographerId: null,
+    date: null,
+  });
+  const [hoveredCell, setHoveredCell] = useState({
     photographerId: null,
     date: null,
   });
@@ -386,6 +392,36 @@ const WeekView = ({
     );
   };
 
+  // Hover handlers
+  const handleCellMouseEnter = (photographerId, date) => {
+    setHoveredCell({
+      photographerId,
+      date: formatLocalDate(date)
+    });
+  };
+
+  const handleCellMouseLeave = () => {
+    setHoveredCell({
+      photographerId: null,
+      date: null
+    });
+  };
+
+  // Check if a cell is being hovered
+  const isHoveredCell = (photographerId, date) => {
+    return (
+      hoveredCell.photographerId === photographerId &&
+      hoveredCell.date === formatLocalDate(date)
+    );
+  };
+
+  // Handle add session click
+  const handleAddSessionClick = (photographerId, date) => {
+    if (onAddSession) {
+      onAddSession(photographerId, date);
+    }
+  };
+
   // Get session color based on order within the day
   const getSessionColorByOrder = (orderIndex) => {
     const colors = [
@@ -593,7 +629,7 @@ const WeekView = ({
     return baseStyle;
   };
 
-  const getSessionBlockStyle = (session, orderIndex) => {
+  const getSessionBlockStyle = (session, orderIndex, isHovered = false) => {
     // Check if this is a time off entry
     if (session.isTimeOff) {
       const baseTimeOffStyle = {
@@ -606,6 +642,7 @@ const WeekView = ({
         transition: "all 0.15s ease",
         userSelect: "none",
         opacity: 0.8,
+        width: isHovered ? "calc(100% - 35px)" : "100%",
       };
 
       // Different styling for pending vs approved status
@@ -649,6 +686,7 @@ const WeekView = ({
       cursor: "grab",
       transition: "all 0.15s ease",
       userSelect: "none",
+      width: isHovered ? "calc(100% - 35px)" : "100%",
     };
 
     // Add dragging style
@@ -795,6 +833,8 @@ const WeekView = ({
                   onDragOver={(e) => handleDragOver(e, 'unassigned', day)}
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, 'unassigned', day)}
+                  onMouseEnter={() => handleCellMouseEnter('unassigned', day)}
+                  onMouseLeave={handleCellMouseLeave}
                 >
                   {/* Drag Over Indicator */}
                   {isDragOverCell('unassigned', day) && (
@@ -811,6 +851,47 @@ const WeekView = ({
                     >
                       📅
                     </div>
+                  )}
+
+                  {/* Add Session Button */}
+                  {isHoveredCell('unassigned', day) && onAddSession && (
+                    <button
+                      className="calendar-cell__add-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddSessionClick('unassigned', day);
+                      }}
+                      style={{
+                        position: daySessions.length > 0 ? "absolute" : "absolute",
+                        top: daySessions.length > 0 ? "4px" : "50%",
+                        right: daySessions.length > 0 ? "4px" : "50%",
+                        transform: daySessions.length > 0 ? "none" : "translate(50%, -50%)",
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "50%",
+                        backgroundColor: "white",
+                        border: "1px solid #ddd",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                        opacity: 0.9,
+                        transition: "all 0.2s ease",
+                        zIndex: 10,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.opacity = "1";
+                        e.currentTarget.style.boxShadow = "0 2px 5px rgba(0,0,0,0.2)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.opacity = "0.9";
+                        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.1)";
+                      }}
+                      title="Add session"
+                    >
+                      <Plus size={14} />
+                    </button>
                   )}
 
 
@@ -835,7 +916,7 @@ const WeekView = ({
                           }
                         }}
                         style={{
-                          ...getSessionBlockStyle(session, globalOrderIndex),
+                          ...getSessionBlockStyle(session, globalOrderIndex, isHoveredCell('unassigned', day)),
                           backgroundColor: "#dc3545",
                           border: "1px dashed #ffffff",
                           color: "white"
@@ -1070,6 +1151,8 @@ const WeekView = ({
                   onDragOver={(e) => handleDragOver(e, member.id, day)}
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, member.id, day)}
+                  onMouseEnter={() => handleCellMouseEnter(member.id, day)}
+                  onMouseLeave={handleCellMouseLeave}
                 >
                   {/* Drag Over Indicator */}
                   {isDragOverCell(member.id, day) && (
@@ -1086,6 +1169,47 @@ const WeekView = ({
                     >
                       📅
                     </div>
+                  )}
+
+                  {/* Add Session Button */}
+                  {isHoveredCell(member.id, day) && onAddSession && (
+                    <button
+                      className="calendar-cell__add-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddSessionClick(member.id, day);
+                      }}
+                      style={{
+                        position: daySessions.length > 0 ? "absolute" : "absolute",
+                        top: daySessions.length > 0 ? "4px" : "50%",
+                        right: daySessions.length > 0 ? "4px" : "50%",
+                        transform: daySessions.length > 0 ? "none" : "translate(50%, -50%)",
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "50%",
+                        backgroundColor: "white",
+                        border: "1px solid #ddd",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                        opacity: 0.9,
+                        transition: "all 0.2s ease",
+                        zIndex: 10,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.opacity = "1";
+                        e.currentTarget.style.boxShadow = "0 2px 5px rgba(0,0,0,0.2)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.opacity = "0.9";
+                        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.1)";
+                      }}
+                      title="Add session"
+                    >
+                      <Plus size={14} />
+                    </button>
                   )}
 
 
@@ -1113,7 +1237,7 @@ const WeekView = ({
                           }
                         }}
                         style={{
-                          ...getSessionBlockStyle(session, globalOrderIndex),
+                          ...getSessionBlockStyle(session, globalOrderIndex, isHoveredCell(member.id, day)),
                           ...(session.isTimeOff ? {} : {
                             backgroundColor: getSessionColorByOrder(globalOrderIndex),
                             color: "white"

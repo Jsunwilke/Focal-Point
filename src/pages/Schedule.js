@@ -75,6 +75,14 @@ const subMonths = (date, months) => {
   return addMonths(date, -months);
 };
 
+// Helper function to format dates consistently
+const formatLocalDate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 // Secure storage utility functions
 const generateStorageKey = (base) => {
   // Create a simple hash-based key to obfuscate storage keys
@@ -198,6 +206,7 @@ const Schedule = () => {
   const [blockedDates, setBlockedDates] = useState([]);
   const [showQuickBlockModal, setShowQuickBlockModal] = useState(false);
   const [selectedDateForBlock, setSelectedDateForBlock] = useState(null);
+  const [createSessionInitialData, setCreateSessionInitialData] = useState(null);
 
   // Real-time listener for sessions
   useEffect(() => {
@@ -672,6 +681,21 @@ const Schedule = () => {
   const handleSessionClick = (session) => {
     setSelectedSession(session); // Use the individual calendar entry for details
     setShowDetailsModal(true);
+  };
+
+  // Handle add session button click
+  const handleAddSession = (photographerId, date) => {
+    // Format date to YYYY-MM-DD string
+    const dateString = formatLocalDate(date);
+    
+    // Set initial data for the create modal
+    setCreateSessionInitialData({
+      photographerId: photographerId === 'unassigned' ? null : photographerId,
+      date: dateString
+    });
+    
+    // Open the create session modal
+    setShowCreateModal(true);
   };
 
   // Handle time off click to open details modal
@@ -1255,6 +1279,7 @@ const Schedule = () => {
           onSessionClick={handleSessionClick}
           onTimeOffClick={handleTimeOffClick}
           onHeaderDateClick={handleHeaderDateClick}
+          onAddSession={handleAddSession}
         />
       </div>
 
@@ -1262,10 +1287,15 @@ const Schedule = () => {
       {showCreateModal && (
         <CreateSessionModal
           isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
+          onClose={() => {
+            setShowCreateModal(false);
+            setCreateSessionInitialData(null);
+          }}
           teamMembers={teamMembers}
           organization={organization}
           userProfile={userProfile}
+          initialPhotographerId={createSessionInitialData?.photographerId}
+          initialDate={createSessionInitialData?.date}
         />
       )}
 
