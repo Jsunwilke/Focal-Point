@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sports Shoot Manager</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <!-- Flatpickr CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="sports-shoot-app.css">
+</head>
+<body>
+    <!-- Login Section -->
+    <div id="loginSection" class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <h1>Sports Shoot Manager</h1>
+                <p>Sign in to access your sports shoots</p>
+            </div>
+            <div class="login-body">
+                <div class="alert alert-danger" role="alert" id="loginErrorMessage" style="display: none;"></div>
+                
+                <form id="loginForm">
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email address</label>
+                        <input type="email" class="form-control" id="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="password" required>
+                            <span class="input-group-text eye-icon" id="togglePassword">
+                                <i class="bi bi-eye"></i>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="rememberMe">
+                        <label class="form-check-label" for="rememberMe">Remember me</label>
+                        <span class="float-end text-primary" id="forgotPassword">Forgot password?</span>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100" id="loginButton">
+                        <span id="loginSpinner" class="spinner-border spinner-border-sm me-2 d-none" role="status" aria-hidden="true"></span>
+                        Sign In
+                    </button>
+                </form>
+            </div>
+            <div class="login-footer">
+                <p>Don't have an account? Contact your administrator.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application Section -->
+    <div id="appSection" class="d-none">
+        <div class="container">
+            <header class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="display-5">Sports Shoot Manager</h1>
+                    <ul class="nav nav-tabs mt-2" id="jobStatusTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="active-jobs-tab" data-bs-toggle="tab" data-bs-target="#activeJobs" type="button" role="tab" aria-controls="activeJobs" aria-selected="true">Active Jobs</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="completed-jobs-tab" data-bs-toggle="tab" data-bs-target="#completedJobs" type="button" role="tab" aria-controls="completedJobs" aria-selected="false">Completed Jobs</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="sports-stats-tab" data-bs-toggle="tab" data-bs-target="#sportsStats" type="button" role="tab" aria-controls="sportsStats" aria-selected="false">Sports Stats</button>
+                        </li>
+                    </ul>
+                </div>
+                <div>
+                    <button class="btn btn-outline-secondary me-2" id="logoutBtn">
+                        <i class="bi bi-box-arrow-right"></i> Logout
+                    </button>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createJobModal">
+                        <i class="bi bi-plus-circle"></i> Create New Job
+                    </button>
+                </div>
+            </header>
+
+            <div class="alert alert-info" role="alert" id="userInfo">
+                Logged in as <span id="userEmail"></span>
+            </div>
+
+            <!-- Search and Sort Controls -->
+            <div class="search-sort-controls mb-3">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="text" class="form-control" id="searchInput" placeholder="Search jobs or players...">
+                            <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="searchTypeDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span id="searchTypeText">Search Jobs</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="searchTypeDropdown">
+                                <li><a class="dropdown-item search-type-option" href="#" data-type="jobs">Search Jobs</a></li>
+                                <li><a class="dropdown-item search-type-option" href="#" data-type="players">Search Players</a></li>
+                            </ul>
+                            <button class="btn btn-primary" id="clearSearchBtn" style="display: none;">
+                                <i class="bi bi-x-circle"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-sort-down"></i></span>
+                            <select class="form-select" id="sortSelect">
+                                <option value="date-desc" selected>Date (Newest First)</option>
+                                <option value="date-asc">Date (Oldest First)</option>
+                                <option value="name-asc">School Name (A-Z)</option>
+                                <option value="name-desc">School Name (Z-A)</option>
+                                <option value="seasonType-asc">Season/Type (A-Z)</option>
+                                <option value="seasonType-desc">Season/Type (Z-A)</option>
+                                <option value="sport-asc">Sport (A-Z)</option>
+                                <option value="sport-desc">Sport (Z-A)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Player Search Results -->
+            <div id="playerSearchResults" class="mt-3" style="display: none;">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Player Search Results</h5>
+                        <button type="button" class="btn-close" aria-label="Close" id="closePlayerSearchBtn"></button>
+                    </div>
+                    <div class="card-body">
+                        <div id="playerResultsContent">
+                            <!-- Player search results will be displayed here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="jobStatusTabsContent">
+                <div class="tab-pane fade show active" id="activeJobs" role="tabpanel" aria-labelledby="active-jobs-tab">
+                    <div id="jobList" class="row">
+                        <!-- Active jobs will be populated here -->
+                        <div class="col-12 text-center py-5" id="loadingJobs">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">Loading sports jobs...</p>
+                        </div>
+                        <div class="col-12 text-center py-5 d-none" id="noJobs">
+                            <p class="text-muted">No active sports jobs found. Create your first job to get started.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="tab-pane fade" id="completedJobs" role="tabpanel" aria-labelledby="completed-jobs-tab">
+                    <div class="folder-navigation mb-3" id="folderNavigation" style="display: none;">
+                        <nav aria-label="breadcrumb">
+                            <ol class="breadcrumb" id="folderBreadcrumb">
+                                <li class="breadcrumb-item"><a href="#" data-folder-level="root">All Schools</a></li>
+                            </ol>
+                        </nav>
+                    </div>
+                    <div id="archivedJobList" class="row">
+                        <!-- Completed jobs will be populated here -->
+                        <div class="col-12 text-center py-5" id="loadingArchivedJobs">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">Loading completed jobs...</p>
+                        </div>
+                        <div class="col-12 text-center py-5 d-none" id="noArchivedJobs">
+                            <p class="text-muted">No completed jobs found. Jobs marked as complete will appear here.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="tab-pane fade" id="sportsStats" role="tabpanel" aria-labelledby="sports-stats-tab">
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0">Photography Stats by Sport</h5>
+                                    <button class="btn btn-sm btn-outline-secondary" id="refreshStatsBtn">
+                                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                                    </button>
+                                </div>
+                                <div class="card-body">
+                                    <div id="statsContent">
+                                        <!-- Stats will be displayed here -->
+                                    </div>
+                                    <div class="mt-3">
+                                        <small class="text-muted">
+                                            * Statistics include all athletes across all jobs in your organization.
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Job Modal -->
+    <div class="modal fade" id="createJobModal" tabindex="-1" aria-labelledby="createJobModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createJobModalLabel">Create New Sports Job</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createJobForm">
+                        <div class="mb-3">
+                            <label for="schoolName" class="form-label">School Name</label>
+                            <select class="form-select" id="schoolName" required>
+                                <option value="">Select School...</option>
+                                <!-- Options will be populated dynamically from dropdownData collection -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="seasonType" class="form-label">Season/Type</label>
+                            <select class="form-select" id="seasonType" required>
+                                <option value="">Select Season/Type...</option>
+                                <option value="Fall Sports">Fall Sports</option>
+                                <option value="Winter Sports">Winter Sports</option>
+                                <option value="Spring Sports">Spring Sports</option>
+                                <option value="League">League</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sportName" class="form-label">Sport <span class="text-muted">(Optional)</span></label>
+                            <input type="text" class="form-control" id="sportName" placeholder="e.g., Basketball, Soccer, Baseball">
+                        </div>
+                        <div class="mb-3">
+                            <label for="shootDate" class="form-label">Shoot Date</label>
+                            <input type="text" class="form-control" id="shootDate" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="location" class="form-label">Location</label>
+                            <input type="text" class="form-control" id="location">
+                        </div>
+                        <div class="mb-3">
+                            <label for="photographer" class="form-label">Photographer</label>
+                            <input type="text" class="form-control" id="photographer">
+                        </div>
+                        <div class="mb-3">
+                            <label for="additionalNotes" class="form-label">Additional Notes</label>
+                            <textarea class="form-control" id="additionalNotes" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="rosterFile" class="form-label">Upload Roster (Excel or CSV)</label>
+                            <input class="form-control" type="file" id="rosterFile" accept=".xlsx,.xls,.csv">
+                            <div id="fileHelp" class="form-text">
+                                Excel file should include columns for: Last Name, First Name, Teacher, Group, Email, Phone.<br>
+                                Column headers will be automatically detected and mapped appropriately.
+                            </div>
+                        </div>
+                        <div id="filePreview" class="my-3 d-none">
+                            <h6>Roster Preview:</h6>
+                            <div id="previewContainer" class="table-responsive"></div>
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <span class="text-muted" id="previewStats"></span>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="refreshPreview">
+                                    <i class="bi bi-arrow-clockwise"></i> Refresh Preview
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="createJobBtn">Create Job</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Job Modal -->
+    <div class="modal fade" id="viewJobModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewJobTitle">Job Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-4" id="jobDetails">
+                        <!-- Job details will be displayed here -->
+                    </div>
+
+                    <ul class="nav nav-tabs" id="jobTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="roster-tab" data-bs-toggle="tab" data-bs-target="#roster" type="button" role="tab" aria-controls="roster" aria-selected="true">
+                                Athletes Roster
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="groups-tab" data-bs-toggle="tab" data-bs-target="#groups" type="button" role="tab" aria-controls="groups" aria-selected="false">
+                                Group Images
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="job-stats-tab" data-bs-toggle="tab" data-bs-target="#jobStats" type="button" role="tab" aria-controls="jobStats" aria-selected="false">
+                                Job Stats
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="export-tab" data-bs-toggle="tab" data-bs-target="#export" type="button" role="tab" aria-controls="export" aria-selected="false">
+                                Export Data
+                            </button>
+                        </li>
+                    </ul>
+                    <div class="tab-content" id="jobTabsContent">
+                        <div class="tab-pane fade show active" id="roster" role="tabpanel" aria-labelledby="roster-tab">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="mb-0">Athletes Roster</h5>
+                                <div>
+                                    <button class="btn btn-sm btn-primary me-2" id="addRosterEntryBtn">
+                                        <i class="bi bi-plus-circle"></i> Add Athlete
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary" id="refreshRosterBtn">
+                                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="roster-table" id="rosterTable">
+                                    <thead>
+                                        <tr>
+                                            <th class="sortable" data-sort="lastName">Last Name <span class="field-mapping">(Name)</span> <i class="sort-icon bi"></i></th>
+                                            <th class="sortable" data-sort="firstName">First Name <span class="field-mapping">(Subject ID)</span> <i class="sort-icon bi"></i></th>
+                                            <th class="sortable" data-sort="teacher">Teacher <span class="field-mapping">(Special)</span> <i class="sort-icon bi"></i></th>
+                                            <th class="sortable" data-sort="group">Group <span class="field-mapping">(Sport/Team)</span> <i class="sort-icon bi"></i></th>
+                                            <th class="sortable" data-sort="email">Email <i class="sort-icon bi"></i></th>
+                                            <th class="sortable" data-sort="phone">Phone <i class="sort-icon bi"></i></th>
+                                            <th class="sortable" data-sort="imageNumbers">Images <i class="sort-icon bi"></i></th>
+                                            <th class="sortable" data-sort="notes">Notes <i class="sort-icon bi"></i></th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="rosterTableBody">
+                                        <!-- Roster entries will be displayed here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="groups" role="tabpanel" aria-labelledby="groups-tab">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="mb-0">Group Images</h5>
+                                <div>
+                                    <button class="btn btn-sm btn-primary me-2" id="addGroupBtn">
+                                        <i class="bi bi-plus-circle"></i> Add Group
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary" id="refreshGroupsBtn">
+                                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="groupsList">
+                                <!-- Group entries will be displayed here -->
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="jobStats" role="tabpanel" aria-labelledby="job-stats-tab">
+                            <div class="mt-3">
+                                <div id="jobStatsContent">
+                                    <!-- Job-specific stats will be displayed here -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="export" role="tabpanel" aria-labelledby="export-tab">
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="mb-0">Export Options</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label class="form-label d-block">What to Export</label>
+                                                <div class="form-check form-check-inline">
+                                                    <input class="form-check-input" type="checkbox" id="exportRoster" checked>
+                                                    <label class="form-check-label" for="exportRoster">Athletes Roster</label>
+                                                </div>
+                                                <div class="form-check form-check-inline">
+                                                    <input class="form-check-input" type="checkbox" id="exportGroups" checked>
+                                                    <label class="form-check-label" for="exportGroups">Group Images</label>
+                                                </div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Format</label>
+                                                <select class="form-select" id="exportFormat">
+                                                    <option value="xlsx" selected>Excel (.xlsx)</option>
+                                                    <option value="csv">CSV</option>
+                                                </select>
+                                            </div>
+                                            <button class="btn btn-success w-100" id="exportDataBtn">
+                                                <i class="bi bi-download"></i> Export Data
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="mb-0">Export Tips</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <p>The exported file includes mappings for Captura Workflow:</p>
+                                            <ul>
+                                                <li><strong>Last Name</strong> column maps to <strong>Name</strong></li>
+                                                <li><strong>First Name</strong> column maps to <strong>Subject ID</strong></li>
+                                                <li><strong>Teacher</strong> column maps to <strong>Special</strong></li>
+                                                <li><strong>Group</strong> column maps to <strong>Sport/Team</strong></li>
+                                                <li><strong>Images</strong> column contains data added by photographers</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer d-flex justify-content-between">
+                    <div>
+                        <button type="button" id="toggleArchiveBtn" class="btn btn-outline-success">
+                            <i class="bi bi-check-circle"></i> <span id="archiveButtonText">Mark as Completed</span>
+                        </button>
+                    </div>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Roster Entry Modal -->
+    <div class="modal fade" id="rosterEntryModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="rosterEntryModalTitle">Add Athlete</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="rosterEntryForm">
+                        <input type="hidden" id="entryId">
+                        <div class="mb-3">
+                            <label for="lastName" class="form-label">Last Name <span class="field-mapping">(Name)</span></label>
+                            <input type="text" class="form-control" id="lastName">
+                        </div>
+                        <div class="mb-3">
+                            <label for="firstName" class="form-label">First Name <span class="field-mapping">(Subject ID)</span></label>
+                            <input type="text" class="form-control" id="firstName">
+                        </div>
+                        <div class="mb-3">
+                            <label for="teacher" class="form-label">Teacher <span class="field-mapping">(Special)</span></label>
+                            <input type="text" class="form-control" id="teacher">
+                        </div>
+                        <div class="mb-3">
+                            <label for="group" class="form-label">Group <span class="field-mapping">(Sport/Team)</span></label>
+                            <input type="text" class="form-control" id="group">
+                        </div>
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email">
+                        </div>
+                        <div class="mb-3">
+                            <label for="phone" class="form-label">Phone</label>
+                            <input type="text" class="form-control" id="phone">
+                        </div>
+                        <div class="mb-3">
+                            <label for="imageNumbers" class="form-label">Image Numbers</label>
+                            <input type="text" class="form-control" id="imageNumbers">
+                        </div>
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Notes</label>
+                            <textarea class="form-control" id="notes" rows="2"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveRosterEntryBtn">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Group Modal -->
+    <div class="modal fade" id="groupModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="groupModalTitle">Add Group</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="groupForm">
+                        <input type="hidden" id="groupId">
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <input type="text" class="form-control" id="description" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="groupImageNumbers" class="form-label">Image Numbers</label>
+                            <input type="text" class="form-control" id="groupImageNumbers">
+                        </div>
+                        <div class="mb-3">
+                            <label for="groupNotes" class="form-label">Notes</label>
+                            <textarea class="form-control" id="groupNotes" rows="2"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveGroupBtn">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reset Password Modal -->
+    <div class="modal fade" id="resetPasswordModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Reset Password</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Enter your email address and we'll send you a link to reset your password.</p>
+                    <div class="alert alert-danger d-none" id="resetErrorMessage"></div>
+                    <div class="alert alert-success d-none" id="resetSuccessMessage"></div>
+                    <div class="mb-3">
+                        <label for="resetEmail" class="form-label">Email address</label>
+                        <input type="email" class="form-control" id="resetEmail" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="sendResetLinkBtn">
+                        <span id="resetSpinner" class="spinner-border spinner-border-sm me-2 d-none" role="status" aria-hidden="true"></span>
+                        Send Reset Link
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container for notifications -->
+    <div class="toast-container"></div>
+
+    <!-- JavaScript Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+    <!-- Firebase modules -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+
+    <!-- Custom JavaScript -->
+    <script src="app.js"></script>
+</body>
+</html>

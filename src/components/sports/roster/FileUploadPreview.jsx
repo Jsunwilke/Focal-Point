@@ -359,10 +359,11 @@ const FileUploadPreview = ({ rosterData, setRosterData }) => {
         },
       });
 
-      showToast(
-        "Success",
-        `Successfully processed ${result.processedData.length} entries`
-      );
+      // Commented out to prevent re-renders in ImportRosterModal
+      // showToast(
+      //   "Success",
+      //   `Successfully processed ${result.processedData.length} entries`
+      // );
     } catch (error) {
       console.error("Error processing file:", error);
 

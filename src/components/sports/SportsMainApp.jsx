@@ -10,6 +10,7 @@ import PlayerSearchResults from "./search/PlayerSearchResults";
 import SportsStats from "./stats/SportsStats";
 import CreateJobModal from "./jobs/CreateJobModal";
 import ViewJobModal from "./jobs/ViewJobModal";
+import ImportRosterModal from "./jobs/ImportRosterModal";
 import LoadingSpinner from "./common/LoadingSpinner";
 
 const SportsMainApp = () => {
@@ -20,6 +21,8 @@ const SportsMainApp = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [highlightPlayerId, setHighlightPlayerId] = useState(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [selectedImportJob, setSelectedImportJob] = useState(null);
 
   const [searchState, setSearchState] = useState({
     isActive: false,
@@ -45,6 +48,11 @@ const SportsMainApp = () => {
 
   const handleCreateJob = () => {
     setShowCreateModal(true);
+  };
+
+  const handleImportJob = (job) => {
+    setSelectedImportJob(job);
+    setShowImportModal(true);
   };
 
   const handleTabChange = (tab) => {
@@ -148,6 +156,21 @@ const SportsMainApp = () => {
           }}
           jobId={selectedJobId}
           highlightPlayerId={highlightPlayerId}
+          onImportJob={handleImportJob}
+        />
+      )}
+
+      {showImportModal && (
+        <ImportRosterModal
+          show={showImportModal}
+          onHide={async (shouldRefresh) => {
+            setShowImportModal(false);
+            setSelectedImportJob(null);
+            if (shouldRefresh) {
+              // The ViewJobModal will refresh when it regains focus
+            }
+          }}
+          job={selectedImportJob}
         />
       )}
     </div>

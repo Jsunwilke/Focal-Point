@@ -13,6 +13,33 @@ import secureLogger from '../utils/secureLogger';
 
 const AuthContext = createContext({});
 
+// Utility function to update favicon
+const updateFavicon = (logoURL) => {
+  if (!logoURL) return;
+  
+  try {
+    // Remove existing favicons
+    const existingLinks = document.querySelectorAll("link[rel*='icon']");
+    existingLinks.forEach(link => link.remove());
+    
+    // Add new favicon
+    const link = document.createElement('link');
+    link.type = 'image/x-icon';
+    link.rel = 'icon';
+    link.href = logoURL;
+    document.head.appendChild(link);
+    
+    // Also add as shortcut icon for broader compatibility
+    const shortcutLink = document.createElement('link');
+    shortcutLink.type = 'image/x-icon';
+    shortcutLink.rel = 'shortcut icon';
+    shortcutLink.href = logoURL;
+    document.head.appendChild(shortcutLink);
+  } catch (error) {
+    console.error('Error updating favicon:', error);
+  }
+};
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -84,6 +111,12 @@ export const AuthProvider = ({ children }) => {
         hasOrgName: !!org?.name 
       });
       setOrganization(org);
+      
+      // Update favicon if organization has a logo
+      if (org?.logoURL) {
+        updateFavicon(org.logoURL);
+      }
+      
       return org;
     } catch (error) {
       secureLogger.error("Error in loadOrganization", error);

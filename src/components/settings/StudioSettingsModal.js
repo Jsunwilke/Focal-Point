@@ -17,9 +17,13 @@ import {
   Plus,
   Trash2,
   Calendar,
+  Upload,
+  Image,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { updateOrganization } from "../../firebase/firestore";
+import { storage } from "../../firebase/config";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import Button from "../shared/Button";
 import { 
   getOrganizationSessionTypes, 
@@ -94,6 +98,9 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState("general");
   const [newSessionType, setNewSessionType] = useState({ name: '', color: '#3b82f6' });
   const [sessionTypeErrors, setSessionTypeErrors] = useState({});
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   // Check if user has admin permissions
   const isAdmin = userProfile?.role === "admin";
@@ -186,6 +193,11 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
         },
       });
       console.log("Initialized session types:", organization.sessionTypes || getDefaultSessionTypesForNewOrg());
+      
+      // Set logo preview if organization has a logo
+      if (organization.logoURL) {
+        setLogoPreview(organization.logoURL);
+      }
     }
   }, [isOpen, organization]);
 
@@ -331,6 +343,65 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
     }));
   };
 
+  const handleLogoChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'];
+    if (!validTypes.includes(file.type)) {
+      setErrors({ ...errors, logo: 'Please select a valid image file (PNG, JPG, or SVG)' });
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors({ ...errors, logo: 'Image size must be less than 5MB' });
+      return;
+    }
+
+    setLogoFile(file);
+    setErrors({ ...errors, logo: null });
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setLogoPreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const uploadLogo = async () => {
+    if (!logoFile || !organization?.id) return null;
+
+    try {
+      setUploadingLogo(true);
+      
+      // Delete old logo if exists
+      if (organization.logoURL) {
+        try {
+          const oldLogoRef = ref(storage, `organizations/${organization.id}/logo`);
+          await deleteObject(oldLogoRef);
+        } catch (error) {
+          // Ignore if old logo doesn't exist
+          console.log('No old logo to delete');
+        }
+      }
+
+      // Upload new logo
+      const logoRef = ref(storage, `organizations/${organization.id}/logo`);
+      const snapshot = await uploadBytes(logoRef, logoFile);
+      const logoURL = await getDownloadURL(snapshot.ref);
+      
+      return logoURL;
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      throw new Error('Failed to upload logo');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -340,9 +411,16 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
 
     setLoading(true);
     try {
+      // Upload logo if changed
+      let logoURL = organization.logoURL;
+      if (logoFile) {
+        logoURL = await uploadLogo();
+      }
+
       // Prepare update data
       const updateData = {
         ...formData,
+        ...(logoURL && { logoURL }),
         updatedAt: new Date(),
       };
 
@@ -594,6 +672,75 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
                     {errors.website && (
                       <span className="form-error-text">{errors.website}</span>
                     )}
+                  </div>
+
+                  <div className="form-section">
+                    <h3 className="form-section__title">
+                      <Image size={16} />
+                      Studio Logo
+                    </h3>
+                    
+                    <div className="form-group">
+                      <label className="form-label">
+                        Upload your studio logo
+                      </label>
+                      <p className="form-text">
+                        Recommended size: 512x512px. Supports PNG, JPG, and SVG.
+                      </p>
+                      
+                      <div className="logo-upload-container">
+                        {logoPreview && (
+                          <div className="logo-preview">
+                            <img src={logoPreview} alt="Studio logo preview" />
+                          </div>
+                        )}
+                        
+                        <div className="logo-upload-controls">
+                          <input
+                            type="file"
+                            id="logo-upload"
+                            accept="image/png,image/jpeg,image/jpg,image/svg+xml"
+                            onChange={handleLogoChange}
+                            style={{ display: 'none' }}
+                          />
+                          <label
+                            htmlFor="logo-upload"
+                            className="btn btn-outline-primary"
+                            style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+                          >
+                            <Upload size={16} />
+                            {logoPreview ? 'Change Logo' : 'Upload Logo'}
+                          </label>
+                          
+                          {logoPreview && (
+                            <button
+                              type="button"
+                              className="btn btn-outline-danger"
+                              onClick={() => {
+                                setLogoFile(null);
+                                setLogoPreview(null);
+                              }}
+                              style={{ marginLeft: '0.5rem' }}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                        
+                        {errors.logo && (
+                          <span className="form-error-text">{errors.logo}</span>
+                        )}
+                        
+                        {uploadingLogo && (
+                          <div className="upload-progress">
+                            <div className="spinner-border spinner-border-sm" role="status">
+                              <span className="visually-hidden">Uploading...</span>
+                            </div>
+                            <span style={{ marginLeft: '0.5rem' }}>Uploading logo...</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
 

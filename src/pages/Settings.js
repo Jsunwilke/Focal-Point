@@ -60,7 +60,8 @@ const Settings = () => {
       icon: <Users size={24} />,
       color: "orange",
       available: isAdmin,
-      modal: null // Future implementation
+      action: "navigate",
+      path: "/team"
     }
   ];
 
@@ -142,15 +143,24 @@ const Settings = () => {
 
       {/* Modals */}
       {activeModal === "profile" && (
-        <ProfileSettingsModal onClose={closeModal} />
+        <ProfileSettingsModal 
+          isOpen={activeModal === "profile"} 
+          onClose={closeModal} 
+        />
       )}
 
       {activeModal === "studio" && (
-        <StudioSettingsModal onClose={closeModal} />
+        <StudioSettingsModal 
+          isOpen={activeModal === "studio"} 
+          onClose={closeModal} 
+        />
       )}
 
       {activeModal === "templates" && (
-        <ReportTemplatesModal onClose={closeModal} />
+        <ReportTemplatesModal 
+          isOpen={activeModal === "templates"} 
+          onClose={closeModal} 
+        />
       )}
     </div>
   );

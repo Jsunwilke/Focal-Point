@@ -49,7 +49,7 @@ const formatJobDate = (date) => {
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { Button, Tab, Tabs } from "react-bootstrap";
-import { Edit3 } from "lucide-react";
+import { Edit3, Upload } from "lucide-react";
 import { useJobs } from "../../../contexts/JobsContext";
 import { formatDate } from "../../../utils/dateHelpers";
 import {
@@ -63,7 +63,7 @@ import ExportModal from "../common/ExportModal";
 import EditJobModal from "./EditJobModal";
 import LoadingSpinner from "../common/LoadingSpinner";
 
-const ViewJobModal = ({ show, onHide, jobId, highlightPlayerId }) => {
+const ViewJobModal = ({ show, onHide, jobId, highlightPlayerId, onImportJob }) => {
   const {
     getJob,
     toggleJobArchiveStatus,
@@ -98,11 +98,10 @@ const ViewJobModal = ({ show, onHide, jobId, highlightPlayerId }) => {
     return () => {
       if (!show) {
         setCurrentJobID("");
-        setRosterData([]);
-        setGroupsData([]);
+        // Don't clear roster/groups data here as it causes issues with sub-modals
       }
     };
-  }, [show, jobId, setCurrentJobID, setRosterData, setGroupsData]);
+  }, [show, jobId, setCurrentJobID]);
 
   const loadJobData = async () => {
     setLoading(true);
@@ -251,6 +250,15 @@ const ViewJobModal = ({ show, onHide, jobId, highlightPlayerId }) => {
             >
               <Edit3 size={16} className="me-1" />
               Edit Details
+            </Button>
+            <Button
+              variant="outline-secondary"
+              size="sm"
+              onClick={() => onImportJob && onImportJob(job)}
+              disabled={!job}
+            >
+              <Upload size={16} className="me-1" />
+              Import
             </Button>
             <button
               onClick={handleClose}
@@ -475,18 +483,22 @@ const ViewJobModal = ({ show, onHide, jobId, highlightPlayerId }) => {
   return (
     <>
       {ReactDOM.createPortal(modalContent, document.body)}
-      <ExportModal
-        show={showExportModal}
-        onHide={() => setShowExportModal(false)}
-        job={job}
-        rosterData={rosterData}
-        groupsData={groupsData}
-      />
-      <EditJobModal
-        show={showEditModal}
-        onHide={() => setShowEditModal(false)}
-        job={job}
-      />
+      {showExportModal && (
+        <ExportModal
+          show={showExportModal}
+          onHide={() => setShowExportModal(false)}
+          job={job}
+          rosterData={rosterData}
+          groupsData={groupsData}
+        />
+      )}
+      {showEditModal && (
+        <EditJobModal
+          show={showEditModal}
+          onHide={() => setShowEditModal(false)}
+          job={job}
+        />
+      )}
     </>
   );
 };

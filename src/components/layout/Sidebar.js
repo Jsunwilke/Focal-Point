@@ -24,10 +24,11 @@ import "./Sidebar.css";
 const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { userProfile } = useAuth();
+  const { userProfile, organization } = useAuth();
 
   // Check if user has admin/manager permissions
-  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager';
+  const isAdminOrManager = userProfile?.role === 'admin' || userProfile?.role === 'manager';
+  const isAdminOnly = userProfile?.role === 'admin';
 
   // Navigation items with Lucide icons
   const navigationItems = [
@@ -96,25 +97,11 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       enabled: true,
     },
     {
-      id: "team",
-      label: "Team",
-      icon: Users,
-      path: "/team",
-      enabled: true,
-    },
-    {
       id: "daily-reports",
       label: "Daily Reports",
       icon: FileText,
       path: "/daily-reports",
       enabled: true,
-    },
-    {
-      id: "reports",
-      label: "Reports",
-      icon: BarChart3,
-      path: "/reports",
-      enabled: false,
     },
     {
       id: "settings",
@@ -145,8 +132,24 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
   return (
     <aside className={`sidebar ${isMobile ? 'sidebar--mobile' : ''} ${isMobile && isOpen ? 'sidebar--open' : ''} ${!isMobile && isCollapsed ? 'sidebar--collapsed' : ''}`}>
       <div className="sidebar__header">
-        <h1 className="sidebar__logo">iconik</h1>
-        <p className="sidebar__subtitle">Studio Management</p>
+        {organization?.logoURL ? (
+          <div className="sidebar__logo-container">
+            <img 
+              src={organization.logoURL} 
+              alt={`${organization.name} logo`}
+              className="sidebar__logo-image"
+            />
+          </div>
+        ) : (
+          <>
+            <h1 className="sidebar__logo">
+              {organization?.name || 'iconik'}
+            </h1>
+            <p className="sidebar__subtitle">
+              Studio Management
+            </p>
+          </>
+        )}
         {!isMobile && (
           <button 
             className="sidebar__toggle" 
@@ -161,7 +164,7 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       <nav className="sidebar__nav">
         <ul className="sidebar__nav-list">
           {navigationItems
-            .filter(item => !item.adminOnly || isAdmin)
+            .filter(item => !item.adminOnly || isAdminOnly)
             .map((item) => {
             const IconComponent = item.icon;
             return (
@@ -186,12 +189,6 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
           })}
         </ul>
       </nav>
-
-      <div className="sidebar__footer">
-        <div className="sidebar__coming-soon">
-          <p>More features coming soon!</p>
-        </div>
-      </div>
     </aside>
   );
 };

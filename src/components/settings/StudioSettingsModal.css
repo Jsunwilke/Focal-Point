@@ -2,6 +2,43 @@
 
 /* StudioSettingsModal inherits base modal styles from Modal.css */
 
+/* Logo Upload Styles */
+.logo-upload-container {
+  margin-top: var(--spacing-md);
+}
+
+.logo-preview {
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background-color: var(--background-secondary);
+  text-align: center;
+}
+
+.logo-preview img {
+  max-width: 200px;
+  max-height: 200px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
+.logo-upload-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.upload-progress {
+  display: flex;
+  align-items: center;
+  margin-top: var(--spacing-sm);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
 .modal--large {
   max-width: 800px;
   max-height: 90vh;

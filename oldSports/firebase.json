@@ -1,0 +1,11 @@
+{
+  "hosting": {
+    "site": "iconinksports",
+    "public": "main",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+}
