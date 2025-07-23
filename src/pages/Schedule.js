@@ -7,6 +7,7 @@ import {
   updateSession,
   getSession,
   getSchools,
+  publishMultipleSessions,
 } from "../firebase/firestore";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { firestore } from "../firebase/config";
@@ -33,6 +34,7 @@ import {
   X,
   Calendar,
   Shield,
+  Check,
 } from "lucide-react";
 import "./Schedule.css";
 
@@ -224,10 +226,20 @@ const Schedule = () => {
 
         const sessionsData = [];
         snapshot.forEach((doc) => {
-          sessionsData.push({
+          const sessionData = {
             id: doc.id,
             ...doc.data(),
-          });
+          };
+          
+          // Check if user can see unpublished sessions
+          const isAdminOrManager = userProfile?.role === 'admin' || userProfile?.role === 'manager';
+          
+          // Include session if:
+          // 1. It's published (or isPublished is not set for backward compatibility)
+          // 2. User is admin/manager (can see all sessions)
+          if (sessionData.isPublished !== false || isAdminOrManager) {
+            sessionsData.push(sessionData);
+          }
         });
 
         // Convert sessions to calendar format
@@ -272,6 +284,7 @@ const Schedule = () => {
                 sessionTypes: session.sessionTypes || [session.sessionType || "session"],
                 customSessionType: session.customSessionType, // Include custom session type
                 status: session.status || "scheduled",
+                isPublished: session.isPublished !== false, // Default to true for backward compatibility
                 schoolId: session.schoolId,
                 schoolName: session.schoolName || session.location || "",
                 location: session.location || session.schoolName || "",
@@ -294,6 +307,7 @@ const Schedule = () => {
                   sessionTypes: session.sessionTypes || [session.sessionType || "session"],
                   customSessionType: session.customSessionType, // Include custom session type
                   status: session.status || "scheduled",
+                  isPublished: session.isPublished !== false, // Default to true for backward compatibility
                   schoolId: session.schoolId,
                   schoolName: session.schoolName || session.location || "",
                   location: session.location || session.schoolName || "",
@@ -696,6 +710,30 @@ const Schedule = () => {
     
     // Open the create session modal
     setShowCreateModal(true);
+  };
+  
+  // Handle publishing all unpublished sessions in current view
+  const handlePublishSessions = async () => {
+    try {
+      // Get all unpublished session IDs from current sessions
+      const unpublishedSessionIds = sessions
+        .filter(s => s.isPublished === false)
+        .map(s => s.sessionId)
+        .filter((id, index, self) => self.indexOf(id) === index); // Remove duplicates
+      
+      if (unpublishedSessionIds.length === 0) return;
+      
+      setUpdating(true);
+      await publishMultipleSessions(unpublishedSessionIds);
+      
+      // Show success message
+      alert(`Successfully published ${unpublishedSessionIds.length} sessions!`);
+    } catch (error) {
+      secureLogger.error("Error publishing sessions:", error);
+      alert("Failed to publish sessions. Please try again.");
+    } finally {
+      setUpdating(false);
+    }
   };
 
   // Handle time off click to open details modal
@@ -1238,6 +1276,34 @@ const Schedule = () => {
             <Plus size={16} />
             <span>Create Session</span>
           </button>
+          
+          {/* Publish Button - Only visible to admins/managers when unpublished sessions exist */}
+          {(userProfile?.role === 'admin' || userProfile?.role === 'manager') && 
+           sessions.some(s => s.isPublished === false) && (
+            <button 
+              className="schedule__publish-btn"
+              onClick={handlePublishSessions}
+              style={{
+                backgroundColor: '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '8px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '500',
+                transition: 'background-color 0.2s',
+              }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#218838'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = '#28a745'}
+            >
+              <Check size={16} />
+              <span>Publish ({sessions.filter(s => s.isPublished === false).length})</span>
+            </button>
+          )}
         </div>
       </div>
 

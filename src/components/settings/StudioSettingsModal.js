@@ -91,6 +91,7 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
         startDate: new Date().toISOString().split('T')[0]
       }
     },
+    enableSessionPublishing: false,
   });
 
   const [loading, setLoading] = useState(false);
@@ -191,6 +192,7 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
             startDate: new Date().toISOString().split('T')[0]
           }
         },
+        enableSessionPublishing: organization.enableSessionPublishing || false,
       });
       console.log("Initialized session types:", organization.sessionTypes || getDefaultSessionTypesForNewOrg());
       
@@ -488,6 +490,7 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
     { id: "hours", label: "Hours", icon: Clock },
     { id: "pricing", label: "Pricing", icon: DollarSign },
     { id: "sessiontypes", label: "Session Types", icon: Tag },
+    { id: "schedule", label: "Schedule", icon: Calendar },
     { id: "payperiods", label: "Pay Periods", icon: Calendar },
     { id: "policies", label: "Policies", icon: SettingsIcon },
   ];
@@ -1200,6 +1203,71 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
                     onChange={handlePayPeriodChange}
                     errors={errors}
                   />
+                </div>
+              </div>
+            )}
+
+            {activeTab === "schedule" && (
+              <div className="tab-content">
+                <div className="form-section">
+                  <h3 className="form-section__title">
+                    <Calendar size={16} />
+                    Schedule Settings
+                  </h3>
+                  
+                  <div className="form-group">
+                    <div className="form-toggle-container">
+                      <label className="form-toggle">
+                        <input
+                          type="checkbox"
+                          name="enableSessionPublishing"
+                          checked={formData.enableSessionPublishing || false}
+                          onChange={(e) => {
+                            setFormData(prev => ({
+                              ...prev,
+                              enableSessionPublishing: e.target.checked
+                            }));
+                          }}
+                        />
+                        <span className="form-toggle__slider"></span>
+                        <span className="form-toggle__label">
+                          Enable session publishing approval
+                        </span>
+                      </label>
+                      <p className="form-text" style={{ marginTop: '0.5rem' }}>
+                        When enabled, newly created sessions will require manual publishing before they are visible to employees. 
+                        Administrators and managers can always see unpublished sessions.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="form-info" style={{
+                    backgroundColor: '#e3f2fd',
+                    border: '1px solid #2196f3',
+                    borderRadius: '4px',
+                    padding: '1rem',
+                    marginTop: '1rem'
+                  }}>
+                    <h4 style={{ 
+                      fontSize: '0.875rem', 
+                      fontWeight: '600',
+                      marginBottom: '0.5rem',
+                      color: '#1976d2'
+                    }}>
+                      How Session Publishing Works
+                    </h4>
+                    <ul style={{ 
+                      fontSize: '0.875rem', 
+                      margin: '0',
+                      paddingLeft: '1.25rem',
+                      color: '#424242'
+                    }}>
+                      <li>Unpublished sessions appear with a dotted border and muted colors</li>
+                      <li>A green "Publish" button appears in the schedule header when unpublished sessions exist</li>
+                      <li>Sessions can be published individually or in bulk</li>
+                      <li>When disabled, all sessions are automatically visible upon creation</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             )}

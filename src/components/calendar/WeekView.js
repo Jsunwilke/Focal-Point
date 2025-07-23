@@ -688,6 +688,18 @@ const WeekView = ({
       userSelect: "none",
       width: isHovered ? "calc(100% - 35px)" : "100%",
     };
+    
+    // Apply unpublished styling if session is not published
+    if (session.isPublished === false) {
+      // For unassigned sessions, use red color
+      const sessionColor = session.photographerId === null || session.photographerId === undefined 
+        ? "#dc3545" 
+        : getSessionColorByOrder(orderIndex);
+      
+      baseStyle.border = "2px dashed " + sessionColor;
+      baseStyle.backgroundColor = sessionColor + "40"; // 40 = 25% opacity in hex
+      baseStyle.color = sessionColor;
+    }
 
     // Add dragging style
     if (
@@ -866,31 +878,33 @@ const WeekView = ({
                         top: daySessions.length > 0 ? "4px" : "50%",
                         right: daySessions.length > 0 ? "4px" : "50%",
                         transform: daySessions.length > 0 ? "none" : "translate(50%, -50%)",
-                        width: "24px",
-                        height: "24px",
-                        borderRadius: "50%",
-                        backgroundColor: "white",
-                        border: "1px solid #ddd",
+                        width: "28px",
+                        height: "28px",
+                        borderRadius: "4px",
+                        backgroundColor: "#007bff",
+                        border: "none",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         cursor: "pointer",
-                        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                        opacity: 0.9,
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                        opacity: 0.85,
                         transition: "all 0.2s ease",
                         zIndex: 10,
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.opacity = "1";
-                        e.currentTarget.style.boxShadow = "0 2px 5px rgba(0,0,0,0.2)";
+                        e.currentTarget.style.transform = daySessions.length > 0 ? "scale(1.05)" : "translate(50%, -50%) scale(1.05)";
+                        e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.25)";
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.opacity = "0.9";
-                        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.1)";
+                        e.currentTarget.style.opacity = "0.85";
+                        e.currentTarget.style.transform = daySessions.length > 0 ? "scale(1)" : "translate(50%, -50%) scale(1)";
+                        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.15)";
                       }}
                       title="Add session"
                     >
-                      <Plus size={14} />
+                      <Plus size={16} color="white" />
                     </button>
                   )}
 
@@ -917,9 +931,11 @@ const WeekView = ({
                         }}
                         style={{
                           ...getSessionBlockStyle(session, globalOrderIndex, isHoveredCell('unassigned', day)),
-                          backgroundColor: "#dc3545",
-                          border: "1px dashed #ffffff",
-                          color: "white"
+                          ...(session.isPublished !== false ? {
+                            backgroundColor: "#dc3545",
+                            border: "1px dashed #ffffff",
+                            color: "white"
+                          } : {})
                         }}
                       >
                         <div
@@ -1184,31 +1200,33 @@ const WeekView = ({
                         top: daySessions.length > 0 ? "4px" : "50%",
                         right: daySessions.length > 0 ? "4px" : "50%",
                         transform: daySessions.length > 0 ? "none" : "translate(50%, -50%)",
-                        width: "24px",
-                        height: "24px",
-                        borderRadius: "50%",
-                        backgroundColor: "white",
-                        border: "1px solid #ddd",
+                        width: "28px",
+                        height: "28px",
+                        borderRadius: "4px",
+                        backgroundColor: "#007bff",
+                        border: "none",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         cursor: "pointer",
-                        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                        opacity: 0.9,
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                        opacity: 0.85,
                         transition: "all 0.2s ease",
                         zIndex: 10,
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.opacity = "1";
-                        e.currentTarget.style.boxShadow = "0 2px 5px rgba(0,0,0,0.2)";
+                        e.currentTarget.style.transform = daySessions.length > 0 ? "scale(1.05)" : "translate(50%, -50%) scale(1.05)";
+                        e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.25)";
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.opacity = "0.9";
-                        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.1)";
+                        e.currentTarget.style.opacity = "0.85";
+                        e.currentTarget.style.transform = daySessions.length > 0 ? "scale(1)" : "translate(50%, -50%) scale(1)";
+                        e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.15)";
                       }}
                       title="Add session"
                     >
-                      <Plus size={14} />
+                      <Plus size={16} color="white" />
                     </button>
                   )}
 
@@ -1238,10 +1256,10 @@ const WeekView = ({
                         }}
                         style={{
                           ...getSessionBlockStyle(session, globalOrderIndex, isHoveredCell(member.id, day)),
-                          ...(session.isTimeOff ? {} : {
+                          ...(session.isTimeOff ? {} : (session.isPublished !== false ? {
                             backgroundColor: getSessionColorByOrder(globalOrderIndex),
                             color: "white"
-                          })
+                          } : {}))
                         }}
                       >
                       <div

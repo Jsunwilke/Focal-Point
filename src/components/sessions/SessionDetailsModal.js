@@ -11,8 +11,9 @@ import {
   FileText,
   Edit3,
   CalendarDays,
+  Check,
 } from "lucide-react";
-import { getSession, getSchools } from "../../firebase/firestore";
+import { getSession, getSchools, publishSession } from "../../firebase/firestore";
 import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
 import secureLogger from "../../utils/secureLogger";
 
@@ -642,6 +643,35 @@ const SessionDetailsModal = ({
               >
                 <CalendarDays size={16} />
                 Duplicate to Next Year
+              </button>
+            )}
+            {/* Publish Button - Only visible for unpublished sessions to admins/managers */}
+            {fullSessionData?.isPublished === false && 
+             (userProfile?.role === 'admin' || userProfile?.role === 'manager') && (
+              <button
+                type="button"
+                className="btn btn-success"
+                onClick={async () => {
+                  try {
+                    await publishSession(fullSessionData.id);
+                    alert('Session published successfully!');
+                    onClose(); // Close modal to refresh data
+                  } catch (error) {
+                    secureLogger.error('Error publishing session:', error);
+                    alert('Failed to publish session. Please try again.');
+                  }
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  backgroundColor: "#28a745",
+                  borderColor: "#28a745",
+                  color: "white",
+                }}
+              >
+                <Check size={16} />
+                Publish Session
               </button>
             )}
             <button

@@ -733,10 +733,16 @@ export const getSessionsForSchool = async (schoolId, organizationID) => {
 
 export const createSession = async (organizationID, sessionData) => {
   try {
+    // Get organization settings to check if publishing is enabled
+    const orgDoc = await getDoc(doc(firestore, "organizations", organizationID));
+    const orgData = orgDoc.data();
+    const enableSessionPublishing = orgData?.enableSessionPublishing || false;
+    
     const sessionRef = await addDoc(collection(firestore, "sessions"), {
       ...sessionData,
       organizationID,
       status: sessionData.status || "scheduled",
+      isPublished: !enableSessionPublishing, // Auto-publish if feature is disabled
       hasJobBoxAssigned: false,
       jobBoxRecordId: null,
       createdAt: serverTimestamp(),
@@ -892,6 +898,47 @@ export const updateSession = async (sessionId, updateData) => {
   } catch (error) {
     console.error("Error updating session:", error);
     throw new Error(`Failed to update session: ${error.message}`);
+  }
+};
+
+// Publish a single session
+export const publishSession = async (sessionId) => {
+  try {
+    const sessionRef = doc(firestore, "sessions", sessionId);
+    await updateDoc(sessionRef, {
+      isPublished: true,
+      publishedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    console.log("Session published successfully:", sessionId);
+    return true;
+  } catch (error) {
+    console.error("Error publishing session:", error);
+    throw new Error(`Failed to publish session: ${error.message}`);
+  }
+};
+
+// Publish multiple sessions
+export const publishMultipleSessions = async (sessionIds) => {
+  try {
+    const batch = writeBatch(firestore);
+    const publishData = {
+      isPublished: true,
+      publishedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    
+    sessionIds.forEach(sessionId => {
+      const sessionRef = doc(firestore, "sessions", sessionId);
+      batch.update(sessionRef, publishData);
+    });
+    
+    await batch.commit();
+    console.log(`Successfully published ${sessionIds.length} sessions`);
+    return true;
+  } catch (error) {
+    console.error("Error publishing multiple sessions:", error);
+    throw new Error(`Failed to publish sessions: ${error.message}`);
   }
 };
 
