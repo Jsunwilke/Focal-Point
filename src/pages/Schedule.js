@@ -18,7 +18,10 @@ import StatsModal from "../components/stats/StatsModal";
 import TimeOffRequestModal from "../components/timeoff/TimeOffRequestModal";
 import TimeOffApprovalModal from "../components/timeoff/TimeOffApprovalModal";
 import TimeOffDetailsModal from "../components/timeoff/TimeOffDetailsModal";
+import BlockedDatesModal from "../components/timeoff/BlockedDatesModal";
+import QuickBlockDateModal from "../components/timeoff/QuickBlockDateModal";
 import { getTimeOffRequests, getApprovedTimeOffForDateRange } from "../firebase/timeOffRequests";
+import { getBlockedDates } from "../firebase/blockedDates";
 import {
   ChevronLeft,
   ChevronRight,
@@ -191,6 +194,10 @@ const Schedule = () => {
   const [showTimeOffDetailsModal, setShowTimeOffDetailsModal] = useState(false);
   const [selectedTimeOffEntry, setSelectedTimeOffEntry] = useState(null);
   const [pendingTimeOffCount, setPendingTimeOffCount] = useState(0);
+  const [showBlockedDatesModal, setShowBlockedDatesModal] = useState(false);
+  const [blockedDates, setBlockedDates] = useState([]);
+  const [showQuickBlockModal, setShowQuickBlockModal] = useState(false);
+  const [selectedDateForBlock, setSelectedDateForBlock] = useState(null);
 
   // Real-time listener for sessions
   useEffect(() => {
@@ -473,6 +480,31 @@ const Schedule = () => {
 
     loadSchools();
   }, [organization?.id]);
+
+  // Load blocked dates when organization changes or after modal closes
+  useEffect(() => {
+    const loadBlockedDates = async () => {
+      if (!organization?.id) return;
+
+      try {
+        const blockedDatesData = await getBlockedDates(organization.id);
+        setBlockedDates(blockedDatesData);
+      } catch (error) {
+        secureLogger.error("Error loading blocked dates:", error);
+      }
+    };
+
+    loadBlockedDates();
+  }, [organization?.id, showBlockedDatesModal, showQuickBlockModal]);
+
+  // Handle header date click for quick blocking
+  const handleHeaderDateClick = (date) => {
+    // Only allow admins/managers to block dates
+    if (isAdmin) {
+      setSelectedDateForBlock(date);
+      setShowQuickBlockModal(true);
+    }
+  };
 
   // Handle session updates (for drag & drop)
   const handleUpdateSession = async (sessionId, updatedSessionData) => {
@@ -1150,6 +1182,17 @@ const Schedule = () => {
             <span>Request Time Off</span>
           </button>
           
+          {/* Blocked Dates Button (Admin/Manager only) */}
+          {isAdmin && (
+            <button
+              className="schedule__blocked-dates-btn"
+              onClick={() => setShowBlockedDatesModal(true)}
+            >
+              <Shield size={16} />
+              <span>Blocked Dates</span>
+            </button>
+          )}
+          
           {/* Admin Time Off Approval Button */}
           {isAdmin && (
             <button
@@ -1206,9 +1249,12 @@ const Schedule = () => {
           scheduleType={scheduleType}
           userProfile={userProfile}
           organization={organization}
+          blockedDates={blockedDates}
+          isAdmin={isAdmin}
           onUpdateSession={handleUpdateSession}
           onSessionClick={handleSessionClick}
           onTimeOffClick={handleTimeOffClick}
+          onHeaderDateClick={handleHeaderDateClick}
         />
       </div>
 
@@ -1544,6 +1590,44 @@ const Schedule = () => {
                     const isToday = new Date().toDateString() === day.toDateString();
                     const isSelected = currentDate.toDateString() === day.toDateString();
                     
+                    // Check if date is blocked
+                    const formatDate = (date) => {
+                      const year = date.getFullYear();
+                      const month = String(date.getMonth() + 1).padStart(2, "0");
+                      const dayStr = String(date.getDate()).padStart(2, "0");
+                      return `${year}-${month}-${dayStr}`;
+                    };
+                    
+                    const isBlocked = blockedDates.some(blocked => {
+                      const startDate = blocked.startDate.toDate ? blocked.startDate.toDate() : new Date(blocked.startDate);
+                      const endDate = blocked.endDate.toDate ? blocked.endDate.toDate() : new Date(blocked.endDate);
+                      const dayStr = formatDate(day);
+                      const start = formatDate(startDate);
+                      const end = formatDate(endDate);
+                      return dayStr >= start && dayStr <= end;
+                    });
+                    
+                    const getBlockedReason = () => {
+                      const blocked = blockedDates.find(b => {
+                        const startDate = b.startDate.toDate ? b.startDate.toDate() : new Date(b.startDate);
+                        const endDate = b.endDate.toDate ? b.endDate.toDate() : new Date(b.endDate);
+                        const dayStr = formatDate(day);
+                        const start = formatDate(startDate);
+                        const end = formatDate(endDate);
+                        return dayStr >= start && dayStr <= end;
+                      });
+                      return blocked?.reason || "Blocked";
+                    };
+                    
+                    let backgroundColor = 'transparent';
+                    if (isSelected) {
+                      backgroundColor = '#007bff';
+                    } else if (isBlocked) {
+                      backgroundColor = '#ffe6e6';
+                    } else if (isToday) {
+                      backgroundColor = '#e3f2fd';
+                    }
+                    
                     return (
                       <button
                         key={index}
@@ -1551,24 +1635,26 @@ const Schedule = () => {
                         style={{
                           padding: '8px 4px',
                           border: 'none',
-                          backgroundColor: isSelected ? '#007bff' : isToday ? '#e3f2fd' : 'transparent',
+                          backgroundColor,
                           color: isSelected ? 'white' : isCurrentMonth ? '#333' : '#ccc',
                           cursor: 'pointer',
                           borderRadius: '6px',
                           fontSize: '14px',
                           fontWeight: isToday ? '600' : 'normal',
-                          transition: 'all 0.2s ease'
+                          transition: 'all 0.2s ease',
+                          position: 'relative'
                         }}
                         onMouseEnter={(e) => {
-                          if (!isSelected) {
+                          if (!isSelected && !isBlocked) {
                             e.target.style.backgroundColor = '#f8f9fa';
                           }
                         }}
                         onMouseLeave={(e) => {
                           if (!isSelected) {
-                            e.target.style.backgroundColor = isToday ? '#e3f2fd' : 'transparent';
+                            e.target.style.backgroundColor = isBlocked ? '#ffe6e6' : isToday ? '#e3f2fd' : 'transparent';
                           }
                         }}
+                        title={isBlocked ? getBlockedReason() : ''}
                       >
                         {day.getDate()}
                       </button>
@@ -1666,6 +1752,28 @@ const Schedule = () => {
           timeOffEntry={selectedTimeOffEntry}
           userProfile={userProfile}
           onStatusChange={handleTimeOffStatusChange}
+        />
+      )}
+      
+      {/* Blocked Dates Modal (Admin/Manager only) */}
+      {showBlockedDatesModal && isAdmin && (
+        <BlockedDatesModal
+          isOpen={showBlockedDatesModal}
+          onClose={() => setShowBlockedDatesModal(false)}
+          organization={organization}
+        />
+      )}
+      
+      {/* Quick Block Date Modal (Admin/Manager only) */}
+      {showQuickBlockModal && isAdmin && (
+        <QuickBlockDateModal
+          isOpen={showQuickBlockModal}
+          onClose={() => {
+            setShowQuickBlockModal(false);
+            setSelectedDateForBlock(null);
+          }}
+          selectedDate={selectedDateForBlock}
+          organization={organization}
         />
       )}
 

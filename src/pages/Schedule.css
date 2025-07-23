@@ -222,7 +222,8 @@
   background-color: var(--primary-hover);
 }
 
-.schedule__time-off-btn {
+.schedule__time-off-btn,
+.schedule__blocked-dates-btn {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
@@ -237,7 +238,8 @@
   transition: all var(--transition-fast);
 }
 
-.schedule__time-off-btn:hover {
+.schedule__time-off-btn:hover,
+.schedule__blocked-dates-btn:hover {
   background-color: var(--background-secondary);
   border-color: var(--primary-color);
   color: var(--primary-color);

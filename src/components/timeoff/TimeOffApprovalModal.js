@@ -9,7 +9,8 @@ import {
   AlertCircle, 
   CheckCircle, 
   XCircle,
-  MessageSquare 
+  MessageSquare,
+  Star 
 } from 'lucide-react';
 import { 
   getTimeOffRequests, 
@@ -213,7 +214,7 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
           ) : (
             <div className="requests-list">
               {requests.map(request => (
-                <div key={request.id} className="request-card">
+                <div key={request.id} className={`request-card ${request.priority === 'high' || request.bypassedBlockedDates ? 'high-priority' : ''}`}>
                   <div className="request-header">
                     <div className="request-photographer">
                       <User size={20} />
@@ -222,7 +223,25 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
                         <span className="photographer-email">{request.photographerEmail}</span>
                       </div>
                     </div>
-                    {getStatusIcon(request.status)}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {(request.priority === 'high' || request.bypassedBlockedDates) && (
+                        <div style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '4px',
+                          backgroundColor: '#ffc107',
+                          color: '#000',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: '600'
+                        }}>
+                          <Star size={12} fill="currentColor" />
+                          HIGH PRIORITY
+                        </div>
+                      )}
+                      {getStatusIcon(request.status)}
+                    </div>
                   </div>
 
                   <div className="request-details">
@@ -252,6 +271,32 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
                     {request.notes && (
                       <div className="detail-row">
                         <span className="notes">Notes: {request.notes}</span>
+                      </div>
+                    )}
+                    {request.priorityReason && (
+                      <div style={{ 
+                        marginTop: '8px',
+                        padding: '8px',
+                        backgroundColor: '#fff3cd',
+                        border: '1px solid #ffeaa7',
+                        borderRadius: '4px'
+                      }}>
+                        <div style={{ 
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '6px'
+                        }}>
+                          <AlertCircle size={14} style={{ color: '#856404', flexShrink: 0, marginTop: '2px' }} />
+                          <div>
+                            <strong style={{ fontSize: '12px', color: '#856404' }}>High Priority Reason:</strong>
+                            <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#856404' }}>{request.priorityReason}</p>
+                            {request.bypassedBlockedDates && (
+                              <p style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#856404', fontStyle: 'italic' }}>
+                                This request bypassed blocked date restrictions.
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import { X, Calendar, AlertCircle, Clock } from 'lucide-react';
 import { createTimeOffRequest, checkTimeOffConflicts } from '../../firebase/timeOffRequests';
+import { checkDateIsBlocked } from '../../firebase/blockedDates';
 import Button from '../shared/Button';
 import '../shared/Modal.css';
 import './TimeOffRequestModal.css';
@@ -21,6 +22,9 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
   const [error, setError] = useState('');
   const [conflicts, setConflicts] = useState([]);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
+  const [blockedInfo, setBlockedInfo] = useState(null);
+  const [showHighPriority, setShowHighPriority] = useState(false);
+  const [highPriorityReason, setHighPriorityReason] = useState('');
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -31,32 +35,61 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
     setError('');
   };
 
+  // Extracted function to check for conflicts and blocked dates
+  const checkForConflictsAndBlockedDates = async (startDateValue, endDateValue) => {
+    if (!startDateValue || !endDateValue) return;
+    
+    setCheckingConflicts(true);
+    try {
+      const start = new Date(startDateValue + 'T12:00:00');
+      const end = new Date(endDateValue + 'T12:00:00');
+      
+      // Check for session conflicts
+      const conflictingSessions = await checkTimeOffConflicts(
+        organization.id,
+        userProfile.id,
+        start,
+        end
+      );
+      setConflicts(conflictingSessions);
+      
+      // Check for blocked dates
+      const blockedResult = await checkDateIsBlocked(
+        organization.id,
+        start,
+        end
+      );
+      
+      if (blockedResult.isBlocked) {
+        setBlockedInfo(blockedResult);
+        if (blockedResult.canOverride) {
+          setShowHighPriority(true);
+        }
+      } else {
+        setBlockedInfo(null);
+        setShowHighPriority(false);
+        setHighPriorityReason('');
+      }
+    } catch (error) {
+      console.error('Error checking conflicts:', error);
+    } finally {
+      setCheckingConflicts(false);
+    }
+  };
+
   const handleDateChange = async (e) => {
     handleInputChange(e);
     
-    // Check for conflicts when both dates are selected
-    if (formData.startDate && formData.endDate || 
-        (e.target.name === 'startDate' && formData.endDate) ||
-        (e.target.name === 'endDate' && formData.startDate)) {
-      
-      setCheckingConflicts(true);
-      try {
-        const start = new Date((e.target.name === 'startDate' ? e.target.value : formData.startDate) + 'T12:00:00');
-        const end = new Date((e.target.name === 'endDate' ? e.target.value : formData.endDate) + 'T12:00:00');
-        
-        const conflictingSessions = await checkTimeOffConflicts(
-          organization.id,
-          userProfile.id,
-          start,
-          end
-        );
-        
-        setConflicts(conflictingSessions);
-      } catch (error) {
-        console.error('Error checking conflicts:', error);
-      } finally {
-        setCheckingConflicts(false);
-      }
+    const startDateValue = e.target.name === 'startDate' ? e.target.value : formData.startDate;
+    const endDateValue = e.target.name === 'endDate' ? e.target.value : formData.endDate;
+    
+    // For partial day requests, check with the same date for start and end
+    if (formData.isPartialDay && startDateValue) {
+      await checkForConflictsAndBlockedDates(startDateValue, startDateValue);
+    }
+    // For regular requests, check when we have both dates
+    else if (startDateValue && endDateValue) {
+      await checkForConflictsAndBlockedDates(startDateValue, endDateValue);
     }
   };
 
@@ -92,6 +125,20 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
       return;
     }
     
+    // Check for blocked dates without override
+    if (blockedInfo && blockedInfo.isBlocked && !blockedInfo.canOverride) {
+      setError('The selected dates are not available for time off requests');
+      return;
+    }
+    
+    // Check for high priority validation
+    if (blockedInfo && blockedInfo.isBlocked && blockedInfo.canOverride && showHighPriority) {
+      if (!highPriorityReason.trim()) {
+        setError('Please provide a reason for the high priority request');
+        return;
+      }
+    }
+    
     // Validate times for partial day requests
     if (formData.isPartialDay) {
       if (!formData.startTime || !formData.endTime) {
@@ -125,6 +172,13 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
         ...(formData.isPartialDay && {
           startTime: formData.startTime,
           endTime: formData.endTime
+        }),
+        // Add priority fields if request overlaps with blocked dates
+        priority: (blockedInfo && blockedInfo.isBlocked && showHighPriority) ? 'high' : 'normal',
+        ...(blockedInfo && blockedInfo.isBlocked && showHighPriority && {
+          priorityReason: highPriorityReason.trim(),
+          bypassedBlockedDates: true,
+          blockedDatesAcknowledged: true
         })
       };
 
@@ -141,6 +195,9 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
         endTime: '17:00'
       });
       setConflicts([]);
+      setBlockedInfo(null);
+      setShowHighPriority(false);
+      setHighPriorityReason('');
       onClose();
     } catch (error) {
       console.error('Error creating time off request:', error);
@@ -174,70 +231,127 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
       }}
     >
       <div 
-        className="modal modal--medium"
         style={{
           position: "relative",
           margin: "0",
           transform: "none",
+          maxWidth: "500px",
+          width: "90%",
+          backgroundColor: "white",
+          borderRadius: "8px",
+          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal__header">
-          <div className="modal__header-content">
-            <h2 className="modal__title">Request Time Off</h2>
-          </div>
-          <button className="modal__close" onClick={onClose}>
-            <X size={24} />
+        <div style={{ 
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "1rem",
+          borderBottom: "1px solid #e9ecef",
+          backgroundColor: "#f8f9fa",
+          flexShrink: 0
+        }}>
+          <h2 style={{ fontSize: "1.25rem", fontWeight: 600, margin: 0 }}>Request Time Off</h2>
+          <button 
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: "0.25rem",
+              color: "#6c757d",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <X size={20} />
           </button>
         </div>
 
-        <div className="modal__body">
-          <form onSubmit={handleSubmit} className="time-off-form">
+        <div style={{ padding: "0.75rem", flex: "1 1 auto" }}>
+          <form onSubmit={handleSubmit} style={{ margin: 0 }}>
             {/* Partial Day Toggle - moved to top */}
-            <div className="form-group partial-day-toggle">
-              <label className="checkbox-label">
+            <div style={{ backgroundColor: '#f8f9fa', padding: '8px 10px', borderRadius: '4px', border: '1px solid #e9ecef', marginBottom: '8px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', margin: 0 }}>
                 <input
                   type="checkbox"
                   name="isPartialDay"
                   checked={formData.isPartialDay}
-                  onChange={(e) => {
+                  onChange={async (e) => {
+                    const isChecked = e.target.checked;
                     handleInputChange(e);
+                    
                     // Set end date same as start date for partial day
-                    if (e.target.checked && formData.startDate) {
+                    if (isChecked && formData.startDate) {
                       setFormData(prev => ({
                         ...prev,
                         endDate: prev.startDate,
                         isPartialDay: true
                       }));
+                      // Check for blocked dates when toggling partial day on
+                      // Use the current startDate value that's already in state
+                      await checkForConflictsAndBlockedDates(formData.startDate, formData.startDate);
+                    } else if (!isChecked && formData.startDate && formData.endDate) {
+                      // When unchecking partial day, recheck with the date range
+                      await checkForConflictsAndBlockedDates(formData.startDate, formData.endDate);
                     }
                   }}
+                  style={{ display: 'none' }}
                 />
-                <span className="checkbox-custom"></span>
+                <span style={{
+                  width: '44px',
+                  height: '24px',
+                  backgroundColor: formData.isPartialDay ? '#007bff' : '#ccc',
+                  borderRadius: '12px',
+                  position: 'relative',
+                  transition: 'background-color 0.3s',
+                  flexShrink: 0,
+                  display: 'inline-block',
+                  boxShadow: 'inset 0 1px 3px rgba(0, 0, 0, 0.1)'
+                }}>
+                  <span style={{
+                    position: 'absolute',
+                    top: '2px',
+                    left: formData.isPartialDay ? '22px' : '2px',
+                    width: '20px',
+                    height: '20px',
+                    backgroundColor: 'white',
+                    borderRadius: '50%',
+                    transition: 'left 0.3s',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+                  }}></span>
+                </span>
                 Partial day only (specify time range)
               </label>
             </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="startDate">
-                  <Calendar size={16} />
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  id="startDate"
-                  name="startDate"
-                  value={formData.startDate}
-                  onChange={handleDateChange}
-                  min={new Date().toISOString().split('T')[0]}
-                  required
-                />
-              </div>
-
-              {!formData.isPartialDay && (
-                <div className="form-group">
-                  <label htmlFor="endDate">
-                    <Calendar size={16} />
+            {/* Date Fields */}
+            {!formData.isPartialDay ? (
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '8px' }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label htmlFor="startDate" style={{ fontSize: '13px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Calendar size={14} />
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    id="startDate"
+                    name="startDate"
+                    value={formData.startDate}
+                    onChange={handleDateChange}
+                    min={new Date().toISOString().split('T')[0]}
+                    required
+                    style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #dee2e6', borderRadius: '4px' }}
+                  />
+                </div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label htmlFor="endDate" style={{ fontSize: '13px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Calendar size={14} />
                     End Date
                   </label>
                   <input
@@ -248,17 +362,37 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
                     onChange={handleDateChange}
                     min={formData.startDate || new Date().toISOString().split('T')[0]}
                     required
+                    style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #dee2e6', borderRadius: '4px' }}
                   />
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div style={{ marginBottom: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label htmlFor="startDate" style={{ fontSize: '13px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Calendar size={14} />
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    id="startDate"
+                    name="startDate"
+                    value={formData.startDate}
+                    onChange={handleDateChange}
+                    min={new Date().toISOString().split('T')[0]}
+                    required
+                    style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #dee2e6', borderRadius: '4px' }}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Time Range for Partial Day */}
             {formData.isPartialDay && (
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="startTime">
-                    <Clock size={16} />
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '8px' }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label htmlFor="startTime" style={{ fontSize: '13px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Clock size={14} />
                     Start Time
                   </label>
                   <input
@@ -268,12 +402,12 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
                     value={formData.startTime}
                     onChange={handleInputChange}
                     required
+                    style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #dee2e6', borderRadius: '4px' }}
                   />
                 </div>
-
-                <div className="form-group">
-                  <label htmlFor="endTime">
-                    <Clock size={16} />
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label htmlFor="endTime" style={{ fontSize: '13px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Clock size={14} />
                     End Time
                   </label>
                   <input
@@ -283,19 +417,21 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
                     value={formData.endTime}
                     onChange={handleInputChange}
                     required
+                    style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #dee2e6', borderRadius: '4px' }}
                   />
                 </div>
               </div>
             )}
 
-            <div className="form-group">
-              <label htmlFor="reason">Reason *</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+              <label htmlFor="reason" style={{ fontSize: '13px', fontWeight: '500' }}>Reason *</label>
               <select
                 id="reason"
                 name="reason"
                 value={formData.reason}
                 onChange={handleInputChange}
                 required
+                style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #dee2e6', borderRadius: '4px' }}
               >
                 <option value="">Select a reason</option>
                 <option value="Vacation">Vacation</option>
@@ -307,39 +443,120 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
               </select>
             </div>
 
-            <div className="form-group">
-              <label htmlFor="notes">Additional Notes</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+              <label htmlFor="notes" style={{ fontSize: '13px', fontWeight: '500' }}>Additional Notes</label>
               <textarea
                 id="notes"
                 name="notes"
                 value={formData.notes}
                 onChange={handleInputChange}
-                rows={3}
+                rows={2}
                 placeholder="Any additional information..."
+                style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #dee2e6', borderRadius: '4px', resize: 'vertical', minHeight: '50px' }}
               />
             </div>
 
-            {/* Conflict Warning */}
+            {/* Blocked Dates Warning */}
+            {blockedInfo && blockedInfo.isBlocked && (
+              <div style={{ backgroundColor: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '4px', padding: '8px', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <AlertCircle size={16} style={{ color: '#6c757d', flexShrink: 0 }} />
+                    <strong style={{ fontSize: '12px', color: '#495057' }}>Note: Selected dates include blocked periods</strong>
+                  </div>
+                  <div style={{ marginLeft: '22px' }}>
+                    {blockedInfo.blockedRanges.map((range, index) => (
+                      <div key={index} style={{ fontSize: '11px', color: '#6c757d', marginBottom: '2px' }}>
+                        {range.reason}
+                      </div>
+                    ))}
+                  </div>
+                  {blockedInfo.canOverride ? (
+                    <div style={{ marginLeft: '22px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px', padding: '4px 0' }}>
+                        <input
+                          type="checkbox"
+                          checked={showHighPriority}
+                          onChange={(e) => setShowHighPriority(e.target.checked)}
+                          style={{ display: 'none' }}
+                        />
+                        <span style={{
+                          width: '40px',
+                          height: '20px',
+                          backgroundColor: showHighPriority ? '#007bff' : '#ccc',
+                          borderRadius: '10px',
+                          position: 'relative',
+                          transition: 'background-color 0.3s',
+                          flexShrink: 0,
+                          display: 'inline-block'
+                        }}>
+                          <span style={{
+                            position: 'absolute',
+                            top: '2px',
+                            left: showHighPriority ? '20px' : '2px',
+                            width: '16px',
+                            height: '16px',
+                            backgroundColor: 'white',
+                            borderRadius: '50%',
+                            transition: 'left 0.3s',
+                            boxShadow: '0 2px 3px rgba(0,0,0,0.2)'
+                          }}></span>
+                        </span>
+                        Mark as high priority
+                      </label>
+                      {showHighPriority && (
+                        <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label htmlFor="priorityReason" style={{ fontSize: '12px', fontWeight: '500' }}>Priority Reason *</label>
+                          <textarea
+                            id="priorityReason"
+                            value={highPriorityReason}
+                            onChange={(e) => setHighPriorityReason(e.target.value)}
+                            rows={2}
+                            placeholder="Please explain why this is high priority..."
+                            required
+                            style={{ padding: '6px 8px', fontSize: '12px', border: '1px solid #dee2e6', borderRadius: '4px', resize: 'vertical', minHeight: '40px' }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ marginLeft: '22px', fontSize: '11px', color: '#dc3545' }}>
+                      These dates are unavailable for time off requests.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Session Conflict Warning */}
             {conflicts.length > 0 && (
-              <div className="conflict-warning">
-                <AlertCircle size={20} />
+              <div style={{ backgroundColor: '#fff4e5', border: '1px solid #ffa500', borderRadius: '4px', padding: '8px', marginBottom: '8px', display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                <AlertCircle size={16} style={{ color: '#ff8c00', flexShrink: 0, marginTop: '2px' }} />
                 <div>
-                  <strong>Warning: You have {conflicts.length} scheduled session{conflicts.length > 1 ? 's' : ''} during this period.</strong>
-                  <p>Your manager will need to reassign these sessions if your request is approved.</p>
+                  <strong style={{ fontSize: '12px', color: '#cc6600', display: 'block', marginBottom: '2px' }}>Warning: You have {conflicts.length} scheduled session{conflicts.length > 1 ? 's' : ''} during this period.</strong>
+                  <p style={{ margin: 0, fontSize: '11px', color: '#666' }}>Your manager will need to reassign these sessions if your request is approved.</p>
                 </div>
               </div>
             )}
 
             {error && (
-              <div className="error-message">
-                <AlertCircle size={16} />
+              <div style={{ backgroundColor: '#fee', border: '1px solid #fcc', color: '#c00', padding: '8px 10px', borderRadius: '4px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
+                <AlertCircle size={14} style={{ flexShrink: 0 }} />
                 {error}
               </div>
             )}
           </form>
         </div>
 
-        <div className="modal__actions">
+        <div style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: "0.5rem",
+          padding: "0.75rem",
+          borderTop: "1px solid #e9ecef",
+          backgroundColor: "#f8f9fa",
+          flexShrink: 0
+        }}>
           <Button
             type="button"
             variant="secondary"
@@ -351,7 +568,7 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
           <Button
             type="submit"
             variant="primary"
-            disabled={loading || checkingConflicts}
+            disabled={loading || checkingConflicts || (blockedInfo && blockedInfo.isBlocked && !blockedInfo.canOverride)}
             onClick={handleSubmit}
           >
             {loading ? 'Submitting...' : 'Submit Request'}

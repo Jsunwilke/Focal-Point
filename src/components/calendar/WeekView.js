@@ -10,9 +10,12 @@ const WeekView = ({
   scheduleType,
   userProfile,
   organization,
+  blockedDates = [],
+  isAdmin,
   onUpdateSession,
   onSessionClick, // New prop for handling session clicks
   onTimeOffClick, // New prop for handling time off clicks
+  onHeaderDateClick, // New prop for handling header date clicks
 }) => {
   const [draggedSession, setDraggedSession] = useState(null);
   const [dragOver, setDragOver] = useState({
@@ -41,6 +44,31 @@ const WeekView = ({
   const isToday = (date) => {
     const today = new Date();
     return date.toDateString() === today.toDateString();
+  };
+
+  // Check if a date is blocked
+  const isDateBlocked = (date) => {
+    const dateString = formatLocalDate(date);
+    return blockedDates.some(blocked => {
+      const startDate = blocked.startDate.toDate ? blocked.startDate.toDate() : new Date(blocked.startDate);
+      const endDate = blocked.endDate.toDate ? blocked.endDate.toDate() : new Date(blocked.endDate);
+      const start = formatLocalDate(startDate);
+      const end = formatLocalDate(endDate);
+      return dateString >= start && dateString <= end;
+    });
+  };
+
+  // Get blocked info for a date
+  const getBlockedInfoForDate = (date) => {
+    const dateString = formatLocalDate(date);
+    const blockedRange = blockedDates.find(blocked => {
+      const startDate = blocked.startDate.toDate ? blocked.startDate.toDate() : new Date(blocked.startDate);
+      const endDate = blocked.endDate.toDate ? blocked.endDate.toDate() : new Date(blocked.endDate);
+      const start = formatLocalDate(startDate);
+      const end = formatLocalDate(endDate);
+      return dateString >= start && dateString <= end;
+    });
+    return blockedRange;
   };
 
   // Get sessions for a specific photographer on a specific day
@@ -556,7 +584,7 @@ const WeekView = ({
       baseStyle.backgroundColor = "var(--primary-light, #e3f2fd)";
     }
 
-    // Add drag over styling
+    // Add drag over styling (highest priority)
     if (isDragOverCell(photographerId, day)) {
       baseStyle.backgroundColor = "#e8f5e8";
       baseStyle.border = "2px dashed #28a745";
@@ -661,6 +689,8 @@ const WeekView = ({
                 style={{
                   ...headerCellStyle,
                   ...(isToday(day) ? todayHeaderStyle : {}),
+                  ...(isDateBlocked(day) ? { backgroundColor: '#ffe6e6' } : {}),
+                  position: 'relative'
                 }}
               >
                 <div
@@ -676,10 +706,44 @@ const WeekView = ({
                   style={{
                     fontSize: "var(--font-size-lg, 16px)",
                     fontWeight: "var(--font-weight-semibold, 600)",
+                    cursor: isAdmin ? (isDateBlocked(day) ? "not-allowed" : "pointer") : "default",
+                    userSelect: "none",
                   }}
+                  onClick={() => {
+                    if (isAdmin && onHeaderDateClick && !isDateBlocked(day)) {
+                      onHeaderDateClick(day);
+                    }
+                  }}
+                  title={
+                    isAdmin 
+                      ? (isDateBlocked(day) 
+                          ? `Already blocked: ${getBlockedInfoForDate(day)?.reason || "Blocked"}` 
+                          : "Click to block this date")
+                      : ""
+                  }
                 >
                   {day.getDate()}
                 </div>
+                {/* Blocked Date Indicator */}
+                {isDateBlocked(day) && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "2px",
+                      right: "2px",
+                      fontSize: "9px",
+                      color: "#dc3545",
+                      backgroundColor: "rgba(255, 255, 255, 0.9)",
+                      padding: "1px 4px",
+                      borderRadius: "3px",
+                      fontWeight: "500",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={getBlockedInfoForDate(day)?.reason || "Blocked"}
+                  >
+                    BLOCKED
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -748,6 +812,7 @@ const WeekView = ({
                       📅
                     </div>
                   )}
+
 
                   {daySessions.map((session) => {
                     // Get global order for this session
@@ -886,6 +951,8 @@ const WeekView = ({
             style={{
               ...headerCellStyle,
               ...(isToday(day) ? todayHeaderStyle : {}),
+              ...(isDateBlocked(day) ? { backgroundColor: '#ffe6e6' } : {}),
+              position: 'relative'
             }}
           >
             <div
@@ -901,10 +968,44 @@ const WeekView = ({
               style={{
                 fontSize: "var(--font-size-lg, 16px)",
                 fontWeight: "var(--font-weight-semibold, 600)",
+                cursor: isAdmin ? (isDateBlocked(day) ? "not-allowed" : "pointer") : "default",
+                userSelect: "none",
               }}
+              onClick={() => {
+                if (isAdmin && onHeaderDateClick && !isDateBlocked(day)) {
+                  onHeaderDateClick(day);
+                }
+              }}
+              title={
+                isAdmin 
+                  ? (isDateBlocked(day) 
+                      ? `Already blocked: ${getBlockedInfoForDate(day)?.reason || "Blocked"}` 
+                      : "Click to block this date")
+                  : ""
+              }
             >
               {day.getDate()}
             </div>
+            {/* Blocked Date Indicator */}
+            {isDateBlocked(day) && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "2px",
+                  right: "2px",
+                  fontSize: "9px",
+                  color: "#dc3545",
+                  backgroundColor: "rgba(255, 255, 255, 0.9)",
+                  padding: "1px 4px",
+                  borderRadius: "3px",
+                  fontWeight: "500",
+                  whiteSpace: "nowrap",
+                }}
+                title={getBlockedInfoForDate(day)?.reason || "Blocked"}
+              >
+                BLOCKED
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -986,6 +1087,7 @@ const WeekView = ({
                       📅
                     </div>
                   )}
+
 
                   {daySessions.map((session) => {
                     // Get global order for this session - same logic as MonthView

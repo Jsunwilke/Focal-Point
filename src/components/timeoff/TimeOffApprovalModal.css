@@ -84,6 +84,12 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
+.request-card.high-priority {
+  border-color: #ffc107;
+  border-width: 2px;
+  background: linear-gradient(135deg, #fffbf0 0%, #fff 100%);
+}
+
 .request-header {
   display: flex;
   justify-content: space-between;

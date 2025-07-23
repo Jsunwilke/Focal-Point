@@ -12,9 +12,12 @@ const CalendarView = ({
   scheduleType,
   userProfile,
   organization,
+  blockedDates,
+  isAdmin,
   onUpdateSession,
   onSessionClick, // New prop for handling session clicks
   onTimeOffClick, // New prop for handling time off clicks
+  onHeaderDateClick, // New prop for handling header date clicks
 }) => {
   const renderView = () => {
     switch (viewMode) {
@@ -28,9 +31,12 @@ const CalendarView = ({
             scheduleType={scheduleType}
             userProfile={userProfile}
             organization={organization}
+            blockedDates={blockedDates}
+            isAdmin={isAdmin}
             onUpdateSession={onUpdateSession}
             onSessionClick={onSessionClick} // Pass the click handler
             onTimeOffClick={onTimeOffClick} // Pass the time off click handler
+            onHeaderDateClick={onHeaderDateClick} // Pass the header date click handler
           />
         );
       case "month":
@@ -43,6 +49,7 @@ const CalendarView = ({
             scheduleType={scheduleType}
             userProfile={userProfile}
             organization={organization}
+            blockedDates={blockedDates}
             onUpdateSession={onUpdateSession} // Pass the update handler (for future month view drag & drop)
             onSessionClick={onSessionClick} // Pass the click handler (for future month view)
           />
@@ -57,8 +64,11 @@ const CalendarView = ({
             scheduleType={scheduleType}
             userProfile={userProfile}
             organization={organization}
+            blockedDates={blockedDates}
+            isAdmin={isAdmin}
             onUpdateSession={onUpdateSession}
             onSessionClick={onSessionClick} // Pass the click handler
+            onHeaderDateClick={onHeaderDateClick} // Pass the header date click handler
           />
         );
     }

@@ -9,6 +9,7 @@ const MonthView = ({
   scheduleType,
   userProfile,
   organization,
+  blockedDates = [],
   onSessionClick,
 }) => {
   // Generate calendar grid for the month
@@ -65,6 +66,39 @@ const MonthView = ({
   // Check if two dates are the same day
   const isSameDay = (date1, date2) => {
     return date1.toDateString() === date2.toDateString();
+  };
+
+  // Helper function to format dates consistently
+  const formatLocalDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  // Check if a date is blocked
+  const isDateBlocked = (date) => {
+    const dateString = formatLocalDate(date);
+    return blockedDates.some(blocked => {
+      const startDate = blocked.startDate.toDate ? blocked.startDate.toDate() : new Date(blocked.startDate);
+      const endDate = blocked.endDate.toDate ? blocked.endDate.toDate() : new Date(blocked.endDate);
+      const start = formatLocalDate(startDate);
+      const end = formatLocalDate(endDate);
+      return dateString >= start && dateString <= end;
+    });
+  };
+
+  // Get blocked info for a date
+  const getBlockedInfoForDate = (date) => {
+    const dateString = formatLocalDate(date);
+    const blockedRange = blockedDates.find(blocked => {
+      const startDate = blocked.startDate.toDate ? blocked.startDate.toDate() : new Date(blocked.startDate);
+      const endDate = blocked.endDate.toDate ? blocked.endDate.toDate() : new Date(blocked.endDate);
+      const start = formatLocalDate(startDate);
+      const end = formatLocalDate(endDate);
+      return dateString >= start && dateString <= end;
+    });
+    return blockedRange;
   };
 
   // Get global session order for consistent colors across views
@@ -235,8 +269,32 @@ const MonthView = ({
             <div
               key={index}
               className={`month-cell ${todayClass} ${otherMonthClass}`}
+              style={{
+                backgroundColor: isDateBlocked(day) ? '#ffe6e6' : 'transparent',
+                position: 'relative'
+              }}
             >
               <div className="month-cell__date">{day.getDate()}</div>
+              
+              {/* Blocked Date Indicator */}
+              {isDateBlocked(day) && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "2px",
+                    right: "2px",
+                    fontSize: "9px",
+                    color: "#dc3545",
+                    backgroundColor: "rgba(255, 255, 255, 0.9)",
+                    padding: "1px 3px",
+                    borderRadius: "3px",
+                    fontWeight: "500",
+                  }}
+                  title={getBlockedInfoForDate(day)?.reason || "Blocked"}
+                >
+                  BLOCKED
+                </div>
+              )}
 
               {/* Sessions for this day */}
               {daySessions
