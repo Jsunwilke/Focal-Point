@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { X, Clock, MapPin, Users, Check, Trash2 } from "lucide-react";
 import TimeSelect from "../shared/TimeSelect";
+import SearchableSelect from "../shared/SearchableSelect";
 import { updateSession, deleteSession, getSchools } from "../../firebase/firestore";
 import { getOrganizationSessionTypes, getSessionTypeColor, normalizeSessionTypes } from "../../utils/sessionTypes";
 
@@ -12,6 +13,7 @@ const EditSessionModal = ({
   session,
   teamMembers,
   organization,
+  userProfile,
   onSessionUpdated,
   onSessionDeleted,
 }) => {
@@ -438,23 +440,16 @@ const EditSessionModal = ({
                     School
                     <span style={{ color: "#dc3545" }}>*</span>
                   </label>
-                  <select
+                  <SearchableSelect
                     name="schoolId"
                     value={formData.schoolId}
                     onChange={handleChange}
-                    className={`form-select ${
-                      errors.schoolId ? "is-invalid" : ""
-                    }`}
-                  >
-                    <option value="">Select School</option>
-                    {schools
-                      .sort((a, b) => (a.value || "").localeCompare(b.value || ""))
-                      .map((school) => (
-                        <option key={school.id} value={school.id}>
-                          {school.value}
-                        </option>
-                      ))}
-                  </select>
+                    options={schools.sort((a, b) => (a.value || "").localeCompare(b.value || ""))}
+                    placeholder="Select School"
+                    searchPlaceholder="Search schools..."
+                    error={errors.schoolId}
+                    required={true}
+                  />
                   {errors.schoolId && (
                     <div className="invalid-feedback">{errors.schoolId}</div>
                   )}
@@ -874,17 +869,19 @@ const EditSessionModal = ({
           }}
         >
           <div>
-            {!showDeleteConfirm ? (
-              <button
-                type="button"
-                className="btn btn-outline-danger"
-                onClick={() => setShowDeleteConfirm(true)}
-                disabled={loading}
-              >
-                <Trash2 size={16} className="me-1" />
-                Delete Session
-              </button>
-            ) : (
+            {/* Delete Button - Only visible to admins/managers */}
+            {(userProfile?.role === 'admin' || userProfile?.role === 'manager') && (
+              !showDeleteConfirm ? (
+                <button
+                  type="button"
+                  className="btn btn-outline-danger"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={loading}
+                >
+                  <Trash2 size={16} className="me-1" />
+                  Delete Session
+                </button>
+              ) : (
               <div
                 style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}
               >
@@ -920,6 +917,7 @@ const EditSessionModal = ({
                   Delete
                 </button>
               </div>
+            )
             )}
           </div>
 

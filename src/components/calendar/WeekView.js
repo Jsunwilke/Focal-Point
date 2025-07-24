@@ -865,8 +865,9 @@ const WeekView = ({
                     </div>
                   )}
 
-                  {/* Add Session Button */}
-                  {isHoveredCell('unassigned', day) && onAddSession && (
+                  {/* Add Session Button - Only for admins/managers */}
+                  {isHoveredCell('unassigned', day) && onAddSession && 
+                   (userProfile?.role === 'admin' || userProfile?.role === 'manager') && (
                     <button
                       className="calendar-cell__add-btn"
                       onClick={(e) => {
@@ -1187,8 +1188,9 @@ const WeekView = ({
                     </div>
                   )}
 
-                  {/* Add Session Button */}
-                  {isHoveredCell(member.id, day) && onAddSession && (
+                  {/* Add Session Button - Only for admins/managers */}
+                  {isHoveredCell(member.id, day) && onAddSession && 
+                   (userProfile?.role === 'admin' || userProfile?.role === 'manager') && (
                     <button
                       className="calendar-cell__add-btn"
                       onClick={(e) => {

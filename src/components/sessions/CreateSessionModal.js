@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { X, Clock, MapPin, Users, Check } from "lucide-react";
 import TimeSelect from "../shared/TimeSelect";
+import SearchableSelect from "../shared/SearchableSelect";
 import { createSession, getSchools } from "../../firebase/firestore";
 import { getOrganizationSessionTypes, getSessionTypeColor } from "../../utils/sessionTypes";
 
@@ -379,23 +380,16 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
                     School
                     <span style={{ color: "#dc3545" }}>*</span>
                   </label>
-                  <select
+                  <SearchableSelect
                     name="schoolId"
                     value={formData.schoolId}
                     onChange={handleChange}
-                    className={`form-select ${
-                      errors.schoolId ? "is-invalid" : ""
-                    }`}
-                  >
-                    <option value="">Select School</option>
-                    {schools
-                      .sort((a, b) => (a.value || "").localeCompare(b.value || ""))
-                      .map((school) => (
-                        <option key={school.id} value={school.id}>
-                          {school.value}
-                        </option>
-                      ))}
-                  </select>
+                    options={schools.sort((a, b) => (a.value || "").localeCompare(b.value || ""))}
+                    placeholder="Select School"
+                    searchPlaceholder="Search schools..."
+                    error={errors.schoolId}
+                    required={true}
+                  />
                   {errors.schoolId && (
                     <div className="invalid-feedback">{errors.schoolId}</div>
                   )}

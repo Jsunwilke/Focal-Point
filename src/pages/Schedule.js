@@ -1269,13 +1269,16 @@ const Schedule = () => {
             </button>
           )}
           
-          <button
-            className="schedule__create-btn"
-            onClick={() => setShowCreateModal(true)}
-          >
-            <Plus size={16} />
-            <span>Create Session</span>
-          </button>
+          {/* Create Session Button - Only visible to admins/managers */}
+          {(userProfile?.role === 'admin' || userProfile?.role === 'manager') && (
+            <button
+              className="schedule__create-btn"
+              onClick={() => setShowCreateModal(true)}
+            >
+              <Plus size={16} />
+              <span>Create Session</span>
+            </button>
+          )}
           
           {/* Publish Button - Only visible to admins/managers when unpublished sessions exist */}
           {(userProfile?.role === 'admin' || userProfile?.role === 'manager') && 
@@ -1547,6 +1550,7 @@ const Schedule = () => {
           session={selectedSession}
           teamMembers={teamMembers}
           organization={organization}
+          userProfile={userProfile}
           onSessionUpdated={handleSessionUpdated}
           onSessionDeleted={handleSessionDeleted}
         />
