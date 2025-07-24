@@ -76,13 +76,6 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       adminOnly: true,
     },
     {
-      id: "schools",
-      label: "Schools",
-      icon: School,
-      path: "/schools",
-      enabled: true,
-    },
-    {
       id: "sports",
       label: "Sports",
       icon: Trophy,

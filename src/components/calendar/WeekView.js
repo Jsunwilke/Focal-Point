@@ -566,7 +566,7 @@ const WeekView = ({
   };
 
   const todayHeaderStyle = {
-    backgroundColor: "var(--primary-light, #e3f2fd)",
+    backgroundColor: "#e9f1fc",
     color: "var(--primary-color, #007bff)",
   };
 
@@ -617,7 +617,7 @@ const WeekView = ({
 
     // Add today styling
     if (isToday(day)) {
-      baseStyle.backgroundColor = "var(--primary-light, #e3f2fd)";
+      baseStyle.backgroundColor = "#e9f1fc";
     }
 
     // Add drag over styling (highest priority)

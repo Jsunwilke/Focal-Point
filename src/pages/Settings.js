@@ -8,6 +8,7 @@ import {
   Building2,
   ChevronRight,
   Plus,
+  School,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import Button from "../components/shared/Button";
@@ -62,6 +63,16 @@ const Settings = () => {
       available: isAdmin,
       action: "navigate",
       path: "/team"
+    },
+    {
+      id: "schools",
+      title: "School Management",
+      description: "Manage schools and their information",
+      icon: <School size={24} />,
+      color: "indigo",
+      available: isAdmin,
+      action: "navigate",
+      path: "/schools"
     }
   ];
 
