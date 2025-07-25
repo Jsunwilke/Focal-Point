@@ -1,6 +1,6 @@
 // src/components/calendar/WeekView.js - Clean version with Multiple Photographers Support
 import React, { useState, useMemo } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Menu } from "lucide-react";
 import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
 
 const WeekView = ({
@@ -18,6 +18,9 @@ const WeekView = ({
   onTimeOffClick, // New prop for handling time off clicks
   onHeaderDateClick, // New prop for handling header date clicks
   onAddSession, // New prop for handling add session clicks
+  onEmployeeReorder, // New prop for handling employee reordering
+  onResetEmployeeOrder, // New prop for resetting employee order
+  hasCustomOrder, // New prop to show/hide reset button
 }) => {
   const [draggedSession, setDraggedSession] = useState(null);
   const [dragOver, setDragOver] = useState({
@@ -28,6 +31,9 @@ const WeekView = ({
     photographerId: null,
     date: null,
   });
+  const [draggedEmployee, setDraggedEmployee] = useState(null);
+  const [dragOverEmployee, setDragOverEmployee] = useState(null);
+  const [dropPosition, setDropPosition] = useState(null); // "before" or "after"
 
   // Generate days for the week
   const generateWeekDays = () => {
@@ -423,6 +429,48 @@ const WeekView = ({
     if (onAddSession) {
       onAddSession(photographerId, date);
     }
+  };
+
+  // Employee drag handlers
+  const handleEmployeeDragStart = (e, member) => {
+    setDraggedEmployee(member);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleEmployeeDragOver = (e, memberId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    
+    // Calculate if we're in the top or bottom half of the row
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const position = y < rect.height / 2 ? "before" : "after";
+    
+    setDragOverEmployee(memberId);
+    setDropPosition(position);
+  };
+
+  const handleEmployeeDragLeave = () => {
+    setDragOverEmployee(null);
+    setDropPosition(null);
+  };
+
+  const handleEmployeeDrop = (e, targetMember) => {
+    e.preventDefault();
+    
+    if (draggedEmployee && draggedEmployee.id !== targetMember.id && onEmployeeReorder) {
+      onEmployeeReorder(draggedEmployee.id, targetMember.id);
+    }
+    
+    setDraggedEmployee(null);
+    setDragOverEmployee(null);
+    setDropPosition(null);
+  };
+
+  const handleEmployeeDragEnd = () => {
+    setDraggedEmployee(null);
+    setDragOverEmployee(null);
+    setDropPosition(null);
   };
 
   // Get session color based on order within the day
@@ -1049,9 +1097,39 @@ const WeekView = ({
         {/* Corner cell for photographer column */}
         <div
           className="calendar-header__cell calendar-header__cell--corner"
-          style={cornerCellStyle}
+          style={{
+            ...cornerCellStyle,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
         >
           <div className="calendar-header__day">TEAM</div>
+          {hasCustomOrder && onResetEmployeeOrder && (
+            <button
+              onClick={onResetEmployeeOrder}
+              style={{
+                fontSize: "12px",
+                padding: "2px 8px",
+                backgroundColor: "#007bff",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                transition: "background-color 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = "#0056b3";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = "#007bff";
+              }}
+              title="Reset to alphabetical order"
+            >
+              Reset Order
+            </button>
+          )}
         </div>
 
         {/* Day columns */}
@@ -1126,7 +1204,39 @@ const WeekView = ({
       {/* Body with Team Members and Sessions */}
       <div className="calendar-body" style={bodyStyle}>
         {finalDisplayMembers.map((member) => (
-          <div key={member.id} className="calendar-row" style={rowStyle}>
+          <div 
+            key={member.id} 
+            className="calendar-row" 
+            style={{
+              ...rowStyle,
+              opacity: draggedEmployee?.id === member.id ? 0.5 : 1,
+              backgroundColor: dragOverEmployee === member.id && !dropPosition ? "rgba(0, 123, 255, 0.05)" : "transparent",
+              transition: "background-color 0.2s ease",
+              position: "relative",
+            }}
+            draggable={isAdmin || userProfile?.role === 'manager'}
+            onDragStart={(e) => handleEmployeeDragStart(e, member)}
+            onDragOver={(e) => handleEmployeeDragOver(e, member.id)}
+            onDragLeave={handleEmployeeDragLeave}
+            onDrop={(e) => handleEmployeeDrop(e, member)}
+            onDragEnd={handleEmployeeDragEnd}
+          >
+            {/* Drop Indicator Line */}
+            {dropPosition && dragOverEmployee === member.id && draggedEmployee && draggedEmployee.id !== member.id && (
+              <div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  height: "2px",
+                  backgroundColor: "#007bff",
+                  top: dropPosition === "before" ? -1 : "auto",
+                  bottom: dropPosition === "after" ? -1 : "auto",
+                  zIndex: 10,
+                  pointerEvents: "none",
+                }}
+              />
+            )}
             {/* Photographer Name Cell */}
             <div
               className="calendar-row__photographer"
@@ -1141,8 +1251,22 @@ const WeekView = ({
                 left: 0,
                 zIndex: 5,
                 boxSizing: "border-box",
+                cursor: (isAdmin || userProfile?.role === 'manager') ? "move" : "default",
               }}
             >
+              {/* Drag Handle */}
+              {(isAdmin || userProfile?.role === 'manager') && (
+                <div 
+                  style={{
+                    color: "#6c757d",
+                    cursor: "grab",
+                    marginRight: "-4px",
+                  }}
+                  title="Drag to reorder"
+                >
+                  <Menu size={16} />
+                </div>
+              )}
               <div className="photographer-avatar">
                 {getUserAvatar(member)}
               </div>

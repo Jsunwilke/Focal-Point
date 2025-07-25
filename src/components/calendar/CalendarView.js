@@ -19,6 +19,9 @@ const CalendarView = ({
   onTimeOffClick, // New prop for handling time off clicks
   onHeaderDateClick, // New prop for handling header date clicks
   onAddSession, // New prop for handling add session button clicks
+  onEmployeeReorder, // New prop for handling employee reordering
+  onResetEmployeeOrder, // New prop for resetting employee order
+  hasCustomOrder, // New prop to show/hide reset button
 }) => {
   const renderView = () => {
     switch (viewMode) {
@@ -39,6 +42,9 @@ const CalendarView = ({
             onTimeOffClick={onTimeOffClick} // Pass the time off click handler
             onHeaderDateClick={onHeaderDateClick} // Pass the header date click handler
             onAddSession={onAddSession} // Pass the add session handler
+            onEmployeeReorder={onEmployeeReorder} // Pass the employee reorder handler
+            onResetEmployeeOrder={onResetEmployeeOrder} // Pass the reset employee order handler
+            hasCustomOrder={hasCustomOrder} // Pass the custom order flag
           />
         );
       case "month":
@@ -73,6 +79,9 @@ const CalendarView = ({
             onTimeOffClick={onTimeOffClick} // Pass the time off click handler
             onHeaderDateClick={onHeaderDateClick} // Pass the header date click handler
             onAddSession={onAddSession} // Pass the add session handler
+            onEmployeeReorder={onEmployeeReorder} // Pass the employee reorder handler
+            onResetEmployeeOrder={onResetEmployeeOrder} // Pass the reset employee order handler
+            hasCustomOrder={hasCustomOrder} // Pass the custom order flag
           />
         );
     }

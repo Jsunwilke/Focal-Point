@@ -176,6 +176,29 @@ const loadPhotographerPreferences = (organizationId) => {
   }
 };
 
+// Helper functions for employee order
+const saveEmployeeOrder = (organizationId, order) => {
+  try {
+    localStorage.setItem(`schedule-employee-order-${organizationId}`, JSON.stringify(order));
+  } catch (error) {
+    secureLogger.error("Error saving employee order:", error);
+  }
+};
+
+const loadEmployeeOrder = (organizationId) => {
+  try {
+    const saved = localStorage.getItem(`schedule-employee-order-${organizationId}`);
+    if (!saved) return [];
+    
+    const parsed = JSON.parse(saved);
+    // Ensure the parsed data is an array
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    secureLogger.error("Error loading employee order:", error);
+    return [];
+  }
+};
+
 const Schedule = () => {
   const { userProfile, organization } = useAuth();
   const { showToast } = useToast();
@@ -200,6 +223,7 @@ const Schedule = () => {
   const [visiblePhotographers, setVisiblePhotographers] = useState(new Set());
   const [visibleSchools, setVisibleSchools] = useState(new Set());
   const [loading, setLoading] = useState(true);
+  const [employeeOrder, setEmployeeOrder] = useState([]);
   const [updating, setUpdating] = useState(false);
   const [showTimeOffModal, setShowTimeOffModal] = useState(false);
   const [showTimeOffApprovalModal, setShowTimeOffApprovalModal] = useState(false);
@@ -372,6 +396,10 @@ const Schedule = () => {
         });
 
         setTeamMembers(sortedMembers);
+
+        // Load saved employee order
+        const savedOrder = loadEmployeeOrder(organization.id);
+        setEmployeeOrder(savedOrder);
 
         // Load saved photographer preferences or initialize with all active members
         const activeMembers = sortedMembers.filter((member) => member.isActive);
@@ -661,6 +689,39 @@ const Schedule = () => {
 
     setVisiblePhotographers(allIds);
     savePhotographerPreferences(organization.id, allIds);
+  };
+
+  // Handle employee reorder
+  const handleEmployeeReorder = (draggedId, targetId) => {
+    console.log("handleEmployeeReorder called with:", { draggedId, targetId });
+    
+    // Get current sorted team members
+    const currentMembers = [...sortedFilteredTeamMembers];
+    const draggedIndex = currentMembers.findIndex(m => m.id === draggedId);
+    const targetIndex = currentMembers.findIndex(m => m.id === targetId);
+    
+    console.log("Indexes:", { draggedIndex, targetIndex });
+    
+    if (draggedIndex !== -1 && targetIndex !== -1 && draggedIndex !== targetIndex) {
+      // Remove dragged member
+      const [draggedMember] = currentMembers.splice(draggedIndex, 1);
+      
+      // Insert at target position
+      currentMembers.splice(targetIndex, 0, draggedMember);
+      
+      // Extract just the IDs for storage
+      const newOrder = currentMembers.map(m => m.id);
+      console.log("New order:", newOrder);
+      
+      setEmployeeOrder(newOrder);
+      saveEmployeeOrder(organization.id, newOrder);
+    }
+  };
+
+  // Handle reset employee order
+  const handleResetEmployeeOrder = () => {
+    setEmployeeOrder([]);
+    localStorage.removeItem(`schedule-employee-order-${organization.id}`);
   };
 
   const handleHideAllPhotographers = () => {
@@ -1036,6 +1097,62 @@ const Schedule = () => {
   // Combine sessions and time off for calendar display
   const allCalendarEntries = [...filteredSessions, ...filteredTimeOff];
 
+  // Sort team members based on saved order
+  const sortTeamMembersByOrder = (members, order) => {
+    // Ensure members is an array
+    if (!members || !Array.isArray(members)) {
+      console.warn("Members is not an array:", members);
+      return [];
+    }
+    
+    // Ensure order is an array
+    if (!order || !Array.isArray(order) || order.length === 0) {
+      // No custom order, sort alphabetically
+      return [...members].sort((a, b) => {
+        const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+        const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+    }
+
+    try {
+      // Sort based on saved order using a simple approach
+      const sortedMembers = [...members];
+      
+      // Sort using the order array
+      sortedMembers.sort((a, b) => {
+        const indexA = order.indexOf(a.id);
+        const indexB = order.indexOf(b.id);
+        
+        // If both are in the order array, sort by their position
+        if (indexA !== -1 && indexB !== -1) {
+          return indexA - indexB;
+        }
+        
+        // If only A is in the order, it comes first
+        if (indexA !== -1) return -1;
+        
+        // If only B is in the order, it comes first
+        if (indexB !== -1) return 1;
+        
+        // If neither is in the order, sort alphabetically
+        const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+        const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+      
+      return sortedMembers;
+    } catch (error) {
+      console.error("Error in sortTeamMembersByOrder:", error);
+      // Fallback to alphabetical order
+      return [...members].sort((a, b) => {
+        const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+        const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+    }
+  };
+
   // Filter team members for display in calendar
   const filteredTeamMembers = teamMembers.filter((member) => {
     const isActiveAndVisible =
@@ -1047,6 +1164,9 @@ const Schedule = () => {
 
     return isActiveAndVisible;
   });
+
+  // Apply custom order to filtered members
+  const sortedFilteredTeamMembers = sortTeamMembersByOrder(filteredTeamMembers, employeeOrder);
 
   // Calculate stats
   const calculateStats = () => {
@@ -1316,7 +1436,7 @@ const Schedule = () => {
           currentDate={currentDate}
           dateRange={dateRange}
           sessions={allCalendarEntries}
-          teamMembers={filteredTeamMembers}
+          teamMembers={sortedFilteredTeamMembers}
           scheduleType={scheduleType}
           userProfile={userProfile}
           organization={organization}
@@ -1327,6 +1447,9 @@ const Schedule = () => {
           onTimeOffClick={handleTimeOffClick}
           onHeaderDateClick={handleHeaderDateClick}
           onAddSession={handleAddSession}
+          onEmployeeReorder={handleEmployeeReorder}
+          onResetEmployeeOrder={handleResetEmployeeOrder}
+          hasCustomOrder={employeeOrder.length > 0}
         />
       </div>
 
