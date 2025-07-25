@@ -103,8 +103,13 @@ const MonthView = ({
 
   // Get global session order for consistent colors across views
   const getGlobalSessionOrderForDay = (day) => {
-    // Get ALL sessions for this day across all photographers
+    // Get ALL sessions for this day across all photographers (excluding time off)
     const allDaySessions = sessions.filter((session) => {
+      // Exclude time off sessions from color ordering
+      if (session.isTimeOff) {
+        return false;
+      }
+      
       let sessionDate;
       if (typeof session.date === "string") {
         const [year, month, dayOfMonth] = session.date.split("-").map(Number);
@@ -229,7 +234,9 @@ const MonthView = ({
 
   // Get session color based on order within the day
   const getSessionColorByOrder = (orderIndex) => {
-    const colors = [
+    // Use custom colors from organization settings if available
+    const customColors = organization?.sessionOrderColors;
+    const defaultColors = [
       "#3b82f6", // Blue - 1st session
       "#10b981", // Green - 2nd session 
       "#8b5cf6", // Purple - 3rd session
@@ -239,6 +246,8 @@ const MonthView = ({
       "#8b5a3c", // Brown - 7th session
       "#6b7280", // Gray - 8th+ sessions
     ];
+    
+    const colors = customColors && customColors.length >= 8 ? customColors : defaultColors;
     return colors[orderIndex] || colors[colors.length - 1];
   };
 

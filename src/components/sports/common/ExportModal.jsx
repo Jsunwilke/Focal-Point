@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Modal, Button, Form, Row, Col } from "react-bootstrap";
+import ReactDOM from "react-dom";
+import { Button, Form, Row, Col } from "react-bootstrap";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import { useToast } from "../../../contexts/ToastContext";
@@ -128,81 +129,164 @@ const ExportModal = ({ show, onHide, job, rosterData, groupsData }) => {
     }
   };
 
-  return (
-    <Modal show={show} onHide={onHide} centered>
-      <Modal.Header closeButton>
-        <Modal.Title>Export Data</Modal.Title>
-      </Modal.Header>
+  if (!show) return null;
 
-      <Modal.Body>
-        <Form>
-          <Form.Group className="mb-3">
-            <Form.Label className="fw-bold">What to Export</Form.Label>
-            <div>
-              <Form.Check
-                type="checkbox"
-                id="exportRoster"
-                name="roster"
-                label="Athletes Roster"
-                checked={exportOptions.roster}
-                onChange={handleOptionChange}
-              />
-              <Form.Check
-                type="checkbox"
-                id="exportGroups"
-                name="groups"
-                label="Group Images"
-                checked={exportOptions.groups}
-                onChange={handleOptionChange}
-              />
-            </div>
-          </Form.Group>
-
-          <Form.Group className="mb-3">
-            <Form.Label className="fw-bold">Format</Form.Label>
-            <Form.Select
-              name="format"
-              value={exportOptions.format}
-              onChange={handleOptionChange}
-            >
-              <option value="xlsx">Excel (.xlsx)</option>
-              <option value="csv">CSV</option>
-            </Form.Select>
-          </Form.Group>
-        </Form>
-
-        <div className="alert alert-info">
-          <small>
-            <strong>File Mapping:</strong>
-            <br />
-            • Last Name → Name
-            <br />
-            • First Name → Subject ID
-            <br />
-            • Teacher → Special
-            <br />
-            • Group → Sport/Team
-            <br />• Images column contains photographer data
-          </small>
+  const modalContent = (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 10001,
+        padding: "20px",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onHide();
+        }
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: "white",
+          borderRadius: "8px",
+          maxWidth: "500px",
+          width: "100%",
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          position: "relative",
+          margin: "0",
+          transform: "none",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div
+          style={{
+            padding: "1rem 1.5rem",
+            borderBottom: "1px solid #dee2e6",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <h5 style={{ margin: 0 }}>Export Data</h5>
+          <button
+            onClick={onHide}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: "1.5rem",
+              cursor: "pointer",
+              padding: "0",
+              width: "32px",
+              height: "32px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            aria-label="Close"
+          >
+            ×
+          </button>
         </div>
-      </Modal.Body>
 
-      <Modal.Footer>
-        <Button variant="secondary" onClick={onHide} disabled={loading}>
-          Cancel
-        </Button>
-        <Button variant="success" onClick={handleExport} disabled={loading}>
-          {loading && (
-            <span
-              className="spinner-border spinner-border-sm me-2"
-              role="status"
-            ></span>
-          )}
-          <i className="bi bi-download"></i> Export Data
-        </Button>
-      </Modal.Footer>
-    </Modal>
+        {/* Modal Body */}
+        <div
+          style={{
+            padding: "1.5rem",
+            overflow: "auto",
+            flex: 1,
+          }}
+        >
+          <Form>
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-bold">What to Export</Form.Label>
+              <div>
+                <Form.Check
+                  type="checkbox"
+                  id="exportRoster"
+                  name="roster"
+                  label="Athletes Roster"
+                  checked={exportOptions.roster}
+                  onChange={handleOptionChange}
+                />
+                <Form.Check
+                  type="checkbox"
+                  id="exportGroups"
+                  name="groups"
+                  label="Group Images"
+                  checked={exportOptions.groups}
+                  onChange={handleOptionChange}
+                />
+              </div>
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-bold">Format</Form.Label>
+              <Form.Select
+                name="format"
+                value={exportOptions.format}
+                onChange={handleOptionChange}
+              >
+                <option value="xlsx">Excel (.xlsx)</option>
+                <option value="csv">CSV</option>
+              </Form.Select>
+            </Form.Group>
+          </Form>
+
+          <div className="alert alert-info">
+            <small>
+              <strong>File Mapping:</strong>
+              <br />
+              • Last Name → Name
+              <br />
+              • First Name → Subject ID
+              <br />
+              • Teacher → Special
+              <br />
+              • Group → Sport/Team
+              <br />• Images column contains photographer data
+            </small>
+          </div>
+        </div>
+
+        {/* Modal Footer */}
+        <div
+          style={{
+            padding: "1rem 1.5rem",
+            borderTop: "1px solid #dee2e6",
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "0.5rem",
+          }}
+        >
+          <Button variant="secondary" onClick={onHide} disabled={loading}>
+            Cancel
+          </Button>
+          <Button variant="success" onClick={handleExport} disabled={loading}>
+            {loading && (
+              <span
+                className="spinner-border spinner-border-sm me-2"
+                role="status"
+              ></span>
+            )}
+            <i className="bi bi-download"></i> Export Data
+          </Button>
+        </div>
+      </div>
+    </div>
   );
+
+  return ReactDOM.createPortal(modalContent, document.body);
 };
 
 export default ExportModal;

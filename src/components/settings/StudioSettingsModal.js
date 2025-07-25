@@ -95,6 +95,16 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
       }
     },
     enableSessionPublishing: false,
+    sessionOrderColors: [
+      "#3b82f6", // Blue - 1st session
+      "#10b981", // Green - 2nd session 
+      "#8b5cf6", // Purple - 3rd session
+      "#f59e0b", // Orange - 4th session
+      "#ef4444", // Red - 5th session
+      "#06b6d4", // Cyan - 6th session
+      "#8b5a3c", // Brown - 7th session
+      "#6b7280", // Gray - 8th+ sessions
+    ],
   });
 
   const [loading, setLoading] = useState(false);
@@ -198,6 +208,16 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
           }
         },
         enableSessionPublishing: organization.enableSessionPublishing || false,
+        sessionOrderColors: organization.sessionOrderColors || [
+          "#3b82f6", // Blue - 1st session
+          "#10b981", // Green - 2nd session 
+          "#8b5cf6", // Purple - 3rd session
+          "#f59e0b", // Orange - 4th session
+          "#ef4444", // Red - 5th session
+          "#06b6d4", // Cyan - 6th session
+          "#8b5a3c", // Brown - 7th session
+          "#6b7280", // Gray - 8th+ sessions
+        ],
       });
       console.log("Initialized session types:", organization.sessionTypes || getDefaultSessionTypesForNewOrg());
       
@@ -1434,6 +1454,169 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
                       <li>Sessions can be published individually or in bulk</li>
                       <li>When disabled, all sessions are automatically visible upon creation</li>
                     </ul>
+                  </div>
+                </div>
+
+                <div className="form-section" style={{ marginTop: '2rem' }}>
+                  <h3 className="form-section__title">
+                    <Tag size={16} />
+                    Session Color Order
+                  </h3>
+                  
+                  <p className="form-text" style={{ marginBottom: '1rem' }}>
+                    Sessions are automatically assigned colors based on their time order within each day. 
+                    Customize the colors below (time off sessions are excluded from this ordering).
+                  </p>
+
+                  <style jsx>{`
+                    @media (max-width: 768px) {
+                      .session-colors-grid {
+                        grid-template-columns: repeat(2, 1fr) !important;
+                      }
+                    }
+                    @media (max-width: 480px) {
+                      .session-colors-grid {
+                        grid-template-columns: 1fr !important;
+                      }
+                    }
+                  `}</style>
+                  <div className="session-colors-grid" style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, 1fr)',
+                    gap: '0.75rem',
+                    marginTop: '1rem'
+                  }}>
+                    {formData.sessionOrderColors.map((color, index) => (
+                      <div key={index} className="color-picker-item" style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.5rem',
+                        padding: '0.875rem',
+                        border: '1px solid #e9ecef',
+                        borderRadius: '0.5rem',
+                        backgroundColor: '#ffffff',
+                        transition: 'all 0.2s ease',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)';
+                        e.currentTarget.style.borderColor = '#dee2e6';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+                        e.currentTarget.style.borderColor = '#e9ecef';
+                      }}>
+                        <label style={{
+                          fontSize: '0.8125rem',
+                          fontWeight: '600',
+                          color: '#495057',
+                          marginBottom: '0.25rem'
+                        }}>
+                          {index === 7 ? '8th+ Session' : `${index + 1}${index === 0 ? 'st' : index === 1 ? 'nd' : index === 2 ? 'rd' : 'th'} Session`}
+                        </label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                          <input
+                            type="color"
+                            value={color}
+                            onChange={(e) => {
+                              const newColors = [...formData.sessionOrderColors];
+                              newColors[index] = e.target.value;
+                              setFormData(prev => ({
+                                ...prev,
+                                sessionOrderColors: newColors
+                              }));
+                            }}
+                            style={{
+                              width: '36px',
+                              height: '36px',
+                              border: '1px solid #dee2e6',
+                              borderRadius: '0.375rem',
+                              cursor: 'pointer',
+                              padding: '2px',
+                              backgroundColor: '#fff',
+                              WebkitAppearance: 'none',
+                              MozAppearance: 'none',
+                              appearance: 'none'
+                            }}
+                          />
+                          <input
+                            type="text"
+                            value={color.toUpperCase()}
+                            onChange={(e) => {
+                              const newColors = [...formData.sessionOrderColors];
+                              newColors[index] = e.target.value;
+                              setFormData(prev => ({
+                                ...prev,
+                                sessionOrderColors: newColors
+                              }));
+                            }}
+                            style={{
+                              width: '90px',
+                              padding: '0.375rem 0.5rem',
+                              border: '1px solid #dee2e6',
+                              borderRadius: '0.375rem',
+                              fontSize: '0.75rem',
+                              fontFamily: 'monospace',
+                              textTransform: 'uppercase',
+                              backgroundColor: '#f8f9fa',
+                              transition: 'border-color 0.15s ease-in-out',
+                              height: '36px'
+                            }}
+                            onFocus={(e) => {
+                              e.target.style.borderColor = '#80bdff';
+                              e.target.style.backgroundColor = '#ffffff';
+                            }}
+                            onBlur={(e) => {
+                              e.target.style.borderColor = '#dee2e6';
+                              e.target.style.backgroundColor = '#f8f9fa';
+                            }}
+                            maxLength={7}
+                            placeholder="#000000"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'center' }}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="small"
+                      onClick={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          sessionOrderColors: [
+                            "#3b82f6", // Blue - 1st session
+                            "#10b981", // Green - 2nd session 
+                            "#8b5cf6", // Purple - 3rd session
+                            "#f59e0b", // Orange - 4th session
+                            "#ef4444", // Red - 5th session
+                            "#06b6d4", // Cyan - 6th session
+                            "#8b5a3c", // Brown - 7th session
+                            "#6b7280", // Gray - 8th+ sessions
+                          ]
+                        }));
+                      }}
+                      style={{ 
+                        fontSize: '0.875rem',
+                        padding: '0.5rem 1rem',
+                        borderColor: '#dee2e6',
+                        color: '#6c757d',
+                        backgroundColor: 'white',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = '#adb5bd';
+                        e.currentTarget.style.backgroundColor = '#f8f9fa';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = '#dee2e6';
+                        e.currentTarget.style.backgroundColor = 'white';
+                      }}
+                    >
+                      Reset to Default Colors
+                    </Button>
                   </div>
                 </div>
               </div>

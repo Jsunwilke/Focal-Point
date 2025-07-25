@@ -176,7 +176,9 @@ const SessionDetailsModal = ({
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
-    const date = new Date(dateString);
+    // Parse date string in local timezone to avoid UTC offset issues
+    const [year, month, day] = dateString.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     return date.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
