@@ -11,18 +11,31 @@ export const DEFAULT_SESSION_TYPE = {
 // Get session types for an organization
 export const getOrganizationSessionTypes = (organization) => {
   if (!organization) {
-    return [DEFAULT_SESSION_TYPE];
+    return [{ ...DEFAULT_SESSION_TYPE, order: 9999 }];
   }
 
-  const customTypes = organization.sessionTypes || [];
+  let customTypes = organization.sessionTypes || [];
+  
+  // Add order field to types that don't have it (backward compatibility)
+  customTypes = customTypes.map((type, index) => ({
+    ...type,
+    order: type.order !== undefined ? type.order : (type.id === 'other' ? 9999 : index + 1)
+  }));
   
   // Always ensure "Other" is available
   const hasOther = customTypes.some(type => type.id === 'other');
   if (!hasOther) {
-    return [...customTypes, DEFAULT_SESSION_TYPE];
+    customTypes.push({ ...DEFAULT_SESSION_TYPE, order: 9999 });
   }
   
-  return customTypes;
+  // Sort by order, ensuring "Other" is always last
+  return customTypes.sort((a, b) => {
+    // Other always goes last
+    if (a.id === 'other') return 1;
+    if (b.id === 'other') return -1;
+    // Sort by order field
+    return (a.order || 0) - (b.order || 0);
+  });
 };
 
 // Get color for a session type (handles both single string and array)
@@ -157,11 +170,11 @@ export const validateSessionType = (sessionType) => {
 // Get default session types for new organizations
 export const getDefaultSessionTypesForNewOrg = () => {
   return [
-    { id: 'sports', name: 'Sports Photography', color: '#8b5cf6' },
-    { id: 'portrait', name: 'Portrait Day', color: '#3b82f6' },
-    { id: 'event', name: 'School Event', color: '#f59e0b' },
-    { id: 'graduation', name: 'Graduation', color: '#10b981' },
-    DEFAULT_SESSION_TYPE
+    { id: 'sports', name: 'Sports Photography', color: '#8b5cf6', order: 1 },
+    { id: 'portrait', name: 'Portrait Day', color: '#3b82f6', order: 2 },
+    { id: 'event', name: 'School Event', color: '#f59e0b', order: 3 },
+    { id: 'graduation', name: 'Graduation', color: '#10b981', order: 4 },
+    { ...DEFAULT_SESSION_TYPE, order: 9999 } // Other always last
   ];
 };
 
@@ -186,4 +199,26 @@ export const normalizeSessionTypes = (sessionTypes) => {
 export const getPrimarySessionType = (sessionTypes) => {
   const normalized = normalizeSessionTypes(sessionTypes);
   return normalized[0];
+};
+
+// Reorder session types array
+export const reorderSessionTypes = (sessionTypes, fromIndex, toIndex) => {
+  const result = Array.from(sessionTypes);
+  const [removed] = result.splice(fromIndex, 1);
+  result.splice(toIndex, 0, removed);
+  
+  // Update order values based on new positions
+  return result.map((type, index) => ({
+    ...type,
+    order: type.id === 'other' ? 9999 : index + 1
+  }));
+};
+
+// Get the next order value for a new session type
+export const getNextSessionTypeOrder = (sessionTypes) => {
+  const nonOtherTypes = sessionTypes.filter(type => type.id !== 'other');
+  if (nonOtherTypes.length === 0) return 1;
+  
+  const maxOrder = Math.max(...nonOtherTypes.map(type => type.order || 0));
+  return maxOrder + 1;
 };

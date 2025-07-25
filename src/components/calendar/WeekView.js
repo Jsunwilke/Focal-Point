@@ -1,5 +1,5 @@
 // src/components/calendar/WeekView.js - Clean version with Multiple Photographers Support
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Plus } from "lucide-react";
 import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
 
@@ -215,16 +215,6 @@ const WeekView = ({
     );
   };
 
-  // Get unassigned sessions (sessions without photographers or with empty photographers array)
-  const getUnassignedSessions = () => {
-    const unassigned = sessions.filter((session) => {
-      // Check if session has no photographers assigned
-      return !session.photographerId && (!session.photographers || session.photographers.length === 0);
-    });
-    console.log('WeekView - Unassigned sessions found:', unassigned);
-    return unassigned;
-  };
-
   // Filter team members based on schedule type
   const displayMembers =
     scheduleType === "my"
@@ -241,8 +231,21 @@ const WeekView = ({
     photoURL: null
   };
 
-  // Handle unassigned sessions separately
-  const unassignedSessions = getUnassignedSessions();
+  // Memoize unassigned sessions calculation to prevent recalculation on every render
+  const unassignedSessions = useMemo(() => {
+    const unassigned = sessions.filter((session) => {
+      // Check if session has no photographers assigned
+      return !session.photographerId && (!session.photographers || session.photographers.length === 0);
+    });
+    
+    // Only log when sessions actually change
+    if (unassigned.length > 0) {
+      console.log('WeekView - Unassigned sessions found:', unassigned.length);
+    }
+    
+    return unassigned;
+  }, [sessions]);
+
   const showUnassignedSection = unassignedSessions.length > 0;
   
   // Don't include unassigned member in main display members
@@ -671,6 +674,7 @@ const WeekView = ({
             backgroundColor: "#e0e0e0",
             background: "repeating-linear-gradient(45deg, #e0e0e0, #e0e0e0 10px, #d0d0d0 10px, #d0d0d0 20px)",
             border: "1px solid #bbb",
+            color: "#333",
           };
         }
       }
@@ -875,15 +879,15 @@ const WeekView = ({
                         handleAddSessionClick('unassigned', day);
                       }}
                       style={{
-                        position: daySessions.length > 0 ? "absolute" : "absolute",
+                        position: "absolute",
                         top: daySessions.length > 0 ? "4px" : "50%",
                         right: daySessions.length > 0 ? "4px" : "50%",
                         transform: daySessions.length > 0 ? "none" : "translate(50%, -50%)",
-                        width: "28px",
-                        height: "28px",
+                        width: daySessions.length > 0 ? "28px" : "80%",
+                        height: daySessions.length > 0 ? "calc(100% - 8px)" : "80%",
                         borderRadius: "4px",
-                        backgroundColor: "#007bff",
-                        border: "none",
+                        backgroundColor: "transparent",
+                        border: "2px solid #007bff",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -895,17 +899,19 @@ const WeekView = ({
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.opacity = "1";
+                        e.currentTarget.style.backgroundColor = "rgba(0, 123, 255, 0.1)";
                         e.currentTarget.style.transform = daySessions.length > 0 ? "scale(1.05)" : "translate(50%, -50%) scale(1.05)";
                         e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.25)";
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.opacity = "0.85";
+                        e.currentTarget.style.backgroundColor = "transparent";
                         e.currentTarget.style.transform = daySessions.length > 0 ? "scale(1)" : "translate(50%, -50%) scale(1)";
                         e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.15)";
                       }}
                       title="Add session"
                     >
-                      <Plus size={16} color="white" />
+                      <Plus size={daySessions.length > 0 ? 20 : 16} color="#007bff" />
                     </button>
                   )}
 
@@ -960,11 +966,11 @@ const WeekView = ({
                             fontSize: "12px",
                             fontWeight: "600",
                             lineHeight: "1.2",
-                            color: "white",
+                            color: session.isTimeOff ? "#333" : "white",
                             marginBottom: "3px"
                           }}
                         >
-                          {session.schoolName || 'School'}
+                          {session.isTimeOff ? (session.reason || 'Time Off') : (session.schoolName || 'School')}
                         </div>
                         {(session.sessionTypes || session.sessionType) && (
                           <div style={{ display: 'flex', gap: '2px', flexWrap: 'wrap', marginTop: '2px' }}>
@@ -1198,15 +1204,15 @@ const WeekView = ({
                         handleAddSessionClick(member.id, day);
                       }}
                       style={{
-                        position: daySessions.length > 0 ? "absolute" : "absolute",
+                        position: "absolute",
                         top: daySessions.length > 0 ? "4px" : "50%",
                         right: daySessions.length > 0 ? "4px" : "50%",
                         transform: daySessions.length > 0 ? "none" : "translate(50%, -50%)",
-                        width: "28px",
-                        height: "28px",
+                        width: daySessions.length > 0 ? "28px" : "80%",
+                        height: daySessions.length > 0 ? "calc(100% - 8px)" : "80%",
                         borderRadius: "4px",
-                        backgroundColor: "#007bff",
-                        border: "none",
+                        backgroundColor: "transparent",
+                        border: "2px solid #007bff",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -1218,17 +1224,19 @@ const WeekView = ({
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.opacity = "1";
+                        e.currentTarget.style.backgroundColor = "rgba(0, 123, 255, 0.1)";
                         e.currentTarget.style.transform = daySessions.length > 0 ? "scale(1.05)" : "translate(50%, -50%) scale(1.05)";
                         e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.25)";
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.opacity = "0.85";
+                        e.currentTarget.style.backgroundColor = "transparent";
                         e.currentTarget.style.transform = daySessions.length > 0 ? "scale(1)" : "translate(50%, -50%) scale(1)";
                         e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.15)";
                       }}
                       title="Add session"
                     >
-                      <Plus size={16} color="white" />
+                      <Plus size={daySessions.length > 0 ? 20 : 16} color="#007bff" />
                     </button>
                   )}
 
@@ -1285,11 +1293,11 @@ const WeekView = ({
                           fontSize: "12px",
                           fontWeight: "600",
                           lineHeight: "1.2",
-                          color: "white",
+                          color: session.isTimeOff ? "#333" : "white",
                           marginBottom: "3px"
                         }}
                       >
-                        {session.schoolName || 'School'}
+                        {session.isTimeOff ? (session.reason || 'Time Off') : (session.schoolName || 'School')}
                       </div>
                       {(session.sessionTypes || session.sessionType) && (
                         <div style={{ display: 'flex', gap: '2px', flexWrap: 'wrap', marginTop: '2px' }}>

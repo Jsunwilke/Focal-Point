@@ -15,6 +15,7 @@ import {
   onSnapshot,
   orderBy,
   Timestamp,
+  writeBatch,
 } from "firebase/firestore";
 import { firestore } from "./config";
 import secureLogger from '../utils/secureLogger';

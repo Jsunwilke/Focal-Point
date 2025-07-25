@@ -19,6 +19,7 @@ import {
   Calendar,
   Upload,
   Image,
+  GripVertical,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { updateOrganization } from "../../firebase/firestore";
@@ -29,7 +30,9 @@ import {
   getOrganizationSessionTypes, 
   createSessionType, 
   validateSessionType,
-  getDefaultSessionTypesForNewOrg 
+  getDefaultSessionTypesForNewOrg,
+  reorderSessionTypes,
+  getNextSessionTypeOrder
 } from "../../utils/sessionTypes";
 import PayPeriodForm from "./PayPeriodForm";
 import "../shared/Modal.css";
@@ -102,6 +105,8 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
 
   // Check if user has admin permissions
   const isAdmin = userProfile?.role === "admin";
@@ -264,7 +269,10 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
       return;
     }
 
-    const sessionType = createSessionType(newSessionType.name, newSessionType.color);
+    const sessionType = {
+      ...createSessionType(newSessionType.name, newSessionType.color),
+      order: getNextSessionTypeOrder(formData.sessionTypes)
+    };
     console.log("Created session type:", sessionType);
     
     setFormData(prev => {
@@ -300,6 +308,66 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
         type.id === sessionTypeId ? { ...type, color } : type
       )
     }));
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (e, index) => {
+    const sessionType = formData.sessionTypes[index];
+    // Don't allow dragging the "Other" type
+    if (sessionType.id === 'other') {
+      e.preventDefault();
+      return;
+    }
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    const sessionType = formData.sessionTypes[index];
+    // Don't allow dropping on "Other" type
+    if (sessionType.id === 'other' || draggedIndex === null) return;
+    
+    setDragOverIndex(index);
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e, dropIndex) => {
+    e.preventDefault();
+    
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    const sessionType = formData.sessionTypes[dropIndex];
+    // Don't allow dropping on "Other" type
+    if (sessionType.id === 'other') {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    // Reorder the session types
+    const reorderedTypes = reorderSessionTypes(formData.sessionTypes, draggedIndex, dropIndex);
+    
+    setFormData(prev => ({
+      ...prev,
+      sessionTypes: reorderedTypes
+    }));
+
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   const validateForm = () => {
@@ -1050,108 +1118,210 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
                     Session Types
                   </h3>
                   <p className="form-section__description">
-                    Customize the session types available for your organization. Each type has a unique color for easy identification.
+                    Customize the session types available for your organization. Each type has a unique color for easy identification. Drag items to reorder.
                   </p>
 
-                  {/* Add New Session Type */}
-                  <div className="session-type-form">
-                    <h4 style={{ marginBottom: '1rem', fontSize: '1rem', fontWeight: '600' }}>Add New Session Type</h4>
-                    <div className="form-row">
-                      <div className="form-group" style={{ flex: 2 }}>
-                        <label className="form-label">Session Type Name</label>
-                        <input
-                          type="text"
-                          className={`form-input ${sessionTypeErrors.name ? 'form-input--error' : ''}`}
-                          value={newSessionType.name}
-                          onChange={(e) => {
-                            setNewSessionType(prev => ({ ...prev, name: e.target.value }));
-                            if (sessionTypeErrors.name) {
-                              setSessionTypeErrors(prev => ({ ...prev, name: '' }));
-                            }
-                          }}
-                          placeholder="e.g., School Dance, Team Photos"
-                        />
-                        {sessionTypeErrors.name && (
-                          <span className="form-error-text">{sessionTypeErrors.name}</span>
-                        )}
-                      </div>
-                      <div className="form-group" style={{ flex: 1 }}>
-                        <label className="form-label">Color</label>
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                          <input
-                            type="color"
-                            value={newSessionType.color}
-                            onChange={(e) => setNewSessionType(prev => ({ ...prev, color: e.target.value }))}
-                            style={{ width: '3rem', height: '2.5rem', border: 'none', borderRadius: '4px' }}
-                          />
-                          <input
-                            type="text"
-                            className="form-input"
-                            value={newSessionType.color}
-                            onChange={(e) => setNewSessionType(prev => ({ ...prev, color: e.target.value }))}
-                            placeholder="#3b82f6"
-                            style={{ flex: 1 }}
-                          />
-                        </div>
-                        {sessionTypeErrors.color && (
-                          <span className="form-error-text">{sessionTypeErrors.color}</span>
-                        )}
-                      </div>
-                      <div className="form-group" style={{ flex: 0, display: 'flex', alignItems: 'end' }}>
-                        <Button
-                          type="button"
-                          variant="primary"
-                          onClick={handleAddSessionType}
-                          style={{ height: '2.5rem' }}
-                        >
-                          <Plus size={16} />
-                          Add
-                        </Button>
-                      </div>
+                  {/* Compact Add New Session Type Form */}
+                  <div style={{ 
+                    backgroundColor: 'var(--background-light, #f8f9fa)',
+                    padding: '0.75rem',
+                    borderRadius: '8px',
+                    marginBottom: '1rem'
+                  }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.75rem'
+                    }}>
+                      <input
+                        type="text"
+                        className={`form-input ${sessionTypeErrors.name ? 'form-input--error' : ''}`}
+                        value={newSessionType.name}
+                        onChange={(e) => {
+                          setNewSessionType(prev => ({ ...prev, name: e.target.value }));
+                          if (sessionTypeErrors.name) {
+                            setSessionTypeErrors(prev => ({ ...prev, name: '' }));
+                          }
+                        }}
+                        placeholder="New session type name..."
+                        style={{ 
+                          flex: 1, 
+                          height: '36px',
+                          fontSize: '0.875rem'
+                        }}
+                      />
+                      <input
+                        type="color"
+                        value={newSessionType.color}
+                        onChange={(e) => setNewSessionType(prev => ({ ...prev, color: e.target.value }))}
+                        style={{ 
+                          width: '36px', 
+                          height: '36px', 
+                          border: '1px solid var(--border-color, #dee2e6)', 
+                          borderRadius: '6px',
+                          cursor: 'pointer'
+                        }}
+                        title="Choose color"
+                      />
+                      <Button
+                        type="button"
+                        variant="primary"
+                        onClick={handleAddSessionType}
+                        style={{ 
+                          height: '36px',
+                          padding: '0 1rem',
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        <Plus size={14} />
+                        Add
+                      </Button>
                     </div>
+                    {(sessionTypeErrors.name || sessionTypeErrors.color) && (
+                      <div style={{ marginTop: '0.5rem' }}>
+                        {sessionTypeErrors.name && (
+                          <span className="form-error-text" style={{ fontSize: '0.75rem' }}>
+                            {sessionTypeErrors.name}
+                          </span>
+                        )}
+                        {sessionTypeErrors.color && (
+                          <span className="form-error-text" style={{ fontSize: '0.75rem', marginLeft: '0.5rem' }}>
+                            {sessionTypeErrors.color}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Existing Session Types */}
-                  <div className="session-types-list" style={{ marginTop: '2rem' }}>
-                    <h4 style={{ marginBottom: '1rem', fontSize: '1rem', fontWeight: '600' }}>Current Session Types</h4>
+                  <div className="session-types-list" style={{ marginTop: '1.5rem' }}>
+                    <h4 style={{ marginBottom: '0.75rem', fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-secondary, #6c757d)' }}>
+                      Current Session Types ({formData.sessionTypes.length})
+                    </h4>
                     <div className="session-types-grid" style={{ 
-                      maxHeight: '300px', 
+                      display: 'grid',
+                      gridTemplateColumns: window.innerWidth < 768 ? '1fr' : 'repeat(auto-fill, minmax(250px, 1fr))',
+                      gap: '0.5rem',
+                      maxHeight: '400px', 
                       overflow: 'auto',
-                      border: '1px solid var(--border-color, #dee2e6)',
-                      borderRadius: '8px',
-                      padding: '0.5rem'
+                      padding: '0.5rem',
+                      backgroundColor: 'var(--background-light, #f8f9fa)',
+                      borderRadius: '8px'
                     }}>
-                      {formData.sessionTypes.map((sessionType) => (
-                        <div key={sessionType.id} className="session-type-item" style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '1rem',
-                          padding: '1rem',
-                          border: '1px solid var(--border-color, #dee2e6)',
-                          borderRadius: '8px',
-                          marginBottom: '0.5rem'
-                        }}>
+                      {formData.sessionTypes.map((sessionType, index) => (
+                        <div 
+                          key={sessionType.id} 
+                          className="session-type-item" 
+                          draggable={sessionType.id !== 'other'}
+                          onDragStart={(e) => handleDragStart(e, index)}
+                          onDragOver={(e) => handleDragOver(e, index)}
+                          onDragLeave={handleDragLeave}
+                          onDrop={(e) => handleDrop(e, index)}
+                          onDragEnd={handleDragEnd}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            padding: '0.5rem',
+                            border: `1px solid ${dragOverIndex === index ? 'var(--primary-color, #007bff)' : 'var(--border-color, #dee2e6)'}`,
+                            borderRadius: '6px',
+                            backgroundColor: dragOverIndex === index ? 'rgba(0, 123, 255, 0.05)' : 'white',
+                            opacity: draggedIndex === index ? 0.5 : 1,
+                            cursor: sessionType.id !== 'other' ? 'move' : 'default',
+                            transition: 'all 0.2s ease',
+                            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+                          }}>
+                          {sessionType.id !== 'other' ? (
+                            <div style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '0.25rem',
+                              flexShrink: 0
+                            }}>
+                              <span style={{
+                                width: '20px',
+                                height: '20px',
+                                borderRadius: '10px',
+                                backgroundColor: 'var(--background-light, #f0f0f0)',
+                                color: 'var(--text-secondary, #6c757d)',
+                                fontSize: '0.7rem',
+                                fontWeight: '600',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}>
+                                {formData.sessionTypes.filter(t => t.id !== 'other').findIndex(t => t.id === sessionType.id) + 1}
+                              </span>
+                              <GripVertical 
+                                size={16} 
+                                style={{ 
+                                  color: 'var(--text-light, #6c757d)', 
+                                  cursor: 'grab'
+                                }} 
+                              />
+                            </div>
+                          ) : (
+                            <span style={{
+                              padding: '0 0.5rem',
+                              fontSize: '0.7rem',
+                              fontWeight: '500',
+                              color: 'var(--text-secondary, #6c757d)',
+                              fontStyle: 'italic',
+                              flexShrink: 0
+                            }}>
+                              Last
+                            </span>
+                          )}
                           <div style={{
-                            width: '2rem',
-                            height: '2rem',
+                            width: '1rem',
+                            height: '1rem',
                             backgroundColor: sessionType.color,
-                            borderRadius: '4px',
-                            border: '1px solid rgba(0,0,0,0.1)'
+                            borderRadius: '3px',
+                            border: '1px solid rgba(0,0,0,0.2)',
+                            flexShrink: 0
                           }}></div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: '500', marginBottom: '0.25rem' }}>
-                              {sessionType.name}
-                            </div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #6c757d)' }}>
-                              {sessionType.color}
-                            </div>
+                          <div style={{ 
+                            flex: 1,
+                            minWidth: 0,
+                            fontSize: '0.875rem',
+                            fontWeight: '500',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            {sessionType.name}
+                            {sessionType.id === 'other' && (
+                              <span style={{ 
+                                fontSize: '0.75rem', 
+                                color: 'var(--text-secondary, #6c757d)',
+                                marginLeft: '0.25rem',
+                                fontWeight: 'normal'
+                              }}>
+                                (fixed)
+                              </span>
+                            )}
                           </div>
-                          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                            <input
-                              type="color"
-                              value={sessionType.color}
-                              onChange={(e) => handleSessionTypeColorChange(sessionType.id, e.target.value)}
-                              style={{ width: '2rem', height: '2rem', border: 'none', borderRadius: '4px' }}
+                          <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const input = document.createElement('input');
+                                input.type = 'color';
+                                input.value = sessionType.color;
+                                input.onchange = (e) => handleSessionTypeColorChange(sessionType.id, e.target.value);
+                                input.click();
+                              }}
+                              style={{
+                                width: '24px',
+                                height: '24px',
+                                backgroundColor: sessionType.color,
+                                border: '1px solid var(--border-color, #dee2e6)',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                padding: 0
+                              }}
+                              title="Change color"
                             />
                             {sessionType.id !== 'other' && (
                               <button
@@ -1162,21 +1332,18 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
                                   border: 'none',
                                   color: 'var(--danger-color, #dc3545)',
                                   cursor: 'pointer',
-                                  padding: '0.25rem'
+                                  padding: '0.25rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  opacity: 0.7,
+                                  transition: 'opacity 0.2s'
                                 }}
+                                onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
+                                onMouseLeave={(e) => e.currentTarget.style.opacity = 0.7}
+                                title="Delete"
                               >
-                                <Trash2 size={16} />
+                                <Trash2 size={14} />
                               </button>
-                            )}
-                            {sessionType.id === 'other' && (
-                              <div style={{ 
-                                fontSize: '0.75rem', 
-                                color: 'var(--text-secondary, #6c757d)',
-                                fontStyle: 'italic',
-                                padding: '0.25rem 0.5rem'
-                              }}>
-                                Default
-                              </div>
                             )}
                           </div>
                         </div>

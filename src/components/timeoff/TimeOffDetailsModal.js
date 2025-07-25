@@ -77,6 +77,7 @@ const TimeOffDetailsModal = ({ isOpen, onClose, timeOffEntry, userProfile, onSta
     switch (status) {
       case 'approved': return '#28a745';
       case 'pending': return '#ffc107';
+      case 'under_review': return '#17a2b8';
       case 'denied': return '#dc3545';
       case 'cancelled': return '#6c757d';
       default: return '#6c757d';

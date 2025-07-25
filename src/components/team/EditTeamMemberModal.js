@@ -10,11 +10,13 @@ import {
   Save,
   DollarSign,
   Shield,
+  Map,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { updateUserProfile } from "../../firebase/firestore";
 import { useToast } from "../../contexts/ToastContext";
 import Button from "../shared/Button";
+import MapModal from "../shared/MapModal";
 import "../shared/Modal.css";
 import "./EditTeamMemberModal.css";
 
@@ -31,10 +33,19 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
     role: "",
     bio: "",
     amountPerMile: "",
+    address: {
+      street: "",
+      city: "",
+      state: "",
+      zipCode: "",
+      country: "USA",
+    },
+    homeAddress: "", // GPS coordinates in "lat,lng" format
   });
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [showMapModal, setShowMapModal] = useState(false);
 
   // Initialize form data when modal opens or team member changes
   useEffect(() => {
@@ -49,6 +60,14 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
         role: teamMember.role || "",
         bio: teamMember.bio || "",
         amountPerMile: teamMember.amountPerMile ? teamMember.amountPerMile.toFixed(2) : "", // Display as dollar amount
+        address: {
+          street: teamMember.address?.street || "",
+          city: teamMember.address?.city || "",
+          state: teamMember.address?.state || "",
+          zipCode: teamMember.address?.zipCode || "",
+          country: teamMember.address?.country || "USA",
+        },
+        homeAddress: teamMember.homeAddress || "", // GPS coordinates
       });
     }
   }, [isOpen, teamMember]);
@@ -59,8 +78,19 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     
+    // Handle address fields
+    if (name.startsWith("address.")) {
+      const addressField = name.split(".")[1];
+      setFormData((prev) => ({
+        ...prev,
+        address: {
+          ...prev.address,
+          [addressField]: value,
+        },
+      }));
+    } 
     // Special handling for mileage rate - only allow numbers and decimal point
-    if (name === "amountPerMile") {
+    else if (name === "amountPerMile") {
       // Allow only numbers and one decimal point
       const numericValue = value.replace(/[^0-9.]/g, "");
       
@@ -93,6 +123,41 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
         [name]: "",
       }));
     }
+  };
+
+  const isValidAddress = () => {
+    return formData.address?.street?.trim() && 
+           formData.address?.city?.trim() && 
+           formData.address?.state?.trim();
+  };
+
+  const getFormattedAddress = () => {
+    if (!isValidAddress()) return "";
+    const { street, city, state, zipCode } = formData.address;
+    return `${street.trim()}, ${city.trim()}, ${state.trim()}${zipCode?.trim() ? ` ${zipCode.trim()}` : ""}`;
+  };
+
+  const parseInitialCoordinates = () => {
+    if (!formData.homeAddress) return [39.7817, -89.6501]; // Default to Springfield, IL
+    
+    const coords = formData.homeAddress.split(",");
+    if (coords.length === 2) {
+      const lat = parseFloat(coords[0].trim());
+      const lng = parseFloat(coords[1].trim());
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return [lat, lng];
+      }
+    }
+    return [39.7817, -89.6501]; // Fallback to default
+  };
+
+  const handleCoordinatesFromMap = (coordinates) => {
+    const coordString = `${coordinates[0]},${coordinates[1]}`;
+    setFormData((prev) => ({
+      ...prev,
+      homeAddress: coordString,
+    }));
+    setShowMapModal(false);
   };
 
   const validateForm = () => {
@@ -152,6 +217,8 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
         position: formData.position,
         role: formData.role,
         bio: formData.bio,
+        address: formData.address,
+        homeAddress: formData.homeAddress,
         updatedAt: new Date(),
       };
 
@@ -425,6 +492,116 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
                     )}
                   </div>
                 </div>
+
+                <div className="form-group">
+                  <label htmlFor="street" className="form-label">
+                    Street Address
+                  </label>
+                  <input
+                    type="text"
+                    id="street"
+                    name="address.street"
+                    className="form-input"
+                    value={formData.address.street}
+                    onChange={handleInputChange}
+                    placeholder="123 Main Street"
+                  />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="city" className="form-label">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      id="city"
+                      name="address.city"
+                      className="form-input"
+                      value={formData.address.city}
+                      onChange={handleInputChange}
+                      placeholder="New York"
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ flex: "0 0 120px" }}>
+                    <label htmlFor="state" className="form-label">
+                      State
+                    </label>
+                    <input
+                      type="text"
+                      id="state"
+                      name="address.state"
+                      className="form-input"
+                      value={formData.address.state}
+                      onChange={handleInputChange}
+                      placeholder="NY"
+                      maxLength="2"
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ flex: "0 0 140px" }}>
+                    <label htmlFor="zipCode" className="form-label">
+                      ZIP Code
+                    </label>
+                    <input
+                      type="text"
+                      id="zipCode"
+                      name="address.zipCode"
+                      className="form-input"
+                      value={formData.address.zipCode}
+                      onChange={handleInputChange}
+                      placeholder="10001"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="country" className="form-label">
+                    Country
+                  </label>
+                  <input
+                    type="text"
+                    id="country"
+                    name="address.country"
+                    className="form-input"
+                    value={formData.address.country}
+                    onChange={handleInputChange}
+                    placeholder="USA"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    Home Location
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                    <input
+                      type="text"
+                      value={formData.homeAddress || "No location set"}
+                      className="form-input"
+                      disabled
+                      style={{ flex: 1 }}
+                    />
+                    {isValidAddress() && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowMapModal(true)}
+                        style={{ whiteSpace: "nowrap" }}
+                      >
+                        <Map size={16} />
+                        Set on Map
+                      </Button>
+                    )}
+                  </div>
+                  <span className="form-hint">
+                    {isValidAddress() 
+                      ? "Click 'Set on Map' to pinpoint the exact home location"
+                      : "Complete the address fields above to enable map location setting"
+                    }
+                  </span>
+                </div>
               </div>
 
               <div className="form-section">
@@ -485,7 +662,22 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
     </div>
   );
 
-  return ReactDOM.createPortal(modalContent, document.body);
+  return (
+    <>
+      {ReactDOM.createPortal(modalContent, document.body)}
+      
+      {/* Map Modal */}
+      <MapModal
+        isOpen={showMapModal}
+        onClose={() => setShowMapModal(false)}
+        initialCoordinates={parseInitialCoordinates()}
+        initialAddress={getFormattedAddress()}
+        onCoordinatesChange={handleCoordinatesFromMap}
+        title="Set Home Location"
+        subtitle="Drag the pin or click on the map to set the exact home/driveway location"
+      />
+    </>
+  );
 };
 
 export default EditTeamMemberModal;

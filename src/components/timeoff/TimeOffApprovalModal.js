@@ -10,12 +10,14 @@ import {
   CheckCircle, 
   XCircle,
   MessageSquare,
-  Star 
+  Star,
+  Eye 
 } from 'lucide-react';
 import { 
   getTimeOffRequests, 
   approveTimeOffRequest, 
-  denyTimeOffRequest 
+  denyTimeOffRequest,
+  markTimeOffRequestUnderReview 
 } from '../../firebase/timeOffRequests';
 import Button from '../shared/Button';
 import '../shared/Modal.css';
@@ -23,7 +25,7 @@ import './TimeOffApprovalModal.css';
 
 const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onStatusChange }) => {
   const [activeTab, setActiveTab] = useState('pending');
-  const [requests, setRequests] = useState([]);
+  const [allRequests, setAllRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
   const [denialReason, setDenialReason] = useState('');
@@ -33,29 +35,43 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
     if (isOpen) {
       loadRequests();
     }
-  }, [isOpen, activeTab]);
+  }, [isOpen]);
 
   const loadRequests = async () => {
     setLoading(true);
     try {
-      const filters = activeTab === 'pending' ? { status: 'pending' } : {};
-      const allRequests = await getTimeOffRequests(organization.id, filters);
+      // Load all requests without filtering
+      const requests = await getTimeOffRequests(organization.id, {});
       
       // Sort by date
-      const sortedRequests = allRequests.sort((a, b) => {
-        if (activeTab === 'pending') {
+      const sortedRequests = requests.sort((a, b) => {
+        // For pending and under_review, sort by created date
+        // For history, sort by updated date
+        if (a.status === 'pending' || a.status === 'under_review') {
           return b.createdAt?.seconds - a.createdAt?.seconds;
         }
         return b.updatedAt?.seconds - a.updatedAt?.seconds;
       });
 
-      setRequests(sortedRequests);
+      setAllRequests(sortedRequests);
     } catch (error) {
       console.error('Error loading time off requests:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  // Filter requests based on active tab
+  const filteredRequests = allRequests.filter(request => {
+    if (activeTab === 'pending') {
+      return request.status === 'pending';
+    } else if (activeTab === 'under_review') {
+      return request.status === 'under_review';
+    } else if (activeTab === 'history') {
+      return request.status === 'approved' || request.status === 'denied' || request.status === 'cancelled';
+    }
+    return true;
+  });
 
   const handleApprove = async (request) => {
     setProcessingId(request.id);
@@ -99,6 +115,23 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
     }
   };
 
+  const handleUnderReview = async (request) => {
+    setProcessingId(request.id);
+    try {
+      await markTimeOffRequestUnderReview(
+        request.id,
+        userProfile.id,
+        `${userProfile.firstName} ${userProfile.lastName}`
+      );
+      await loadRequests();
+      onStatusChange?.();
+    } catch (error) {
+      console.error('Error marking request as under review:', error);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const formatDate = (timestamp) => {
     if (!timestamp) return '';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -135,6 +168,8 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
         return <CheckCircle size={16} className="status-icon approved" />;
       case 'denied':
         return <XCircle size={16} className="status-icon denied" />;
+      case 'under_review':
+        return <Eye size={16} className="status-icon under-review" />;
       default:
         return <Clock size={16} className="status-icon pending" />;
     }
@@ -190,7 +225,13 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
             className={`approval-tab ${activeTab === 'pending' ? 'active' : ''}`}
             onClick={() => setActiveTab('pending')}
           >
-            Pending ({requests.filter(r => r.status === 'pending').length})
+            Pending ({allRequests.filter(r => r.status === 'pending').length})
+          </button>
+          <button
+            className={`approval-tab ${activeTab === 'under_review' ? 'active' : ''}`}
+            onClick={() => setActiveTab('under_review')}
+          >
+            Under Review ({allRequests.filter(r => r.status === 'under_review').length})
           </button>
           <button
             className={`approval-tab ${activeTab === 'history' ? 'active' : ''}`}
@@ -206,14 +247,14 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
               <div className="spinner"></div>
               <p>Loading requests...</p>
             </div>
-          ) : requests.length === 0 ? (
+          ) : filteredRequests.length === 0 ? (
             <div className="empty-state">
               <Calendar size={48} />
-              <p>No {activeTab === 'pending' ? 'pending' : ''} time off requests</p>
+              <p>No {activeTab === 'pending' ? 'pending' : activeTab === 'under_review' ? 'under review' : ''} time off requests</p>
             </div>
           ) : (
             <div className="requests-list">
-              {requests.map(request => (
+              {filteredRequests.map(request => (
                 <div key={request.id} className={`request-card ${request.priority === 'high' || request.bypassedBlockedDates ? 'high-priority' : ''}`}>
                   <div className="request-header">
                     <div className="request-photographer">
@@ -301,8 +342,18 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
                     )}
                   </div>
 
-                  {request.status === 'pending' ? (
+                  {(request.status === 'pending' || request.status === 'under_review') ? (
                     <div className="request-actions">
+                      {request.status === 'pending' && (
+                        <Button
+                          variant="info"
+                          size="small"
+                          onClick={() => handleUnderReview(request)}
+                          disabled={processingId === request.id}
+                        >
+                          Under Review
+                        </Button>
+                      )}
                       <Button
                         variant="success"
                         size="small"

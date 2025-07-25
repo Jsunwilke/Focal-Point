@@ -162,6 +162,26 @@ export const denyTimeOffRequest = async (requestId, denierId, denierName, denial
   }
 };
 
+// Mark time off request as under review
+export const markTimeOffRequestUnderReview = async (requestId, reviewerId, reviewerName) => {
+  try {
+    const docRef = doc(firestore, 'timeOffRequests', requestId);
+    const updates = {
+      status: 'under_review',
+      reviewedBy: reviewerId,
+      reviewerName: reviewerName,
+      reviewedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    
+    await updateDoc(docRef, updates);
+    return { id: requestId, ...updates };
+  } catch (error) {
+    console.error('Error marking time off request as under review:', error);
+    throw error;
+  }
+};
+
 // Cancel time off request (by photographer)
 export const cancelTimeOffRequest = async (requestId) => {
   try {

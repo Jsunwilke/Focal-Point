@@ -210,6 +210,9 @@ const MonthView = ({
 
   // Get school name from session
   const getSchoolName = (session) => {
+    if (session.isTimeOff) {
+      return session.reason || "Time Off";
+    }
     return session.schoolName || session.school?.name || "School TBD";
   };
 

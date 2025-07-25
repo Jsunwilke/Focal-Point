@@ -1,6 +1,7 @@
 // src/pages/Schedule.js - With Real-time Firestore Listeners and Secure Logging
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { useToast } from "../contexts/ToastContext";
 import secureLogger from "../utils/secureLogger";
 import {
   getTeamMembers,
@@ -177,6 +178,7 @@ const loadPhotographerPreferences = (organizationId) => {
 
 const Schedule = () => {
   const { userProfile, organization } = useAuth();
+  const { showToast } = useToast();
   const [currentDate, setCurrentDate] = useState(new Date());
   const dateRangeRef = React.useRef(null);
   const [viewMode, setViewMode] = useState("week");
@@ -425,8 +427,8 @@ const Schedule = () => {
 
           setAllTimeOffRequests(requests);
           
-          // Update pending count for badge
-          const pendingCount = requests.filter(r => r.status === 'pending').length;
+          // Update pending count for badge (includes both pending and under_review)
+          const pendingCount = requests.filter(r => r.status === 'pending' || r.status === 'under_review').length;
           setPendingTimeOffCount(pendingCount);
           
           secureLogger.debug("Time off requests updated:", requests.length);
@@ -726,8 +728,12 @@ const Schedule = () => {
       setUpdating(true);
       await publishMultipleSessions(unpublishedSessionIds);
       
-      // Show success message
-      alert(`Successfully published ${unpublishedSessionIds.length} sessions!`);
+      // Show success toast
+      showToast(
+        "Success", 
+        `Successfully published ${unpublishedSessionIds.length} session${unpublishedSessionIds.length !== 1 ? 's' : ''}`,
+        "success"
+      );
     } catch (error) {
       secureLogger.error("Error publishing sessions:", error);
       alert("Failed to publish sessions. Please try again.");
@@ -1083,34 +1089,6 @@ const Schedule = () => {
 
   return (
     <div className="schedule">
-      {/* Real-time Status Indicator */}
-      <div
-        style={{
-          position: "fixed",
-          bottom: "20px",
-          right: "20px",
-          background: "#28a745",
-          color: "white",
-          padding: "8px 12px",
-          borderRadius: "20px",
-          fontSize: "12px",
-          zIndex: 1000,
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-        }}
-      >
-        <div
-          style={{
-            width: "8px",
-            height: "8px",
-            backgroundColor: "#fff",
-            borderRadius: "50%",
-            animation: "pulse 2s infinite",
-          }}
-        ></div>
-        Live Updates Active
-      </div>
 
       {/* Updating Indicator */}
       {updating && (

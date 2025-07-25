@@ -60,7 +60,9 @@ const MapModal = ({
   onClose, 
   initialCoordinates = [39.7817, -89.6501], // Default to Springfield, IL
   initialAddress = "",
-  onCoordinatesChange 
+  onCoordinatesChange,
+  title = "Set Location",
+  subtitle = "Search for an address or drag the pin to set the exact location"
 }) => {
   const [position, setPosition] = useState(initialCoordinates);
   const [searchQuery, setSearchQuery] = useState("");
@@ -243,12 +245,12 @@ const MapModal = ({
           <div className="map-modal__header-content">
             <h2 className="map-modal__title">
               <MapPin size={20} />
-              Set School Location
+              {title}
             </h2>
             <p className="map-modal__subtitle">
               {initialAddress 
                 ? `Setting location for: ${initialAddress}`
-                : "Search for an address or drag the pin to set the exact location"
+                : subtitle
               }
             </p>
           </div>
@@ -282,7 +284,7 @@ const MapModal = ({
             <Search size={16} className="map-modal__search-icon" />
             <input
               type="text"
-              placeholder="Enter school address..."
+              placeholder="Enter address to search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyPress={handleSearchKeyPress}
