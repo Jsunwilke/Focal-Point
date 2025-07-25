@@ -1,26 +1,35 @@
-// src/components/sessions/CreateSessionModal.js - Updated with multiple photographers support
-import React, { useState, useEffect } from "react";
+// src/components/sessions/CreateSessionModal.js - Professional Design
+import React, { useState, useEffect, useRef } from "react";
 import ReactDOM from "react-dom";
-import { X, Clock, MapPin, Users, Check } from "lucide-react";
+import { 
+  X, Clock, MapPin, Users, Check, ChevronDown, ChevronUp,
+  Calendar, Building2, Camera, FileText
+} from "lucide-react";
 import TimeSelect from "../shared/TimeSelect";
 import SearchableSelect from "../shared/SearchableSelect";
 import { createSession, getSchools } from "../../firebase/firestore";
 import { getOrganizationSessionTypes, getSessionTypeColor } from "../../utils/sessionTypes";
-
+import "./CreateSessionModal.css";
 import secureLogger from "../../utils/secureLogger";
 
 const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userProfile, initialPhotographerId, initialDate }) => {
   const [loading, setLoading] = useState(false);
   const [schools, setSchools] = useState([]);
+  const [showSessionTypes, setShowSessionTypes] = useState(false);
+  const [sessionTypeSearch, setSessionTypeSearch] = useState("");
+  const [showPhotographerNotes, setShowPhotographerNotes] = useState(true);
+  const sessionTypesRef = useRef(null);
+  const notesTextareaRef = useRef(null);
+  
   const [formData, setFormData] = useState({
     schoolId: "",
     date: initialDate || "",
     startTime: "09:00",
     endTime: "15:00",
-    sessionTypes: [], // No session types selected by default
-    customSessionType: "", // Custom session type when "other" is selected
-    photographerIds: initialPhotographerId ? [initialPhotographerId] : [], // Pre-populate if provided
-    photographerNotes: {}, // New field for photographer-specific notes
+    sessionTypes: [],
+    customSessionType: "",
+    photographerIds: initialPhotographerId ? [initialPhotographerId] : [],
+    photographerNotes: {},
     notes: "",
     status: "scheduled",
   });
@@ -52,11 +61,30 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
     }
   }, [isOpen, initialDate, initialPhotographerId]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (sessionTypesRef.current && !sessionTypesRef.current.contains(event.target)) {
+        setShowSessionTypes(false);
+      }
+    };
+    
+    if (showSessionTypes) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showSessionTypes]);
+
   // Get session types from organization configuration
   const sessionTypes = getOrganizationSessionTypes(organization).map(type => ({
     value: type.id,
     label: type.name
   }));
+
+  // Filter session types based on search
+  const filteredSessionTypes = sessionTypes.filter(type =>
+    type.label.toLowerCase().includes(sessionTypeSearch.toLowerCase())
+  );
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -74,8 +102,7 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
     }
   };
 
-  // Handle session type checkbox changes
-  const handleSessionTypeChange = (sessionTypeId) => {
+  const handleSessionTypeToggle = (sessionTypeId) => {
     setFormData((prev) => {
       const currentTypes = prev.sessionTypes || [];
       const isSelected = currentTypes.includes(sessionTypeId);
@@ -84,14 +111,11 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
       let newCustomType = prev.customSessionType;
       
       if (isSelected) {
-        // Remove the session type
         newTypes = currentTypes.filter(id => id !== sessionTypeId);
-        // Clear custom type if "other" is being deselected
         if (sessionTypeId === 'other') {
           newCustomType = "";
         }
       } else {
-        // Add the session type
         newTypes = [...currentTypes, sessionTypeId];
       }
       
@@ -102,7 +126,6 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
       };
     });
 
-    // Clear errors when user makes selection
     if (errors.sessionTypes) {
       setErrors((prev) => ({
         ...prev,
@@ -110,6 +133,10 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
         customSessionType: "",
       }));
     }
+    
+    // Close the dropdown after selection
+    setShowSessionTypes(false);
+    setSessionTypeSearch(""); // Reset search
   };
 
   const handlePhotographerToggle = (photographerId) => {
@@ -120,7 +147,6 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
         : [...prev.photographerIds, photographerId],
     }));
 
-    // Clear photographer error if any photographer is selected
     if (errors.photographerIds) {
       setErrors((prev) => ({
         ...prev,
@@ -137,6 +163,42 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
         [photographerId]: note,
       },
     }));
+  };
+
+  const handleNotesChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
+    }
+
+    // Auto-resize textarea
+    if (notesTextareaRef.current) {
+      notesTextareaRef.current.style.height = 'auto';
+      notesTextareaRef.current.style.height = `${notesTextareaRef.current.scrollHeight}px`;
+    }
+  };
+
+  // Auto-resize notes textarea on mount if there's initial content
+  useEffect(() => {
+    if (notesTextareaRef.current && formData.notes) {
+      notesTextareaRef.current.style.height = 'auto';
+      notesTextareaRef.current.style.height = `${notesTextareaRef.current.scrollHeight}px`;
+    }
+  }, [formData.notes, isOpen]);
+
+  const getInitials = (firstName, lastName) => {
+    const firstInitial = firstName ? firstName.charAt(0).toUpperCase() : '';
+    const lastInitial = lastName ? lastName.charAt(0).toUpperCase() : '';
+    return firstInitial + lastInitial || '?';
   };
 
   const validateForm = () => {
@@ -158,16 +220,10 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
       newErrors.endTime = "End time is required";
     }
 
-    // Photographer assignment is now optional - sessions can be created without photographers
-    // if (formData.photographerIds.length === 0) {
-    //   newErrors.photographerIds = "At least one photographer is required";
-    // }
-
     if (!formData.sessionTypes || formData.sessionTypes.length === 0) {
       newErrors.sessionTypes = "At least one session type is required";
     }
 
-    // Validate custom session type if "other" is selected
     if (formData.sessionTypes.includes('other') && !formData.customSessionType.trim()) {
       newErrors.customSessionType = "Please specify a custom session type";
     }
@@ -199,7 +255,7 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
           id: member.id,
           name: `${member.firstName} ${member.lastName}`,
           email: member.email,
-          notes: formData.photographerNotes[member.id] || "", // Include photographer-specific notes
+          notes: formData.photographerNotes[member.id] || "",
         }));
 
       // Get school details
@@ -212,11 +268,10 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
         startTime: formData.startTime,
         endTime: formData.endTime,
         sessionTypes: formData.sessionTypes,
-        customSessionType: formData.customSessionType.trim() || null, // Include custom session type
-        photographers: selectedPhotographers, // Array of photographer objects
+        customSessionType: formData.customSessionType.trim() || null,
+        photographers: selectedPhotographers,
         notes: formData.notes,
         status: formData.status,
-        // Add creator information
         createdBy: {
           id: userProfile?.id || userProfile?.uid,
           name: userProfile?.displayName || `${userProfile?.firstName} ${userProfile?.lastName}` || userProfile?.email,
@@ -225,15 +280,7 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
         createdAt: new Date(),
       };
 
-
-      console.log("🚀 MODAL: About to call createSession with data:", {
-        organizationId: organization.id,
-        sessionData
-      });
-      
       await createSession(organization.id, sessionData);
-      
-      console.log("✅ MODAL: createSession completed successfully");
 
       // Reset form and close modal
       setFormData({
@@ -250,10 +297,6 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
       });
       setErrors({});
       onClose();
-
-      // Instead of refreshing the entire page, just trigger a re-fetch of data
-      // The parent component should handle refreshing sessions data
-      console.log("✅ MODAL: Session created successfully, modal closed");
     } catch (error) {
       secureLogger.error("Error creating session:", error);
       setErrors({ general: "Failed to create session. Please try again." });
@@ -270,13 +313,13 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
 
   const modalContent = (
     <div
+      className="modal-overlay"
       style={{
         position: "fixed",
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.6)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -290,42 +333,15 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
       }}
     >
       <div
-        style={{
-          backgroundColor: "white",
-          borderRadius: "8px",
-          width: "90%",
-          maxWidth: "700px",
-          maxHeight: "90vh",
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-          boxShadow: "0 20px 25px rgba(0, 0, 0, 0.15)",
-        }}
+        className="create-session-modal"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div
-          style={{
-            padding: "1rem 1.5rem",
-            borderBottom: "1px solid #dee2e6",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            backgroundColor: "#f8f9fa",
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: "1.25rem" }}>Create New Session</h2>
+        <div className="modal-header">
+          <h2>Create New Session</h2>
           <button
+            className="modal-close-btn"
             onClick={handleClose}
-            style={{
-              background: "none",
-              border: "none",
-              fontSize: "1.5rem",
-              cursor: "pointer",
-              padding: "0.25rem 0.5rem",
-              color: "#6c757d",
-              borderRadius: "4px",
-            }}
             aria-label="Close"
           >
             <X size={20} />
@@ -333,461 +349,328 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
         </div>
 
         {/* Modal Body */}
-        <div
-          style={{
-            padding: "1.5rem",
-            overflow: "auto",
-            flex: 1,
-          }}
-        >
-          {errors.general && (
-            <div
-              style={{
-                padding: "0.75rem 1rem",
-                marginBottom: "1rem",
-                backgroundColor: "#f8d7da",
-                border: "1px solid #f5c6cb",
-                borderRadius: "0.375rem",
-                color: "#721c24",
-              }}
-            >
-              {errors.general}
-            </div>
-          )}
-
+        <div className="modal-body">
           <form onSubmit={handleSubmit}>
-            {/* Basic Information */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <h3
-                style={{
-                  fontSize: "1.1rem",
-                  fontWeight: "600",
-                  marginBottom: "1rem",
-                  paddingBottom: "0.5rem",
-                  borderBottom: "1px solid #dee2e6",
-                }}
-              >
-                Session Details
-              </h3>
-
-              <div className="row">
-                <div className="col-md-8 mb-3">
-                  <label
-                    className="form-label d-flex align-items-center gap-2"
-                    style={{ fontWeight: "500", marginBottom: "0.5rem" }}
-                  >
-                    <MapPin size={16} />
-                    School
-                    <span style={{ color: "#dc3545" }}>*</span>
-                  </label>
-                  <SearchableSelect
-                    name="schoolId"
-                    value={formData.schoolId}
-                    onChange={handleChange}
-                    options={schools.sort((a, b) => (a.value || "").localeCompare(b.value || ""))}
-                    placeholder="Select School"
-                    searchPlaceholder="Search schools..."
-                    error={errors.schoolId}
-                    required={true}
-                  />
-                  {errors.schoolId && (
-                    <div className="invalid-feedback">{errors.schoolId}</div>
-                  )}
-                </div>
-
-                <div className="col-md-4 mb-3">
-                  <label
-                    className="form-label"
-                    style={{ fontWeight: "500", marginBottom: "0.5rem" }}
-                  >
-                    Session Types
-                    <span style={{ color: "#dc3545" }}>*</span>
-                  </label>
-                  <div style={{ 
-                    border: `1px solid ${errors.sessionTypes ? '#dc3545' : '#dee2e6'}`,
-                    borderRadius: '0.375rem',
-                    padding: '0.5rem',
-                    maxHeight: '120px',
-                    overflow: 'auto'
-                  }}>
-                    {sessionTypes.map((type) => (
-                      <div key={type.value} style={{ marginBottom: '0.5rem' }}>
-                        <label style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: '0.5rem',
-                          cursor: 'pointer',
-                          fontSize: '0.875rem'
-                        }}>
-                          <input
-                            type="checkbox"
-                            checked={formData.sessionTypes.includes(type.value)}
-                            onChange={() => handleSessionTypeChange(type.value)}
-                            style={{ marginRight: '0.25rem' }}
-                          />
-                          <div style={{
-                            width: '12px',
-                            height: '12px',
-                            backgroundColor: getSessionTypeColor(type.value, organization),
-                            borderRadius: '2px',
-                            border: '1px solid rgba(0,0,0,0.2)'
-                          }}></div>
-                          {type.label}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                  {errors.sessionTypes && (
-                    <div style={{ color: '#dc3545', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-                      {errors.sessionTypes}
-                    </div>
-                  )}
-
-                  {/* Custom Session Type Input - appears when "other" is selected */}
-                  {formData.sessionTypes.includes('other') && (
-                    <div style={{ marginTop: '0.75rem' }}>
-                      <label 
-                        className="form-label"
-                        style={{ fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem', display: 'block' }}
-                      >
-                        Custom Session Type <span style={{ color: "#dc3545" }}>*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.customSessionType}
-                        onChange={(e) => setFormData(prev => ({ ...prev, customSessionType: e.target.value }))}
-                        placeholder="Enter custom session type (e.g., Team Photos, Award Ceremony)"
-                        className={`form-control ${errors.customSessionType ? "is-invalid" : ""}`}
-                        style={{ fontSize: '0.875rem' }}
-                      />
-                      {errors.customSessionType && (
-                        <div className="invalid-feedback" style={{ fontSize: '0.75rem' }}>
-                          {errors.customSessionType}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  {/* Selected Types Preview */}
-                  {formData.sessionTypes.length > 0 && (
-                    <div style={{ marginTop: '0.5rem' }}>
-                      <div style={{ fontSize: '0.75rem', color: '#6c757d', marginBottom: '0.25rem' }}>
-                        Selected:
-                      </div>
-                      <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
-                        {formData.sessionTypes.map(typeId => {
-                          const type = sessionTypes.find(t => t.value === typeId);
-                          if (!type) return null;
-                          
-                          // Show custom type if "other" is selected and custom type is provided
-                          const displayLabel = typeId === 'other' && formData.customSessionType 
-                            ? formData.customSessionType 
-                            : type.label;
-                          
-                          return (
-                            <span key={typeId} style={{
-                              backgroundColor: getSessionTypeColor(typeId, organization),
-                              color: 'white',
-                              padding: '0.125rem 0.375rem',
-                              borderRadius: '0.25rem',
-                              fontSize: '0.75rem',
-                              fontWeight: '500'
-                            }}>
-                              {displayLabel}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
+            {errors.general && (
+              <div className="form-section" style={{
+                backgroundColor: "#fef2f2",
+                borderColor: "#fecaca",
+                color: "#991b1b",
+                padding: "12px 16px",
+                marginBottom: "16px",
+              }}>
+                {errors.general}
               </div>
-            </div>
+            )}
 
-            {/* Date and Time */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <h3
-                style={{
-                  fontSize: "1.1rem",
-                  fontWeight: "600",
-                  marginBottom: "1rem",
-                  paddingBottom: "0.5rem",
-                  borderBottom: "1px solid #dee2e6",
-                }}
-              >
-                Schedule
-              </h3>
+            {/* School & Date Section */}
+            <div className="form-section">
+              <div className="section-header">
+                <h3 className="section-title">
+                  <Building2 size={16} />
+                  Session Details
+                </h3>
+              </div>
 
-              <div className="row">
-                <div className="col-md-4 mb-3">
-                  <label
-                    className="form-label"
-                    style={{ fontWeight: "500", marginBottom: "0.5rem" }}
-                  >
+              <div className="form-group">
+                <label className="form-label">
+                  School
+                  <span className="required-asterisk">*</span>
+                </label>
+                <SearchableSelect
+                  name="schoolId"
+                  value={formData.schoolId}
+                  onChange={handleChange}
+                  options={schools.sort((a, b) => (a.value || "").localeCompare(b.value || ""))}
+                  placeholder="Select School"
+                  searchPlaceholder="Search schools..."
+                  error={errors.schoolId}
+                  required={true}
+                />
+                {errors.schoolId && (
+                  <div className="invalid-feedback">{errors.schoolId}</div>
+                )}
+              </div>
+
+              <div className="form-grid form-grid-2">
+                <div className="form-group">
+                  <label className="form-label">
                     Date
+                    <span className="required-asterisk">*</span>
                   </label>
                   <input
                     type="date"
                     name="date"
                     value={formData.date}
                     onChange={handleChange}
-                    className={`form-control ${
-                      errors.date ? "is-invalid" : ""
-                    }`}
+                    className={`form-control ${errors.date ? "is-invalid" : ""}`}
                   />
                   {errors.date && (
                     <div className="invalid-feedback">{errors.date}</div>
                   )}
                 </div>
 
-                <div className="col-md-4 mb-3">
-                  <label
-                    className="form-label d-flex align-items-center gap-2"
-                    style={{ fontWeight: "500", marginBottom: "0.5rem" }}
-                  >
-                    <Clock size={16} />
-                    Start Time
-                  </label>
-                  <TimeSelect
-                    name="startTime"
-                    value={formData.startTime}
-                    onChange={handleChange}
-                    className={`form-select ${
-                      errors.startTime ? "is-invalid" : ""
-                    }`}
-                  />
-                  {errors.startTime && (
-                    <div className="invalid-feedback">{errors.startTime}</div>
-                  )}
-                </div>
+                <div className="form-grid form-grid-2">
+                  <div className="form-group">
+                    <label className="form-label">
+                      Start
+                      <span className="required-asterisk">*</span>
+                    </label>
+                    <TimeSelect
+                      name="startTime"
+                      value={formData.startTime}
+                      onChange={handleChange}
+                      className={`form-select ${errors.startTime ? "is-invalid" : ""}`}
+                    />
+                    {errors.startTime && (
+                      <div className="invalid-feedback">{errors.startTime}</div>
+                    )}
+                  </div>
 
-                <div className="col-md-4 mb-3">
-                  <label
-                    className="form-label"
-                    style={{ fontWeight: "500", marginBottom: "0.5rem" }}
-                  >
-                    End Time
-                  </label>
-                  <TimeSelect
-                    name="endTime"
-                    value={formData.endTime}
-                    onChange={handleChange}
-                    className={`form-select ${
-                      errors.endTime ? "is-invalid" : ""
-                    }`}
-                  />
-                  {errors.endTime && (
-                    <div className="invalid-feedback">{errors.endTime}</div>
-                  )}
+                  <div className="form-group">
+                    <label className="form-label">
+                      End
+                      <span className="required-asterisk">*</span>
+                    </label>
+                    <TimeSelect
+                      name="endTime"
+                      value={formData.endTime}
+                      onChange={handleChange}
+                      className={`form-select ${errors.endTime ? "is-invalid" : ""}`}
+                    />
+                    {errors.endTime && (
+                      <div className="invalid-feedback">{errors.endTime}</div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Photographer Assignment */}
-            <div style={{ marginBottom: "1.5rem" }}>
-              <h3
-                style={{
-                  fontSize: "1.1rem",
-                  fontWeight: "600",
-                  marginBottom: "1rem",
-                  paddingBottom: "0.5rem",
-                  borderBottom: "1px solid #dee2e6",
-                }}
-              >
-                Photographer Assignment
-              </h3>
+            {/* Session Types Section */}
+            <div className="form-section">
+              <div className="section-header">
+                <h3 className="section-title">
+                  <Camera size={16} />
+                  Session Types
+                </h3>
+              </div>
 
-              <div className="mb-3">
-                <label
-                  className="form-label d-flex align-items-center gap-2"
-                  style={{ fontWeight: "500", marginBottom: "0.5rem" }}
-                >
-                  <Users size={16} />
-                  Select Photographers
-                  <span style={{ color: "#dc3545" }}>*</span>
+              <div className="form-group">
+                <label className="form-label">
+                  Select Types
+                  <span className="required-asterisk">*</span>
                 </label>
+                
+                <div className="session-types-container" ref={sessionTypesRef}>
+                  <div className="session-types-dropdown">
+                    <button
+                      type="button"
+                      className={`session-types-button ${errors.sessionTypes ? "is-invalid" : ""}`}
+                      onClick={() => setShowSessionTypes(!showSessionTypes)}
+                    >
+                      <span style={{ color: formData.sessionTypes.length === 0 ? '#9ca3af' : '#111827' }}>
+                        {formData.sessionTypes.length === 0 
+                          ? "Select session types"
+                          : `${formData.sessionTypes.length} selected`}
+                      </span>
+                      {showSessionTypes ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </button>
 
-                {errors.photographerIds && (
-                  <div
-                    style={{
-                      color: "#dc3545",
-                      fontSize: "0.875rem",
-                      marginBottom: "0.5rem",
-                    }}
-                  >
-                    {errors.photographerIds}
+                    {showSessionTypes && (
+                      <div className="session-types-menu">
+                        <div className="session-types-search">
+                          <input
+                            type="text"
+                            placeholder="Search types..."
+                            value={sessionTypeSearch}
+                            onChange={(e) => setSessionTypeSearch(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        
+                        {filteredSessionTypes.map((type) => (
+                          <div
+                            key={type.value}
+                            className="session-type-option"
+                            onClick={() => handleSessionTypeToggle(type.value)}
+                          >
+                            <div className={`session-type-checkbox ${formData.sessionTypes.includes(type.value) ? 'checked' : ''}`}>
+                              <Check />
+                            </div>
+                            <div className="session-type-label">
+                              <div 
+                                className="session-type-dot" 
+                                style={{ backgroundColor: getSessionTypeColor(type.value, organization) }}
+                              />
+                              {type.label}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {errors.sessionTypes && (
+                  <div className="invalid-feedback">{errors.sessionTypes}</div>
+                )}
+
+                {formData.sessionTypes.length > 0 && (
+                  <div className="selected-types-tags">
+                    {formData.sessionTypes.map(typeId => {
+                      const type = sessionTypes.find(t => t.value === typeId);
+                      if (!type) return null;
+                      return (
+                        <span 
+                          key={typeId} 
+                          className="type-tag"
+                          style={{ backgroundColor: getSessionTypeColor(typeId, organization) }}
+                        >
+                          {type.label}
+                          <X 
+                            size={12} 
+                            className="type-tag-remove"
+                            onClick={() => handleSessionTypeToggle(typeId)}
+                          />
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
 
-                <div
-                  style={{
-                    border: "1px solid #dee2e6",
-                    borderRadius: "0.375rem",
-                    maxHeight: "300px",
-                    overflowY: "auto",
-                    backgroundColor: "#f8f9fa",
-                  }}
-                >
+                {formData.sessionTypes.includes('other') && (
+                  <div className="custom-type-input">
+                    <label className="form-label">
+                      Custom Session Type <span className="required-asterisk">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.customSessionType}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customSessionType: e.target.value }))}
+                      placeholder="Enter custom session type"
+                      className={`form-control ${errors.customSessionType ? "is-invalid" : ""}`}
+                    />
+                    {errors.customSessionType && (
+                      <div className="invalid-feedback">{errors.customSessionType}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Photographers Section */}
+            <div className="form-section">
+              <div className="section-header">
+                <h3 className="section-title">
+                  <Users size={16} />
+                  Photographer Assignment
+                </h3>
+              </div>
+
+              {errors.photographerIds && (
+                <div className="invalid-feedback" style={{ display: "block", marginBottom: "12px" }}>
+                  {errors.photographerIds}
+                </div>
+              )}
+
+              <div className="photographers-container">
+                <div className="photographers-grid">
                   {teamMembers
                     .filter((member) => member.isActive)
                     .map((member) => (
                       <div
                         key={member.id}
-                        style={{
-                          borderBottom: "1px solid #e9ecef",
-                          backgroundColor: formData.photographerIds.includes(
-                            member.id
-                          )
-                            ? "#e3f2fd"
-                            : "transparent",
-                        }}
+                        className={`photographer-card ${formData.photographerIds.includes(member.id) ? 'selected' : ''}`}
+                        onClick={() => handlePhotographerToggle(member.id)}
                       >
-                        {/* Photographer Selection Row */}
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            padding: "0.75rem",
-                            cursor: "pointer",
-                            transition: "background-color 0.2s",
-                          }}
-                          onClick={() => handlePhotographerToggle(member.id)}
-                        >
-                          <div
-                            style={{
-                              width: "20px",
-                              height: "20px",
-                              border: "2px solid #dee2e6",
-                              borderRadius: "4px",
-                              marginRight: "0.75rem",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              backgroundColor:
-                                formData.photographerIds.includes(member.id)
-                                  ? "#007bff"
-                                  : "white",
-                              borderColor: formData.photographerIds.includes(
-                                member.id
-                              )
-                                ? "#007bff"
-                                : "#dee2e6",
-                            }}
-                          >
-                            {formData.photographerIds.includes(member.id) && (
-                              <Check size={12} color="white" />
-                            )}
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: "500" }}>
-                              {member.firstName} {member.lastName}
-                            </div>
-                            <div
-                              style={{ fontSize: "0.875rem", color: "#6c757d" }}
-                            >
-                              {member.email}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Photographer-Specific Notes (only show if selected) */}
-                        {formData.photographerIds.includes(member.id) && (
-                          <div
-                            style={{
-                              padding: "0 0.75rem 0.75rem 2.5rem",
-                              borderTop: "1px solid #e9ecef",
-                              backgroundColor: "#f8f9fa",
-                            }}
-                          >
-                            <label
-                              style={{
-                                fontSize: "0.75rem",
-                                fontWeight: "500",
-                                color: "#6c757d",
-                                marginBottom: "0.25rem",
-                                display: "block",
-                              }}
-                            >
-                              Notes for {member.firstName}:
-                            </label>
-                            <textarea
-                              placeholder={`Specific notes for ${member.firstName}...`}
-                              value={
-                                formData.photographerNotes[member.id] || ""
-                              }
-                              onChange={(e) =>
-                                handlePhotographerNoteChange(
-                                  member.id,
-                                  e.target.value
-                                )
-                              }
-                              style={{
-                                width: "100%",
-                                minHeight: "60px",
-                                padding: "0.5rem",
-                                border: "1px solid #dee2e6",
-                                borderRadius: "0.25rem",
-                                fontSize: "0.875rem",
-                                resize: "vertical",
-                                fontFamily: "inherit",
-                              }}
-                              onClick={(e) => e.stopPropagation()} // Prevent toggle when clicking in textarea
+                        <div className="photographer-avatar">
+                          {member.photoURL ? (
+                            <img 
+                              src={member.photoURL} 
+                              alt={`${member.firstName} ${member.lastName}`}
                             />
+                          ) : (
+                            getInitials(member.firstName, member.lastName)
+                          )}
+                        </div>
+                        <div className="photographer-name">
+                          {member.firstName} {member.lastName}
+                        </div>
+                        {formData.photographerIds.includes(member.id) && (
+                          <div className="photographer-check">
+                            <Check size={10} />
                           </div>
                         )}
                       </div>
                     ))}
                 </div>
 
+                {/* Individual photographer notes */}
                 {formData.photographerIds.length > 0 && (
-                  <div
-                    style={{
-                      marginTop: "0.5rem",
-                      fontSize: "0.875rem",
-                      color: "#6c757d",
-                    }}
-                  >
-                    {formData.photographerIds.length} photographer
-                    {formData.photographerIds.length > 1 ? "s" : ""} selected
+                  <div className="photographer-notes-section">
+                    <div className="photographer-notes-header">
+                      <div className="photographer-notes-title">
+                        <FileText size={12} />
+                        Individual Notes
+                      </div>
+                      <button
+                        type="button"
+                        className="notes-toggle"
+                        onClick={() => setShowPhotographerNotes(!showPhotographerNotes)}
+                      >
+                        {showPhotographerNotes ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </button>
+                    </div>
+                    
+                    {showPhotographerNotes && (
+                      <div className="photographer-notes-list">
+                        {formData.photographerIds.map(photographerId => {
+                          const member = teamMembers.find(m => m.id === photographerId);
+                          if (!member) return null;
+                          
+                          return (
+                            <div key={photographerId} className="photographer-note-field">
+                              <label className="photographer-note-label">
+                                {member.firstName} {member.lastName}
+                              </label>
+                              <input
+                                type="text"
+                                className="photographer-note-input"
+                                placeholder={`Instructions for ${member.firstName}...`}
+                                value={formData.photographerNotes[photographerId] || ""}
+                                onChange={(e) => handlePhotographerNoteChange(photographerId, e.target.value)}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
+            </div>
 
-              <div className="mb-3">
-                <label
-                  className="form-label"
-                  style={{ fontWeight: "500", marginBottom: "0.5rem" }}
-                >
-                  Session Notes (Shared)
+            {/* General Notes */}
+            <div className="form-section">
+              <div className="form-group">
+                <label className="form-label">
+                  General Session Notes
                 </label>
                 <textarea
+                  ref={notesTextareaRef}
                   name="notes"
                   value={formData.notes}
-                  onChange={handleChange}
-                  className="form-control"
-                  rows={3}
-                  placeholder="General session notes visible to all photographers..."
+                  onChange={handleNotesChange}
+                  className="general-notes-textarea"
+                  placeholder="Notes visible to all photographers..."
                 />
-                <small className="text-muted">
-                  These notes are shared across all photographers for this
-                  session.
-                </small>
               </div>
             </div>
           </form>
         </div>
 
         {/* Modal Footer */}
-        <div
-          style={{
-            padding: "1rem 1.5rem",
-            borderTop: "1px solid #dee2e6",
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: "0.75rem",
-            backgroundColor: "#f8f9fa",
-          }}
-        >
+        <div className="modal-footer">
           <button
             type="button"
             className="btn btn-secondary"
@@ -802,13 +685,8 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
             onClick={handleSubmit}
             disabled={loading}
           >
-            {loading && (
-              <span
-                className="spinner-border spinner-border-sm me-2"
-                role="status"
-              ></span>
-            )}
-            Create Session
+            {loading && <span className="loading-spinner" />}
+            {loading ? "Creating..." : "Create Session"}
           </button>
         </div>
       </div>

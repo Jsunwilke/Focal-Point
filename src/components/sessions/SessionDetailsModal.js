@@ -187,20 +187,6 @@ const SessionDetailsModal = ({
     });
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "scheduled":
-        return "#007bff";
-      case "in-progress":
-        return "#ffc107";
-      case "completed":
-        return "#28a745";
-      case "cancelled":
-        return "#dc3545";
-      default:
-        return "#6c757d";
-    }
-  };
 
   // Get session type color using organization configuration
   const getSessionTypeBadgeColor = (type) => {
@@ -375,19 +361,6 @@ const SessionDetailsModal = ({
                         );
                       });
                     })()}
-                    <span
-                      style={{
-                        backgroundColor: getStatusColor(session.status),
-                        color: "white",
-                        padding: "0.3rem 0.8rem",
-                        borderRadius: "1rem",
-                        fontSize: "0.75rem",
-                        fontWeight: "500",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {session.status || "scheduled"}
-                    </span>
                   </div>
                 </div>
               </div>
