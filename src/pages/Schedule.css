@@ -345,7 +345,6 @@
 
 /* Calendar View Styles */
 .calendar-view {
-  height: 100%;
   background-color: var(--background);
 }
 
@@ -617,9 +616,9 @@
 
 /* Month View Styles */
 .month-view {
-  height: 100%;
   display: flex;
   flex-direction: column;
+  padding-bottom: 50px;
 }
 
 .month-header {
@@ -647,7 +646,8 @@
 .month-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  flex: 1;
+  grid-auto-rows: minmax(120px, max-content);
+  align-items: stretch;
 }
 
 .month-cell {

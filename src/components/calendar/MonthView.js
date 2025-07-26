@@ -310,7 +310,6 @@ const MonthView = ({
 
               {/* Sessions for this day */}
               {daySessions
-                .slice(0, 3)
                 .map((session) => {
                 // Get global order for this session to determine consistent color
                 const globalSessionOrder = getGlobalSessionOrderForDay(day);
@@ -429,12 +428,6 @@ const MonthView = ({
                 );
               })}
 
-              {/* Show more indicator if there are additional sessions */}
-              {daySessions.length > 3 && (
-                <div className="month-session__more">
-                  +{daySessions.length - 3} more
-                </div>
-              )}
             </div>
           );
         })}
