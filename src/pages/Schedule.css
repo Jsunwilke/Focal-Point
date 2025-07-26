@@ -4,8 +4,9 @@
 .schedule {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   background-color: var(--background-secondary);
+  padding: var(--spacing-lg);
 }
 
 .schedule-loading {
@@ -322,8 +323,9 @@
 /* Calendar Container */
 .schedule__calendar {
   flex: 1;
-  overflow: hidden;
+  overflow-y: auto;
   position: relative;
+  min-height: 0;
 }
 
 .schedule__calendar::after {

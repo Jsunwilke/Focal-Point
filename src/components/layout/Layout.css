@@ -39,6 +39,13 @@
   width: calc(100vw - var(--sidebar-collapsed-width));
 }
 
+/* Schedule page specific layout override */
+.layout__content--schedule {
+  padding: 0;
+  overflow: hidden;
+  height: calc(100vh - var(--header-height));
+}
+
 /* Mobile backdrop */
 .layout__backdrop {
   position: fixed;

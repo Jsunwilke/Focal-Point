@@ -632,7 +632,8 @@ const WeekView = ({
 
   const bodyStyle = {
     flex: 1,
-    overflow: "auto",
+    minHeight: 0,
+    paddingBottom: "80px",
   };
 
   const rowStyle = {

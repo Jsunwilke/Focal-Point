@@ -69,7 +69,7 @@ const Layout = ({ children }) => {
             onMenuToggle={toggleMobileMenu}
             isMobile={isMobile}
           />
-          <main className="layout__content">{children}</main>
+          <main className={`layout__content ${location.pathname === '/schedule' ? 'layout__content--schedule' : ''}`}>{children}</main>
         </div>
       </div>
     </ToastProvider>
