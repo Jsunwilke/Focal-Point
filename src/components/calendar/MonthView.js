@@ -1,5 +1,6 @@
 // src/components/calendar/MonthView.js
 import React from "react";
+import { User } from "lucide-react";
 import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
 
 const MonthView = ({
@@ -321,10 +322,10 @@ const MonthView = ({
                 );
                 
                 
-                const duration = calculateDuration(session.startTime, session.endTime);
                 const schoolName = getSchoolName(session);
                 const sessionType = formatSessionType(session.sessionType);
                 const sessionColor = getSessionColorByOrder(globalOrderIndex);
+                const photographerCount = session.allPhotographers?.length || 1;
                 
                 return (
                   <div
@@ -333,11 +334,11 @@ const MonthView = ({
                     style={{
                       backgroundColor: sessionColor,
                       color: "white",
-                      padding: "0.4rem",
+                      padding: "0.3rem 0.4rem",
                       marginBottom: "0.2rem",
                       borderRadius: "0.25rem",
                       cursor: "pointer",
-                      fontSize: "0.75rem",
+                      fontSize: "0.7rem",
                       lineHeight: "1.2"
                     }}
                     onClick={() => {
@@ -346,21 +347,30 @@ const MonthView = ({
                       }
                     }}
                   >
-                    <div className="month-session__time" style={{ 
-                      fontSize: "0.7rem", 
+                    <div style={{ 
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      fontSize: "0.65rem", 
                       color: "rgba(255, 255, 255, 0.9)",
-                      marginBottom: "0.2rem",
-                      lineHeight: "1.2"
+                      marginBottom: "0.15rem",
+                      lineHeight: "1"
                     }}>
-                      {formatTime(session.startTime)} - {formatTime(session.endTime)}
-                      {duration && ` (${duration})`}
+                      <span>{formatTime(session.startTime)} - {formatTime(session.endTime)}</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
+                        <User size={10} />
+                        <span>{photographerCount}</span>
+                      </span>
                     </div>
                     <div className="month-session__school" style={{ 
-                      fontSize: "0.8rem", 
-                      fontWeight: "600",
+                      fontSize: "0.7rem", 
+                      fontWeight: "500",
                       color: "white",
-                      lineHeight: "1.2",
-                      marginBottom: "0.2rem"
+                      lineHeight: "1.1",
+                      marginBottom: "0.15rem",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap"
                     }}>
                       {schoolName}
                     </div>
@@ -371,14 +381,9 @@ const MonthView = ({
                           const colors = getSessionTypeColors(sessionTypes, organization);
                           const names = getSessionTypeNames(sessionTypes, organization);
                           
-                          // For month view, show max 2 badges to save space
-                          const maxBadges = 2;
-                          const visibleTypes = sessionTypes.slice(0, maxBadges);
-                          const hasMore = sessionTypes.length > maxBadges;
-                          
                           return (
                             <>
-                              {visibleTypes.map((type, index) => {
+                              {sessionTypes.map((type, index) => {
                                 // Use custom session type if "other" is selected and custom type exists
                                 let displayName = names[index];
                                 if (type === 'other' && session.customSessionType) {
@@ -390,37 +395,21 @@ const MonthView = ({
                                     key={`${type}-${index}`}
                                     className="month-session__badge"
                                     style={{
-                                      fontSize: "0.5rem",
+                                      fontSize: "0.45rem",
                                       backgroundColor: colors[index],
                                       color: "white",
-                                      padding: "0.05rem 0.2rem",
-                                      borderRadius: "0.2rem",
+                                      padding: "0.1rem 0.15rem",
+                                      borderRadius: "0.15rem",
                                       textTransform: "capitalize",
                                       fontWeight: "500",
                                       display: "inline-block",
-                                      lineHeight: "1.2"
+                                      lineHeight: "1"
                                     }}
                                   >
                                     {displayName}
                                   </div>
                                 );
                               })}
-                              {hasMore && (
-                                <div
-                                  style={{
-                                    fontSize: "0.5rem",
-                                    backgroundColor: "#6c757d",
-                                    color: "white",
-                                    padding: "0.05rem 0.2rem",
-                                    borderRadius: "0.2rem",
-                                    fontWeight: "500",
-                                    display: "inline-block",
-                                    lineHeight: "1.2"
-                                  }}
-                                >
-                                  +{sessionTypes.length - maxBadges}
-                                </div>
-                              )}
                             </>
                           );
                         })()}

@@ -918,9 +918,9 @@ const Schedule = () => {
     }
     setCalendarMonth(currentDate); // Set calendar to current month
     setShowDatePicker(!showDatePicker);
-    // Reset to day view when opening
+    // Set calendar view based on current view mode
     if (!showDatePicker) {
-      setCalendarView('days');
+      setCalendarView(viewMode === 'month' ? 'months' : 'days');
     }
   };
 
@@ -963,8 +963,17 @@ const Schedule = () => {
 
   // Handle month selection from month/year picker
   const handleMonthSelect = (monthIndex) => {
-    setCalendarMonth(new Date(calendarMonth.getFullYear(), monthIndex, 1));
-    setCalendarView('days'); // Switch back to day view
+    const newDate = new Date(calendarMonth.getFullYear(), monthIndex, 1);
+    
+    if (viewMode === 'month') {
+      // In month view, navigate to the selected month and close picker
+      setCurrentDate(newDate);
+      setShowDatePicker(false);
+    } else {
+      // In week view, switch to day picker for specific date selection
+      setCalendarMonth(newDate);
+      setCalendarView('days');
+    }
   };
 
   // Close date picker on escape key

@@ -697,9 +697,10 @@
   font-size: var(--font-size-xs);
   margin-bottom: 2px;
   cursor: pointer;
-  min-height: 20px;
+  min-height: 28px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .month-session--sports {
