@@ -616,9 +616,9 @@
 
 /* Month View Styles */
 .month-view {
+  height: 100%;
   display: flex;
   flex-direction: column;
-  padding-bottom: 50px;
 }
 
 .month-header {
@@ -626,6 +626,9 @@
   grid-template-columns: repeat(7, 1fr);
   background-color: var(--background-secondary);
   border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .month-header__cell {
@@ -643,11 +646,25 @@
   border-right: none;
 }
 
+.month-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+  min-height: 0;
+}
+
+.month-body::-webkit-scrollbar {
+  display: none;
+}
+
 .month-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   grid-auto-rows: minmax(120px, max-content);
   align-items: stretch;
+  padding-bottom: 80px;
 }
 
 .month-cell {

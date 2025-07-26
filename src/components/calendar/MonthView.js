@@ -269,8 +269,10 @@ const MonthView = ({
         ))}
       </div>
 
-      {/* Calendar Grid */}
-      <div className="month-grid">
+      {/* Calendar Body */}
+      <div className="month-body">
+        {/* Calendar Grid */}
+        <div className="month-grid">
         {monthDays.map((day, index) => {
           const daySessions = getSessionsForDay(day);
           const isOtherMonth = !isCurrentMonth(day);
@@ -431,6 +433,7 @@ const MonthView = ({
             </div>
           );
         })}
+        </div>
       </div>
     </div>
   );
