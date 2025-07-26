@@ -59,7 +59,8 @@ const CalendarView = ({
             organization={organization}
             blockedDates={blockedDates}
             onUpdateSession={onUpdateSession} // Pass the update handler (for future month view drag & drop)
-            onSessionClick={onSessionClick} // Pass the click handler (for future month view)
+            onSessionClick={onSessionClick} // Pass the click handler
+            onTimeOffClick={onTimeOffClick} // Pass the time off click handler
           />
         );
       default:

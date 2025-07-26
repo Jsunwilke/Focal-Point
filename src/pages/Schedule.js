@@ -497,8 +497,8 @@ const Schedule = () => {
     }
 
     return allTimeOffRequests.filter(request => {
-      // Include both pending and approved requests (but not denied or cancelled)
-      if (!['pending', 'approved'].includes(request.status)) return false;
+      // Include pending, under_review, and approved requests (but not denied or cancelled)
+      if (!['pending', 'under_review', 'approved'].includes(request.status)) return false;
 
       const startDate = request.startDate.toDate ? request.startDate.toDate() : new Date(request.startDate);
       const endDate = request.endDate.toDate ? request.endDate.toDate() : new Date(request.endDate);

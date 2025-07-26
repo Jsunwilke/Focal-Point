@@ -708,12 +708,21 @@ const WeekView = ({
 
       // Different styling for pending vs approved status
       if (session.status === 'pending') {
-        // Pending requests: dotted border, no fill
+        // Pending requests: blue dashed border, no fill
         return {
           ...baseTimeOffStyle,
           backgroundColor: "transparent",
           border: "2px dashed #007bff",
           color: "#007bff",
+          fontWeight: "500",
+        };
+      } else if (session.status === 'under_review') {
+        // Under review requests: orange dashed border, no fill
+        return {
+          ...baseTimeOffStyle,
+          backgroundColor: "transparent",
+          border: "2px dashed #ff6b35",
+          color: "#ff6b35",
           fontWeight: "500",
         };
       } else if (session.status === 'approved') {

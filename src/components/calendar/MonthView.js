@@ -12,6 +12,7 @@ const MonthView = ({
   organization,
   blockedDates = [],
   onSessionClick,
+  onTimeOffClick,
 }) => {
   // Generate calendar grid for the month
   const generateMonthDays = () => {
@@ -166,20 +167,66 @@ const MonthView = ({
     return sortedSessions;
   };
 
-  // Get sessions for a specific day - deduplicated by unique session
+  // Get sessions for a specific day - including time off
   const getSessionsForDay = (day) => {
-    const globalSessions = getGlobalSessionOrderForDay(day);
+    // Get ALL sessions for this day
+    const allDaySessions = sessions.filter((session) => {
+      let sessionDate;
+      if (typeof session.date === "string") {
+        const [year, month, dayOfMonth] = session.date.split("-").map(Number);
+        sessionDate = new Date(year, month - 1, dayOfMonth);
+      } else {
+        sessionDate = new Date(session.date);
+      }
+      return isSameDay(sessionDate, day);
+    });
+    
+    // Separate time off from regular sessions
+    const timeOffSessions = allDaySessions.filter(s => s.isTimeOff);
+    const regularSessions = allDaySessions.filter(s => !s.isTimeOff);
+    
+    // Group only regular sessions by unique identifier to avoid duplicates
+    const uniqueSessions = {};
+    regularSessions.forEach((session) => {
+      // Create unique key based on session properties to properly deduplicate multi-photographer sessions
+      const key = `${session.date}-${session.startTime}-${session.schoolId}-${session.sessionType || 'default'}`;
+      
+      if (!uniqueSessions[key]) {
+        // Store the session with all photographer information
+        uniqueSessions[key] = {
+          ...session,
+          allPhotographers: []
+        };
+      }
+      
+      // Add photographer info to the session
+      if (session.photographerId) {
+        uniqueSessions[key].allPhotographers.push(session.photographerId);
+      }
+      if (session.photographerIds) {
+        uniqueSessions[key].allPhotographers.push(...session.photographerIds);
+      }
+    });
+    
+    // Get unique sessions array
+    const uniqueSessionsArray = Object.values(uniqueSessions).map(session => ({
+      ...session,
+      allPhotographers: [...new Set(session.allPhotographers)] // Remove duplicate photographer IDs
+    }));
+    
+    // Combine grouped regular sessions with individual time off entries
+    const finalSessions = [...uniqueSessionsArray, ...timeOffSessions];
     
     // Filter based on schedule type
     if (scheduleType === "my") {
-      return globalSessions.filter((session) =>
+      return finalSessions.filter((session) =>
         session.photographerId === userProfile?.id || 
         (session.photographerIds && session.photographerIds.includes(userProfile?.id)) ||
         (session.allPhotographers && session.allPhotographers.includes(userProfile?.id))
       );
     }
     
-    return globalSessions;
+    return finalSessions;
   };
 
 
@@ -250,6 +297,44 @@ const MonthView = ({
     
     const colors = customColors && customColors.length >= 8 ? customColors : defaultColors;
     return colors[orderIndex] || colors[colors.length - 1];
+  };
+
+  // Get time off styling based on status
+  const getTimeOffStyle = (session) => {
+    if (!session.isTimeOff) return {};
+    
+    if (session.status === 'pending') {
+      return {
+        backgroundColor: "transparent",
+        border: "2px dashed #007bff",
+        color: "#007bff"
+      };
+    } else if (session.status === 'under_review') {
+      return {
+        backgroundColor: "transparent",
+        border: "2px dashed #ff6b35",
+        color: "#ff6b35"
+      };
+    } else if (session.status === 'approved') {
+      // Match the week view styling for approved time off
+      if (session.isPartialDay) {
+        return {
+          backgroundColor: "#fff4e6",
+          background: "repeating-linear-gradient(45deg, #fff4e6, #fff4e6 8px, #ffe0b3 8px, #ffe0b3 16px)",
+          border: "1px solid #ff9800",
+          color: "#e65100"
+        };
+      } else {
+        return {
+          backgroundColor: "#e0e0e0",
+          background: "repeating-linear-gradient(45deg, #e0e0e0, #e0e0e0 10px, #d0d0d0 10px, #d0d0d0 20px)",
+          border: "1px solid #bbb",
+          color: "#333"
+        };
+      }
+    }
+    
+    return {};
   };
 
 
@@ -338,11 +423,14 @@ const MonthView = ({
                       marginBottom: "0.2rem",
                       borderRadius: "0.25rem",
                       cursor: "pointer",
-                      fontSize: "0.7rem",
-                      lineHeight: "1.2"
+                      fontSize: "0.75rem",
+                      lineHeight: "1.2",
+                      ...getTimeOffStyle(session)
                     }}
                     onClick={() => {
-                      if (onSessionClick) {
+                      if (session.isTimeOff && onTimeOffClick) {
+                        onTimeOffClick(session);
+                      } else if (onSessionClick && !session.isTimeOff) {
                         onSessionClick(session);
                       }
                     }}
@@ -351,39 +439,56 @@ const MonthView = ({
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      fontSize: "0.65rem", 
-                      color: "rgba(255, 255, 255, 0.9)",
+                      fontSize: "0.75rem", 
+                      color: session.isTimeOff ? "#666" : "rgba(255, 255, 255, 0.9)",
                       marginBottom: "0.15rem",
                       lineHeight: "1"
                     }}>
                       <span>{formatTime(session.startTime)} - {formatTime(session.endTime)}</span>
-                      <span style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: "0.2rem", color: "inherit" }}>
                         <User size={10} />
                         <span>{photographerCount}</span>
                       </span>
                     </div>
-                    <div className="month-session__school" style={{ 
-                      fontSize: "0.7rem", 
-                      fontWeight: "500",
-                      color: "white",
-                      lineHeight: "1.1",
-                      marginBottom: "0.15rem",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap"
+                    <div style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.15rem"
                     }}>
-                      {schoolName}
+                      <div className="month-session__school" style={{ 
+                        fontSize: "0.75rem", 
+                        fontWeight: "500",
+                        color: session.isTimeOff ? "inherit" : "white",
+                        lineHeight: "1.1",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        flex: 1
+                      }}>
+                        {schoolName}
+                      </div>
+                      {session.isTimeOff && (
+                        <span style={{ 
+                          fontSize: "0.65rem", 
+                          textTransform: "capitalize",
+                          color: "inherit",
+                          marginLeft: "0.5rem"
+                        }}>
+                          {session.status}
+                        </span>
+                      )}
                     </div>
-                    {(session.sessionTypes || session.sessionType) && (
-                      <div style={{ display: 'flex', gap: '0.1rem', flexWrap: 'wrap', marginTop: '0.1rem' }}>
-                        {(() => {
-                          const sessionTypes = normalizeSessionTypes(session.sessionTypes || session.sessionType);
-                          const colors = getSessionTypeColors(sessionTypes, organization);
-                          const names = getSessionTypeNames(sessionTypes, organization);
-                          
-                          return (
-                            <>
-                              {sessionTypes.map((type, index) => {
+                    {((session.sessionTypes || session.sessionType) || session.isTimeOff) && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.1rem', marginTop: '0.1rem' }}>
+                        {(session.sessionTypes || session.sessionType) && (
+                          <div style={{ display: 'flex', gap: '0.1rem', flexWrap: 'wrap' }}>
+                            {(() => {
+                              const sessionTypes = normalizeSessionTypes(session.sessionTypes || session.sessionType);
+                              const colors = getSessionTypeColors(sessionTypes, organization);
+                              const names = getSessionTypeNames(sessionTypes, organization);
+                              
+                              return sessionTypes.map((type, index) => {
                                 // Use custom session type if "other" is selected and custom type exists
                                 let displayName = names[index];
                                 if (type === 'other' && session.customSessionType) {
@@ -395,7 +500,7 @@ const MonthView = ({
                                     key={`${type}-${index}`}
                                     className="month-session__badge"
                                     style={{
-                                      fontSize: "0.45rem",
+                                      fontSize: "0.5rem",
                                       backgroundColor: colors[index],
                                       color: "white",
                                       padding: "0.1rem 0.15rem",
@@ -409,10 +514,20 @@ const MonthView = ({
                                     {displayName}
                                   </div>
                                 );
-                              })}
-                            </>
-                          );
-                        })()}
+                              });
+                            })()}
+                          </div>
+                        )}
+                        {session.isTimeOff && (
+                          <span style={{ 
+                            fontSize: "0.65rem", 
+                            fontWeight: "500",
+                            color: "inherit",
+                            marginLeft: "auto"
+                          }}>
+                            {session.photographerName}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
