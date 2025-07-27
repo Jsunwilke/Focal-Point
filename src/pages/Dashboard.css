@@ -4,34 +4,20 @@
   margin: 0 auto;
 }
 
-.dashboard__header {
-  margin-bottom: var(--spacing-2xl);
-}
 
-.dashboard__title {
-  font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--text-primary);
-  margin-bottom: var(--spacing-xs);
-}
 
-.dashboard__subtitle {
-  font-size: var(--font-size-lg);
-  color: var(--text-secondary);
-}
-
+/* Dashboard Content - Independent Columns */
 .dashboard__content {
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: start;
+}
+
+.dashboard__column {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
-}
-
-/* Dashboard Row Styling - 2 Column Grid */
-.dashboard__row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-lg);
-  align-items: start;
 }
 
 /* Widget container for drag & drop */
@@ -54,6 +40,60 @@
 .dashboard__widget-container.dragging {
   opacity: 0.5;
   transform: rotate(2deg);
+}
+
+/* Empty column drop zone */
+.empty-column-drop-zone {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--border-color, #d1d5db);
+  border-radius: 8px;
+  background-color: var(--background-muted, #f9fafb);
+  transition: all 0.2s ease;
+}
+
+.drop-zone-content {
+  text-align: center;
+  color: var(--text-secondary, #6b7280);
+  font-size: var(--font-size-sm, 14px);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.column-drag-over .empty-column-drop-zone {
+  border-color: var(--primary-color, #2563eb);
+  background-color: rgba(37, 99, 235, 0.05);
+}
+
+.column-drag-over .drop-zone-content {
+  color: var(--primary-color, #2563eb);
+}
+
+/* Drop zones between widgets */
+.drop-zone {
+  height: 4px;
+  margin: 8px 0;
+  border-radius: 2px;
+  background: transparent;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.drop-zone.drag-over {
+  height: 20px;
+  background: rgba(37, 99, 235, 0.1);
+  border: 2px dashed var(--primary-color, #2563eb);
+}
+
+.drop-zone-indicator {
+  width: 100%;
+  height: 2px;
+  background: var(--primary-color, #2563eb);
+  border-radius: 1px;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .dashboard__welcome-card {
@@ -108,34 +148,10 @@
 
 /* Mobile Styles */
 @media (max-width: 768px) {
-  .dashboard__header {
-    margin-bottom: var(--spacing-xl);
-  }
-
-  .dashboard__title {
-    font-size: var(--font-size-2xl);
-  }
-
-  .dashboard__subtitle {
-    font-size: var(--font-size-base);
-  }
-
+  /* Stack columns in single column on mobile */
   .dashboard__content {
+    flex-direction: column;
     gap: var(--spacing-md);
-  }
-
-  /* Stack widgets in single column on mobile */
-  .dashboard__row {
-    grid-template-columns: 1fr;
-    gap: var(--spacing-md);
-  }
-
-  .dashboard__welcome-card {
-    padding: var(--spacing-lg);
-  }
-
-  .dashboard__welcome-title {
-    font-size: var(--font-size-xl);
   }
 
   .dashboard__placeholder {
@@ -146,7 +162,7 @@
 
 /* Tablet responsive adjustments */
 @media (max-width: 1024px) and (min-width: 769px) {
-  .dashboard__row {
+  .dashboard__content {
     gap: var(--spacing-md);
   }
 }

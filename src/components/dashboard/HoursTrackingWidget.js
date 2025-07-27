@@ -269,8 +269,26 @@ const HoursTrackingWidget = () => {
   }
 
   const { week: weekTarget, period: periodTarget } = getTargetHours();
-  const weekProgress = Math.min((weekHours / weekTarget) * 100, 100);
-  const periodProgress = Math.min((periodHours / periodTarget) * 100, 100);
+  
+  // Calculate progress with overtime handling
+  const calculateProgress = (hours, target) => {
+    const regularHours = Math.min(hours, target);
+    const overtimeHours = Math.max(hours - target, 0);
+    const totalProgress = (hours / target) * 100;
+    const regularProgress = (regularHours / target) * 100;
+    const overtimeProgress = totalProgress > 100 ? ((overtimeHours / hours) * 100) : 0;
+    
+    return {
+      total: totalProgress,
+      regular: regularProgress,
+      overtime: overtimeProgress,
+      overtimeHours: overtimeHours,
+      hasOvertime: overtimeHours > 0
+    };
+  };
+
+  const weekStats = calculateProgress(weekHours, weekTarget);
+  const periodStats = calculateProgress(periodHours, periodTarget);
 
   return (
     <div className="hours-tracking-widget">
@@ -286,16 +304,33 @@ const HoursTrackingWidget = () => {
         <div className="hours-section">
           <div className="hours-info">
             <span className="hours-label">This Week:</span>
-            <span className="hours-value">{formatDuration(weekHours)}/{Math.round(weekTarget)}h</span>
+            <span className="hours-value">
+              {formatDuration(weekHours)}/{Math.round(weekTarget)}h
+              {weekStats.hasOvertime && (
+                <span className="overtime-text"> ({formatDuration(weekStats.overtimeHours)} OT)</span>
+              )}
+            </span>
           </div>
           <div className="progress-container">
-            <div className="progress-bar">
+            <div className="progress-bar enhanced">
               <div 
-                className="progress-fill progress-fill--week"
-                style={{ width: `${weekProgress}%` }}
+                className="progress-fill progress-fill--regular"
+                style={{ width: `${Math.min(weekStats.regular, 100)}%` }}
               />
+              {weekStats.hasOvertime && (
+                <div 
+                  className="progress-fill progress-fill--overtime"
+                  style={{ 
+                    width: `${(weekStats.overtimeHours / weekHours) * 100}%`,
+                    left: `${Math.min(weekStats.regular, 100)}%`
+                  }}
+                />
+              )}
             </div>
-            <span className="progress-text">{Math.round(weekProgress)}%</span>
+            <span className="progress-text">
+              {Math.round(weekStats.total)}%
+              {weekStats.hasOvertime && <span className="overtime-indicator"> OT</span>}
+            </span>
           </div>
         </div>
 
@@ -303,16 +338,33 @@ const HoursTrackingWidget = () => {
         <div className="hours-section">
           <div className="hours-info">
             <span className="hours-label">Pay Period:</span>
-            <span className="hours-value">{formatDuration(periodHours)}/{Math.round(periodTarget)}h</span>
+            <span className="hours-value">
+              {formatDuration(periodHours)}/{Math.round(periodTarget)}h
+              {periodStats.hasOvertime && (
+                <span className="overtime-text"> ({formatDuration(periodStats.overtimeHours)} OT)</span>
+              )}
+            </span>
           </div>
           <div className="progress-container">
-            <div className="progress-bar">
+            <div className="progress-bar enhanced">
               <div 
-                className="progress-fill progress-fill--period"
-                style={{ width: `${periodProgress}%` }}
+                className="progress-fill progress-fill--regular"
+                style={{ width: `${Math.min(periodStats.regular, 100)}%` }}
               />
+              {periodStats.hasOvertime && (
+                <div 
+                  className="progress-fill progress-fill--overtime"
+                  style={{ 
+                    width: `${(periodStats.overtimeHours / periodHours) * 100}%`,
+                    left: `${Math.min(periodStats.regular, 100)}%`
+                  }}
+                />
+              )}
             </div>
-            <span className="progress-text">{Math.round(periodProgress)}%</span>
+            <span className="progress-text">
+              {Math.round(periodStats.total)}%
+              {periodStats.hasOvertime && <span className="overtime-indicator"> OT</span>}
+            </span>
           </div>
         </div>
       </div>

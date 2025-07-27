@@ -357,8 +357,8 @@ exports.getSearchIndexStats = onRequest(async (req, res) => {
     }
 });
 
-// Function 5: Automatic PTO Processing (runs every 5 minutes for testing)
-exports.processAutomaticPTO = onSchedule('every 5 minutes', async (event) => {
+// Function 5: Automatic PTO Processing (runs daily at midnight)
+exports.processAutomaticPTO = onSchedule('0 0 * * *', async (event) => {
     console.log('Starting automatic PTO processing...');
     
     const organizationsCollection = db.collection('organizations');

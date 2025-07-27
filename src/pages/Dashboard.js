@@ -54,42 +54,98 @@ const Dashboard = () => {
     // Note: No need to refresh data as widgets handle their own data loading
   };
 
-  // Widget configuration
-  const defaultWidgets = [
-    { id: 'time-tracking', component: TimeTrackingWidget, props: {} },
-    { id: 'pto-balance', component: PTOBalanceWidget, props: {} },
-    { id: 'hours-tracking', component: HoursTrackingWidget, props: {} },
-    { id: 'upcoming-sessions', component: UpcomingSessionsWidget, props: { onSessionClick: handleSessionClick } },
-    { id: 'placeholder-1', component: null, props: {} },
-    { id: 'placeholder-2', component: null, props: {} }
-  ];
+  // Widget configuration - organized by columns
+  const defaultWidgets = {
+    column1: [
+      { id: 'time-tracking', component: TimeTrackingWidget, props: {} },
+      { id: 'pto-balance', component: PTOBalanceWidget, props: {} }
+    ],
+    column2: [
+      { id: 'hours-tracking', component: HoursTrackingWidget, props: {} },
+      { id: 'upcoming-sessions', component: UpcomingSessionsWidget, props: { onSessionClick: handleSessionClick } },
+      { id: 'placeholder-1', component: null, props: {} }
+    ]
+  };
 
-  // Widget state and drag & drop
+  // Migration helper for old localStorage format
+  const migrateOldFormat = (oldData) => {
+    if (Array.isArray(oldData)) {
+      // Old format was array - convert to column structure
+      console.log('Migrating old widget format to column structure');
+      return {
+        column1: [
+          defaultWidgets.column1[0], // time-tracking
+          defaultWidgets.column1[1]  // pto-balance  
+        ],
+        column2: [
+          defaultWidgets.column2[0], // hours-tracking
+          defaultWidgets.column2[1], // upcoming-sessions
+          defaultWidgets.column2[2]  // placeholder-1
+        ]
+      };
+    }
+    // If migrating from old column structure with multiple placeholders
+    if (oldData.column1 && oldData.column2) {
+      const filteredColumn1 = oldData.column1.filter(w => w.id !== 'placeholder-2');
+      const filteredColumn2 = oldData.column2.filter(w => w.id !== 'placeholder-2');
+      
+      // Keep only one placeholder in column2
+      if (!filteredColumn2.find(w => w.id === 'placeholder-1')) {
+        filteredColumn2.push(defaultWidgets.column2[2]); // Add placeholder-1
+      }
+      
+      return {
+        column1: filteredColumn1,
+        column2: filteredColumn2
+      };
+    }
+    return oldData;
+  };
+
+  // Resolve widget component references
+  const resolveWidget = (widget) => {
+    const allDefaultWidgets = [...defaultWidgets.column1, ...defaultWidgets.column2];
+    const defaultWidget = allDefaultWidgets.find(w => w.id === widget.id);
+    
+    return {
+      ...widget,
+      component: widget.component || defaultWidget?.component || null,
+      props: widget.id === 'upcoming-sessions' 
+        ? { onSessionClick: handleSessionClick }
+        : (widget.props || defaultWidget?.props || {})
+    };
+  };
+
+  // Widget state and drag & drop (column-based)
   const [widgets, setWidgets] = useState(() => {
     const savedOrder = localStorage.getItem('dashboard-widget-order');
     if (savedOrder) {
       try {
         const parsedOrder = JSON.parse(savedOrder);
-        // Ensure we have all widgets and update props for upcoming-sessions
-        const orderedWidgets = parsedOrder.map(savedWidget => {
-          const defaultWidget = defaultWidgets.find(w => w.id === savedWidget.id);
-          if (savedWidget.id === 'upcoming-sessions') {
-            return { ...savedWidget, props: { onSessionClick: handleSessionClick } };
-          }
-          return defaultWidget || savedWidget;
-        });
+        const migratedOrder = migrateOldFormat(parsedOrder);
         
-        // Add any new widgets that weren't in saved order
-        defaultWidgets.forEach(defaultWidget => {
-          if (!orderedWidgets.find(w => w.id === defaultWidget.id)) {
-            orderedWidgets.push(defaultWidget);
+        // Ensure we have column structure and resolve widget components
+        if (migratedOrder && typeof migratedOrder === 'object' && !Array.isArray(migratedOrder)) {
+          const resolvedOrder = {
+            column1: (migratedOrder.column1 || defaultWidgets.column1).map(resolveWidget),
+            column2: (migratedOrder.column2 || defaultWidgets.column2).map(resolveWidget)
+          };
+          
+          // Verify all widgets have valid components or are placeholders
+          const isValidColumn = (column) => column.every(widget => 
+            widget.component !== undefined && (widget.component === null || typeof widget.component === 'function')
+          );
+          
+          if (isValidColumn(resolvedOrder.column1) && isValidColumn(resolvedOrder.column2)) {
+            return resolvedOrder;
+          } else {
+            console.warn('Invalid widget configuration found, resetting to defaults');
           }
-        });
-        
-        return orderedWidgets;
+        }
       } catch (error) {
         console.error('Error parsing saved widget order:', error);
-        return defaultWidgets;
+        // Clear invalid localStorage
+        localStorage.removeItem('dashboard-widget-order');
       }
     }
     return defaultWidgets;
@@ -107,9 +163,9 @@ const Dashboard = () => {
     }
   };
 
-  // Drag and drop handlers
-  const handleDragStart = (e, widget, index) => {
-    setDraggedWidget({ widget, index });
+  // Drag and drop handlers (intelligent positioning)
+  const handleDragStart = (e, widget, columnId, index) => {
+    setDraggedWidget({ widget, columnId, index });
     e.dataTransfer.effectAllowed = "move";
     e.target.style.opacity = "0.5";
   };
@@ -120,10 +176,63 @@ const Dashboard = () => {
     setDragOver(null);
   };
 
-  const handleDragOver = (e, index) => {
+  // Calculate drop position based on mouse position within widget
+  const calculateDropPosition = (e, columnId, widgetIndex) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mouseY = e.clientY;
+    const widgetCenter = rect.top + rect.height / 2;
+    
+    // If mouse is in upper half, insert before current widget
+    // If mouse is in lower half, insert after current widget
+    const insertIndex = mouseY < widgetCenter ? widgetIndex : widgetIndex + 1;
+    
+    return { columnId, index: insertIndex };
+  };
+
+  const handleWidgetDragOver = (e, columnId, index) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    setDragOver(index);
+    
+    const dropPosition = calculateDropPosition(e, columnId, index);
+    setDragOver(dropPosition);
+  };
+
+  // Drop zone specific handlers
+  const handleDropZoneDragOver = (e, columnId, insertIndex) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+    setDragOver({ columnId, index: insertIndex, isDropZone: true });
+  };
+
+  const handleDropZoneDrop = (e, columnId, insertIndex) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!draggedWidget) {
+      setDragOver(null);
+      return;
+    }
+
+    const { columnId: sourceColumnId, index: sourceIndex } = draggedWidget;
+    
+    // Calculate actual insert position accounting for removal
+    let actualInsertIndex = insertIndex;
+    if (sourceColumnId === columnId && sourceIndex < insertIndex) {
+      actualInsertIndex = insertIndex - 1;
+    }
+
+    const newWidgets = { ...widgets };
+    
+    // Remove from source column
+    const [draggedItem] = newWidgets[sourceColumnId].splice(sourceIndex, 1);
+    
+    // Insert at specific position in target column
+    newWidgets[columnId].splice(actualInsertIndex, 0, draggedItem);
+    
+    setWidgets(newWidgets);
+    saveWidgetOrder(newWidgets);
+    setDragOver(null);
   };
 
   const handleDragLeave = (e) => {
@@ -133,25 +242,86 @@ const Dashboard = () => {
     }
   };
 
-  const handleDrop = (e, dropIndex) => {
+  // Handle drop on widget (intelligent positioning)
+  const handleWidgetDrop = (e, dropColumnId, dropIndex) => {
     e.preventDefault();
     
-    if (!draggedWidget || draggedWidget.index === dropIndex) {
+    if (!draggedWidget) {
       setDragOver(null);
       return;
     }
 
-    const newWidgets = [...widgets];
-    const [draggedItem] = newWidgets.splice(draggedWidget.index, 1);
-    newWidgets.splice(dropIndex, 0, draggedItem);
+    const { columnId: sourceColumnId, index: sourceIndex } = draggedWidget;
+    const dropPosition = calculateDropPosition(e, dropColumnId, dropIndex);
+    const actualDropIndex = dropPosition.index;
+    
+    // If dropping in same position, do nothing
+    if (sourceColumnId === dropColumnId && sourceIndex === actualDropIndex) {
+      setDragOver(null);
+      return;
+    }
+
+    const newWidgets = { ...widgets };
+    
+    // Remove from source column
+    const [draggedItem] = newWidgets[sourceColumnId].splice(sourceIndex, 1);
+    
+    // Calculate adjusted insert position if moving within same column
+    let adjustedInsertIndex = actualDropIndex;
+    if (sourceColumnId === dropColumnId && sourceIndex < actualDropIndex) {
+      adjustedInsertIndex = actualDropIndex - 1;
+    }
+    
+    // Add to target column
+    newWidgets[dropColumnId].splice(adjustedInsertIndex, 0, draggedItem);
     
     setWidgets(newWidgets);
     saveWidgetOrder(newWidgets);
     setDragOver(null);
   };
 
+  // Column-level drag handlers for empty columns
+  const handleColumnDragOver = (e, columnId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    
+    // Only set drag over for empty columns or between widgets
+    const columnWidgets = widgets[columnId];
+    if (columnWidgets.length === 0) {
+      setDragOver({ columnId, index: 0 });
+    }
+  };
+
+  const handleColumnDrop = (e, columnId) => {
+    e.preventDefault();
+    
+    if (!draggedWidget) {
+      setDragOver(null);
+      return;
+    }
+
+    const { columnId: sourceColumnId, index: sourceIndex } = draggedWidget;
+    const targetColumn = widgets[columnId];
+    
+    // If dropping on empty column, add to end
+    if (targetColumn.length === 0) {
+      const newWidgets = { ...widgets };
+      
+      // Remove from source column
+      const [draggedItem] = newWidgets[sourceColumnId].splice(sourceIndex, 1);
+      
+      // Add to target column
+      newWidgets[columnId].push(draggedItem);
+      
+      setWidgets(newWidgets);
+      saveWidgetOrder(newWidgets);
+    }
+    
+    setDragOver(null);
+  };
+
   // Render widget component
-  const renderWidget = (widget, index) => {
+  const renderWidget = (widget) => {
     if (!widget.component) {
       // Render placeholder
       return (
@@ -168,57 +338,103 @@ const Dashboard = () => {
     return <Component {...widget.props} />;
   };
 
+  // Render visual drop indicator
+  const renderDropIndicator = (columnId, insertIndex) => {
+    const isActive = draggedWidget && dragOver?.columnId === columnId && 
+                    dragOver?.index === insertIndex;
+    
+    if (!isActive) return null;
+    
+    return (
+      <div
+        key={`indicator-${columnId}-${insertIndex}`}
+        style={{
+          height: '3px',
+          margin: '4px 0',
+          background: 'var(--primary-color, #2563eb)',
+          borderRadius: '2px',
+          transition: 'all 0.2s ease',
+          opacity: 0.8
+        }}
+      />
+    );
+  };
+
+  // Render column with widgets
+  const renderColumn = (columnId, columnWidgets) => {
+    const isEmptyColumn = columnWidgets.length === 0;
+    const isColumnDragOver = dragOver?.columnId === columnId && isEmptyColumn;
+    
+    if (isEmptyColumn) {
+      return (
+        <div 
+          className={`dashboard__column ${isColumnDragOver ? 'column-drag-over' : ''}`}
+          onDragOver={(e) => handleColumnDragOver(e, columnId)}
+          onDragLeave={handleDragLeave}
+          onDrop={(e) => handleColumnDrop(e, columnId)}
+          style={{
+            minHeight: '200px',
+            border: isColumnDragOver ? '2px dashed var(--primary-color, #2563eb)' : '2px solid transparent',
+            borderRadius: '8px',
+            transition: 'all 0.2s ease',
+            padding: 'var(--spacing-md)'
+          }}
+        >
+          <div className="empty-column-drop-zone">
+            <div className="drop-zone-content">
+              <span>Drop widgets here</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="dashboard__column">
+        {/* Drop indicator before first widget */}
+        {renderDropIndicator(columnId, 0)}
+        
+        {columnWidgets.map((widget, index) => {
+          const isDragged = draggedWidget?.columnId === columnId && draggedWidget?.index === index;
+          
+          return (
+            <div key={`widget-container-${widget.id}`}>
+              {/* Widget container with intelligent drop zones */}
+              <div
+                className={`dashboard__widget-container ${isDragged ? 'dragging' : ''}`}
+                draggable="true"
+                onDragStart={(e) => handleDragStart(e, widget, columnId, index)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => handleWidgetDragOver(e, columnId, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleWidgetDrop(e, columnId, index)}
+                style={{
+                  position: 'relative',
+                  transition: 'all 0.2s ease',
+                  opacity: isDragged ? 0.5 : 1,
+                  border: '2px solid transparent',
+                  borderRadius: '8px',
+                  cursor: 'grab'
+                }}
+              >
+                {renderWidget(widget)}
+              </div>
+              
+              {/* Drop indicator after this widget */}
+              {renderDropIndicator(columnId, index + 1)}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="dashboard">
-      <div className="dashboard__header">
-        <h1 className="dashboard__title">
-          Welcome back, {userProfile?.firstName}
-        </h1>
-        <p className="dashboard__subtitle">
-          {new Date().toLocaleDateString('en-US', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          })}
-        </p>
-      </div>
-
       <div className="dashboard__content">
-        {/* Dynamic widget rows with drag & drop */}
-        {Array.from({ length: Math.ceil(widgets.length / 2) }, (_, rowIndex) => (
-          <div key={rowIndex} className="dashboard__row">
-            {widgets.slice(rowIndex * 2, rowIndex * 2 + 2).map((widget, colIndex) => {
-              const widgetIndex = rowIndex * 2 + colIndex;
-              const isDragOver = dragOver === widgetIndex;
-              const isDragged = draggedWidget?.index === widgetIndex;
-              
-              return (
-                <div
-                  key={widget.id}
-                  className={`dashboard__widget-container ${isDragOver ? 'drag-over' : ''} ${isDragged ? 'dragging' : ''}`}
-                  draggable="true"
-                  onDragStart={(e) => handleDragStart(e, widget, widgetIndex)}
-                  onDragEnd={handleDragEnd}
-                  onDragOver={(e) => handleDragOver(e, widgetIndex)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, widgetIndex)}
-                  style={{
-                    position: 'relative',
-                    transition: 'all 0.2s ease',
-                    opacity: isDragged ? 0.5 : 1,
-                    transform: isDragOver ? 'scale(1.02)' : 'scale(1)',
-                    border: isDragOver ? '2px dashed var(--primary-color, #2563eb)' : '2px solid transparent',
-                    borderRadius: '8px',
-                    cursor: 'grab'
-                  }}
-                >
-                  {renderWidget(widget, widgetIndex)}
-                </div>
-              );
-            })}
-          </div>
-        ))}
+        {/* Two independent columns with drag & drop */}
+        {renderColumn('column1', widgets.column1)}
+        {renderColumn('column2', widgets.column2)}
       </div>
 
       {/* Session Details Modal */}
