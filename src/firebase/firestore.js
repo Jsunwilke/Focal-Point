@@ -1503,6 +1503,71 @@ export const getTodayTimeEntries = async (userId, organizationID) => {
   }
 };
 
+// Get week's time entries for a user
+export const getWeekTimeEntries = async (userId, organizationID, startDate, endDate) => {
+  try {
+    const formatDate = (date) => {
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    };
+    
+    const startString = formatDate(startDate);
+    const endString = formatDate(endDate);
+    
+    return await getTimeEntries(userId, organizationID, startString, endString);
+  } catch (error) {
+    console.error("Error fetching week's time entries:", error);
+    throw error;
+  }
+};
+
+// Get upcoming sessions for a user
+export const getUserUpcomingSessions = async (userId, organizationID, daysAhead = 7) => {
+  try {
+    const today = new Date();
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() + daysAhead);
+    
+    const formatDate = (date) => {
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    };
+    
+    const todayString = formatDate(today);
+    const endString = formatDate(endDate);
+    
+    const sessionsRef = collection(firestore, 'sessions');
+    const q = query(
+      sessionsRef,
+      where('organizationID', '==', organizationID),
+      where('date', '>=', todayString),
+      where('date', '<=', endString),
+      orderBy('date', 'asc'),
+      orderBy('startTime', 'asc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const sessions = [];
+    
+    querySnapshot.forEach((doc) => {
+      const sessionData = doc.data();
+      // Check if user is assigned to this session
+      const isAssigned = sessionData.photographers && 
+        sessionData.photographers.some(photographer => photographer.id === userId);
+      
+      if (isAssigned) {
+        sessions.push({
+          id: doc.id,
+          ...sessionData
+        });
+      }
+    });
+    
+    return sessions;
+  } catch (error) {
+    console.error("Error fetching upcoming sessions:", error);
+    throw error;
+  }
+};
+
 // Calculate total hours for time entries
 export const calculateTotalHours = (timeEntries) => {
   let totalMilliseconds = 0;

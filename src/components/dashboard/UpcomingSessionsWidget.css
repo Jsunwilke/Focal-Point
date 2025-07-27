@@ -1,0 +1,143 @@
+/* src/components/dashboard/UpcomingSessionsWidget.css */
+
+.upcoming-sessions-widget {
+  background: var(--background, white);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1));
+  padding: var(--spacing-sm, 8px);
+  border: 1px solid var(--border-color, #d1d5db);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+  height: auto;
+  min-height: 300px;
+}
+
+.widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm, 6px);
+  flex-shrink: 0;
+}
+
+.widget-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 6px);
+  font-weight: var(--font-weight-semibold, 600);
+  font-size: var(--font-size-base, 14px);
+  color: var(--text-primary, #111827);
+}
+
+.widget-title svg {
+  color: var(--warning-color, #f59e0b);
+  flex-shrink: 0;
+}
+
+.session-count {
+  background: var(--warning-color, #f59e0b);
+  color: white;
+  padding: var(--spacing-xs, 2px) var(--spacing-sm, 8px);
+  border-radius: var(--radius-lg, 12px);
+  font-size: var(--font-size-xs, 12px);
+  font-weight: var(--font-weight-semibold, 600);
+  min-width: 20px;
+  text-align: center;
+}
+
+.widget-content {
+  flex: 1;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.widget-loading,
+.widget-error {
+  text-align: center;
+  padding: var(--spacing-xl, 24px) 0;
+  color: var(--text-secondary, #6b7280);
+  font-size: var(--font-size-sm, 14px);
+}
+
+.widget-error {
+  color: var(--error-color, #ef4444);
+}
+
+.no-sessions {
+  text-align: center;
+  padding: var(--spacing-lg, 16px) 0;
+  color: var(--text-secondary, #6b7280);
+}
+
+.no-sessions svg {
+  color: var(--text-muted, #9ca3af);
+  margin-bottom: var(--spacing-sm, 8px);
+}
+
+.no-sessions p {
+  margin: 0;
+  font-size: var(--font-size-sm, 14px);
+}
+
+/* Sessions Container - holds schedule card blocks */
+.sessions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: var(--spacing-xs, 2px);
+}
+
+/* Session blocks inherit styling from globals.css .session-block */
+.sessions-container .session-block:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Custom scrollbar for sessions container */
+.sessions-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sessions-container::-webkit-scrollbar-track {
+  background: var(--background-muted, #f3f4f6);
+  border-radius: 2px;
+}
+
+.sessions-container::-webkit-scrollbar-thumb {
+  background: var(--border-color, #d1d5db);
+  border-radius: 2px;
+}
+
+.sessions-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary, #6b7280);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .upcoming-sessions-widget {
+    padding: var(--spacing-xs, 6px);
+    min-height: 250px;
+  }
+  
+  .sessions-container .session-block {
+    margin-bottom: 2px;
+    padding: 2px var(--spacing-xs);
+    min-height: 36px;
+    font-size: var(--font-size-xs);
+  }
+}
+
+@media (max-width: 480px) {
+  .widget-title {
+    font-size: var(--font-size-sm, 13px);
+  }
+  
+  .upcoming-sessions-widget {
+    min-height: 200px;
+  }
+}

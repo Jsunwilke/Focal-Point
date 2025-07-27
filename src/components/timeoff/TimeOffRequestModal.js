@@ -1,9 +1,10 @@
 // src/components/timeoff/TimeOffRequestModal.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { X, Calendar, AlertCircle, Clock } from 'lucide-react';
+import { X, Calendar, AlertCircle, Clock, Users } from 'lucide-react';
 import { createTimeOffRequest, checkTimeOffConflicts } from '../../firebase/timeOffRequests';
 import { checkDateIsBlocked } from '../../firebase/blockedDates';
+import { getPTOBalance, reservePTOHours } from '../../services/ptoService';
 import Button from '../shared/Button';
 import '../shared/Modal.css';
 import './TimeOffRequestModal.css';
@@ -16,7 +17,9 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
     notes: '',
     isPartialDay: false,
     startTime: '09:00',
-    endTime: '17:00'
+    endTime: '17:00',
+    isPaidTimeOff: false,
+    ptoHoursRequested: 0
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -25,6 +28,50 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
   const [blockedInfo, setBlockedInfo] = useState(null);
   const [showHighPriority, setShowHighPriority] = useState(false);
   const [highPriorityReason, setHighPriorityReason] = useState('');
+  const [ptoBalance, setPtoBalance] = useState(null);
+  const [loadingPTO, setLoadingPTO] = useState(false);
+  const [ptoEnabled, setPtoEnabled] = useState(false);
+
+  // Load PTO balance when modal opens
+  useEffect(() => {
+    const loadPTOData = async () => {
+      if (isOpen && userProfile && organization) {
+        setPtoEnabled(organization.ptoSettings?.enabled || false);
+        
+        if (organization.ptoSettings?.enabled) {
+          setLoadingPTO(true);
+          try {
+            const balance = await getPTOBalance(userProfile.id, organization.id);
+            setPtoBalance(balance);
+          } catch (error) {
+            console.error('Error loading PTO balance:', error);
+          } finally {
+            setLoadingPTO(false);
+          }
+        }
+      }
+    };
+
+    loadPTOData();
+  }, [isOpen, userProfile, organization]);
+
+  // Calculate total days and maximum PTO hours
+  const calculateDaysRequested = () => {
+    if (!formData.startDate) return 0;
+    
+    if (formData.isPartialDay) return 1;
+    
+    if (!formData.endDate) return 0;
+    
+    const start = new Date(formData.startDate);
+    const end = new Date(formData.endDate);
+    const timeDiff = end.getTime() - start.getTime();
+    const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1;
+    
+    return daysDiff;
+  };
+
+  const maxPTOHours = calculateDaysRequested() * 8; // Max 8 hours per day
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -155,6 +202,24 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
       }
     }
 
+    // Validate PTO hours if using paid time off
+    if (formData.isPaidTimeOff && ptoEnabled) {
+      if (formData.ptoHoursRequested <= 0) {
+        setError('Please specify PTO hours to use');
+        return;
+      }
+      
+      if (formData.ptoHoursRequested > maxPTOHours) {
+        setError(`Maximum ${maxPTOHours} PTO hours allowed for this request`);
+        return;
+      }
+      
+      if (ptoBalance && formData.ptoHoursRequested > ptoBalance.currentBalance) {
+        setError(`Insufficient PTO balance. You have ${ptoBalance.currentBalance} hours available`);
+        return;
+      }
+    }
+
     setLoading(true);
     setError('');
 
@@ -173,6 +238,9 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
           startTime: formData.startTime,
           endTime: formData.endTime
         }),
+        // Add PTO fields
+        isPaidTimeOff: formData.isPaidTimeOff && ptoEnabled,
+        ptoHoursRequested: formData.isPaidTimeOff && ptoEnabled ? formData.ptoHoursRequested : 0,
         // Add priority fields if request overlaps with blocked dates
         priority: (blockedInfo && blockedInfo.isBlocked && showHighPriority) ? 'high' : 'normal',
         ...(blockedInfo && blockedInfo.isBlocked && showHighPriority && {
@@ -192,7 +260,9 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
         notes: '',
         isPartialDay: false,
         startTime: '09:00',
-        endTime: '17:00'
+        endTime: '17:00',
+        isPaidTimeOff: false,
+        ptoHoursRequested: 0
       });
       setConflicts([]);
       setBlockedInfo(null);
@@ -455,6 +525,88 @@ const TimeOffRequestModal = ({ isOpen, onClose, userProfile, organization }) => 
                 style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #dee2e6', borderRadius: '4px', resize: 'vertical', minHeight: '50px' }}
               />
             </div>
+
+            {/* PTO Section */}
+            {ptoEnabled && (
+              <div style={{ backgroundColor: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '4px', padding: '12px', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <Users size={16} style={{ color: '#6c757d' }} />
+                  <span style={{ fontSize: '13px', fontWeight: '500', color: '#495057' }}>Paid Time Off (PTO)</span>
+                </div>
+                
+                {loadingPTO ? (
+                  <div style={{ fontSize: '12px', color: '#6c757d' }}>Loading PTO balance...</div>
+                ) : ptoBalance ? (
+                  <>
+                    <div style={{ fontSize: '12px', color: '#6c757d', marginBottom: '8px' }}>
+                      Available PTO: <strong>{ptoBalance.currentBalance} hours</strong>
+                      {ptoBalance.pendingBalance > 0 && (
+                        <span> ({ptoBalance.pendingBalance} hours pending)</span>
+                      )}
+                    </div>
+                    
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px', marginBottom: '8px' }}>
+                      <input
+                        type="checkbox"
+                        name="isPaidTimeOff"
+                        checked={formData.isPaidTimeOff}
+                        onChange={handleInputChange}
+                        style={{ display: 'none' }}
+                      />
+                      <span style={{
+                        width: '32px',
+                        height: '16px',
+                        backgroundColor: formData.isPaidTimeOff ? '#007bff' : '#ccc',
+                        borderRadius: '8px',
+                        position: 'relative',
+                        transition: 'background-color 0.3s',
+                        flexShrink: 0,
+                        display: 'inline-block'
+                      }}>
+                        <span style={{
+                          position: 'absolute',
+                          top: '2px',
+                          left: formData.isPaidTimeOff ? '16px' : '2px',
+                          width: '12px',
+                          height: '12px',
+                          backgroundColor: 'white',
+                          borderRadius: '50%',
+                          transition: 'left 0.3s',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                        }}></span>
+                      </span>
+                      Use PTO for this request
+                    </label>
+                    
+                    {formData.isPaidTimeOff && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label htmlFor="ptoHoursRequested" style={{ fontSize: '12px', fontWeight: '500' }}>
+                          PTO Hours to Use (max {maxPTOHours} for this request)
+                        </label>
+                        <input
+                          type="number"
+                          id="ptoHoursRequested"
+                          name="ptoHoursRequested"
+                          value={formData.ptoHoursRequested}
+                          onChange={handleInputChange}
+                          min="1"
+                          max={Math.min(maxPTOHours, ptoBalance.currentBalance)}
+                          step="0.5"
+                          placeholder="Enter hours"
+                          style={{ padding: '4px 6px', fontSize: '12px', border: '1px solid #dee2e6', borderRadius: '4px', width: '120px' }}
+                        />
+                        <div style={{ fontSize: '11px', color: '#6c757d' }}>
+                          You can use up to {Math.min(maxPTOHours, ptoBalance.currentBalance)} hours
+                          {maxPTOHours < ptoBalance.currentBalance && ' (limited by request duration)'}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ fontSize: '12px', color: '#6c757d' }}>PTO balance unavailable</div>
+                )}
+              </div>
+            )}
 
             {/* Blocked Dates Warning */}
             {blockedInfo && blockedInfo.isBlocked && (

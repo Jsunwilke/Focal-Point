@@ -20,6 +20,7 @@ import {
   Upload,
   Image,
   GripVertical,
+  Users,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { updateOrganization } from "../../firebase/firestore";
@@ -218,6 +219,16 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
           "#8b5a3c", // Brown - 7th session
           "#6b7280", // Gray - 8th+ sessions
         ],
+        ptoSettings: organization.ptoSettings || {
+          enabled: false,
+          accrualRate: 1, // hours earned
+          accrualPeriod: 40, // per X hours worked
+          maxAccrual: 240, // maximum PTO hours that can be banked (30 days)
+          rolloverPolicy: 'limited', // 'none', 'unlimited', 'limited'
+          rolloverLimit: 80, // hours that can roll over (10 days)
+          resetDate: '01-01', // MM-DD format for annual reset
+          yearlyAllotment: 0, // optional fixed yearly hours instead of accrual
+        },
       });
       console.log("Initialized session types:", organization.sessionTypes || getDefaultSessionTypesForNewOrg());
       
@@ -580,6 +591,7 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
     { id: "sessiontypes", label: "Session Types", icon: Tag },
     { id: "schedule", label: "Schedule", icon: Calendar },
     { id: "payperiods", label: "Pay Periods", icon: Calendar },
+    { id: "pto", label: "PTO Settings", icon: Users },
     { id: "policies", label: "Policies", icon: SettingsIcon },
   ];
 
@@ -1618,6 +1630,185 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
                       Reset to Default Colors
                     </Button>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "pto" && (
+              <div className="tab-content">
+                <div className="form-section">
+                  <h3 className="form-section__title">
+                    <Users size={16} />
+                    PTO (Paid Time Off) Settings
+                  </h3>
+                  <p className="form-section__description">
+                    Configure how employees earn and use paid time off
+                  </p>
+
+                  <div className="form-group">
+                    <label className="form-checkbox">
+                      <input
+                        type="checkbox"
+                        name="ptoSettings.enabled"
+                        checked={formData.ptoSettings.enabled}
+                        onChange={handleInputChange}
+                      />
+                      <span className="form-checkbox__indicator"></span>
+                      Enable PTO Tracking
+                    </label>
+                    <p className="form-help">
+                      When enabled, employees will earn PTO based on hours worked and can use it for time off requests
+                    </p>
+                  </div>
+
+                  {formData.ptoSettings.enabled && (
+                    <>
+                      <div className="form-section">
+                        <h4 className="form-subsection__title">Accrual Settings</h4>
+                        
+                        <div className="form-row">
+                          <div className="form-group">
+                            <label htmlFor="ptoSettings.accrualRate" className="form-label">
+                              Hours Earned
+                            </label>
+                            <input
+                              type="number"
+                              id="ptoSettings.accrualRate"
+                              name="ptoSettings.accrualRate"
+                              className="form-input"
+                              value={formData.ptoSettings.accrualRate}
+                              onChange={handleInputChange}
+                              min="0.25"
+                              max="40"
+                              step="0.25"
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label htmlFor="ptoSettings.accrualPeriod" className="form-label">
+                              Per Hours Worked
+                            </label>
+                            <input
+                              type="number"
+                              id="ptoSettings.accrualPeriod"
+                              name="ptoSettings.accrualPeriod"
+                              className="form-input"
+                              value={formData.ptoSettings.accrualPeriod}
+                              onChange={handleInputChange}
+                              min="1"
+                              max="160"
+                            />
+                          </div>
+                        </div>
+                        <p className="form-help">
+                          Example: {formData.ptoSettings.accrualRate} hour{formData.ptoSettings.accrualRate !== 1 ? 's' : ''} of PTO earned for every {formData.ptoSettings.accrualPeriod} hours worked
+                        </p>
+
+                        <div className="form-group">
+                          <label htmlFor="ptoSettings.maxAccrual" className="form-label">
+                            Maximum PTO Balance (hours)
+                          </label>
+                          <input
+                            type="number"
+                            id="ptoSettings.maxAccrual"
+                            name="ptoSettings.maxAccrual"
+                            className="form-input"
+                            value={formData.ptoSettings.maxAccrual}
+                            onChange={handleInputChange}
+                            min="40"
+                            max="1000"
+                          />
+                          <p className="form-help">
+                            Maximum hours an employee can accumulate ({Math.floor(formData.ptoSettings.maxAccrual / 8)} days at 8 hours per day)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="form-section">
+                        <h4 className="form-subsection__title">Year-End Policy</h4>
+                        
+                        <div className="form-group">
+                          <label htmlFor="ptoSettings.rolloverPolicy" className="form-label">
+                            Rollover Policy
+                          </label>
+                          <select
+                            id="ptoSettings.rolloverPolicy"
+                            name="ptoSettings.rolloverPolicy"
+                            className="form-select"
+                            value={formData.ptoSettings.rolloverPolicy}
+                            onChange={handleInputChange}
+                          >
+                            <option value="none">No Rollover - All PTO expires</option>
+                            <option value="unlimited">Unlimited Rollover</option>
+                            <option value="limited">Limited Rollover</option>
+                          </select>
+                        </div>
+
+                        {formData.ptoSettings.rolloverPolicy === 'limited' && (
+                          <div className="form-group">
+                            <label htmlFor="ptoSettings.rolloverLimit" className="form-label">
+                              Rollover Limit (hours)
+                            </label>
+                            <input
+                              type="number"
+                              id="ptoSettings.rolloverLimit"
+                              name="ptoSettings.rolloverLimit"
+                              className="form-input"
+                              value={formData.ptoSettings.rolloverLimit}
+                              onChange={handleInputChange}
+                              min="0"
+                              max={formData.ptoSettings.maxAccrual}
+                            />
+                            <p className="form-help">
+                              Maximum hours that can roll over to next year ({Math.floor(formData.ptoSettings.rolloverLimit / 8)} days at 8 hours per day)
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="form-group">
+                          <label htmlFor="ptoSettings.resetDate" className="form-label">
+                            Reset Date (MM-DD)
+                          </label>
+                          <input
+                            type="text"
+                            id="ptoSettings.resetDate"
+                            name="ptoSettings.resetDate"
+                            className="form-input"
+                            value={formData.ptoSettings.resetDate}
+                            onChange={handleInputChange}
+                            placeholder="01-01"
+                            pattern="^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"
+                          />
+                          <p className="form-help">
+                            Date when PTO balances reset/rollover each year (MM-DD format)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="form-section">
+                        <h4 className="form-subsection__title">Alternative: Fixed Yearly Allotment</h4>
+                        
+                        <div className="form-group">
+                          <label htmlFor="ptoSettings.yearlyAllotment" className="form-label">
+                            Yearly PTO Allowance (hours)
+                          </label>
+                          <input
+                            type="number"
+                            id="ptoSettings.yearlyAllotment"
+                            name="ptoSettings.yearlyAllotment"
+                            className="form-input"
+                            value={formData.ptoSettings.yearlyAllotment}
+                            onChange={handleInputChange}
+                            min="0"
+                            max="400"
+                          />
+                          <p className="form-help">
+                            If set above 0, employees receive this fixed amount each year instead of earning based on hours worked. 
+                            Leave at 0 to use accrual system above.
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}

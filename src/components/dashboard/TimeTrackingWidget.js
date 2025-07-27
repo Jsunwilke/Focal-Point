@@ -166,8 +166,8 @@ const TimeTrackingWidget = () => {
       </div>
 
       <div className="widget-content">
-        {/* Current Status */}
-        <div className="current-status">
+        {/* Compact Status and Hours */}
+        <div className="compact-status">
           <div className={`status-indicator ${isOnBreak ? 'clocked-in' : 'clocked-out'}`}>
             {isOnBreak ? (
               <>
@@ -181,35 +181,14 @@ const TimeTrackingWidget = () => {
               </>
             )}
           </div>
-          
-          {isOnBreak && (
-            <div className="elapsed-time">
-              {formatDuration(elapsedTime)}
-            </div>
-          )}
+          <div className="time-display">
+            <div className="time-value">{formatDuration(todayHours + (isOnBreak ? elapsedTime : 0))}</div>
+            <div className="time-label">Today's Hours</div>
+          </div>
         </div>
 
-        {/* Session Selection (when clocking in) */}
-        {!isOnBreak && sessions.length > 0 && (
-          <div className="session-selection">
-            <label>Session (Optional)</label>
-            <select 
-              value={selectedSession} 
-              onChange={(e) => setSelectedSession(e.target.value)}
-              className="session-select"
-            >
-              <option value="">No specific session</option>
-              {sessions.map(session => (
-                <option key={session.id} value={session.id}>
-                  {session.schoolName} - {session.sessionType} ({session.startTime}-{session.endTime})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="action-buttons">
+        {/* Compact Action Button */}
+        <div className="compact-actions">
           {!isOnBreak ? (
             <button
               className="clock-btn clock-in-btn"
@@ -229,12 +208,6 @@ const TimeTrackingWidget = () => {
               {loading ? 'Clocking Out...' : 'Clock Out'}
             </button>
           )}
-        </div>
-
-        {/* Today's Hours */}
-        <div className="today-hours">
-          <span className="hours-label">Today's Hours:</span>
-          <span className="hours-value">{formatDuration(todayHours + (isOnBreak ? elapsedTime : 0))}</span>
         </div>
       </div>
 

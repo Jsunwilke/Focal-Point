@@ -4,24 +4,28 @@
   background: white;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  padding: 24px;
-  margin-bottom: 24px;
+  padding: var(--spacing-sm, 8px);
   border: 1px solid var(--border-color, #e1e5e9);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .widget-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-sm, 6px);
+  flex-shrink: 0;
 }
 
 .widget-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 16px;
+  gap: var(--spacing-xs, 6px);
+  font-weight: var(--font-weight-semibold, 600);
+  font-size: var(--font-size-base, 14px);
   color: var(--text-primary, #2d3748);
 }
 
@@ -43,7 +47,49 @@
 .widget-content {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-sm, 6px);
+  flex: 1;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Compact Status Layout */
+.compact-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md, 12px);
+  background: var(--bg-secondary, #f7fafc);
+  border-radius: var(--radius-lg, 8px);
+  border: 1px solid var(--border-light, #e2e8f0);
+}
+
+.time-display {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.time-value {
+  font-size: var(--font-size-base, 14px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--primary-color, #3b82f6);
+  font-family: 'Courier New', monospace;
+  line-height: 1.2;
+}
+
+.time-label {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--text-secondary, #718096);
+  font-weight: var(--font-weight-medium, 500);
+  margin-top: var(--spacing-xs, 2px);
+  white-space: nowrap;
+}
+
+/* Compact Actions */
+.compact-actions {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 /* Current Status */
@@ -51,17 +97,21 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
+  padding: var(--spacing-sm, 8px);
   background: var(--bg-secondary, #f7fafc);
-  border-radius: 8px;
+  border-radius: var(--radius-md, 6px);
   border: 1px solid var(--border-light, #e2e8f0);
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .status-indicator {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 500;
+  gap: var(--spacing-xs, 6px);
+  font-weight: var(--font-weight-medium, 500);
+  font-size: var(--font-size-sm, 13px);
+  color: var(--text-primary, #2d3748);
 }
 
 .status-dot {
@@ -147,16 +197,17 @@
 .clock-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
+  gap: var(--spacing-xs, 6px);
+  padding: var(--spacing-xs, 6px) var(--spacing-sm, 8px);
   border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 14px;
+  border-radius: var(--radius-md, 6px);
+  font-weight: var(--font-weight-semibold, 600);
+  font-size: var(--font-size-sm, 13px);
   cursor: pointer;
   transition: all 0.2s ease;
-  min-width: 120px;
+  min-width: 100px;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .clock-in-btn {
