@@ -137,7 +137,7 @@ const UpcomingSessionsWidget = ({ onSessionClick }) => {
                 }
               }}
               style={{
-                backgroundColor: getSessionColorByOrder(index),
+                backgroundColor: session.sessionColor || getSessionColorByOrder(index),
                 color: "white",
                 padding: "var(--spacing-xs)",
                 borderRadius: "var(--radius-sm)",

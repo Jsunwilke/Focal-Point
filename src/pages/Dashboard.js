@@ -450,6 +450,7 @@ const Dashboard = () => {
           userProfile={userProfile}
           organization={organization}
           onEditSession={handleEditSession}
+          hideEditButton={true}
         />
       )}
 

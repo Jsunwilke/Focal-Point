@@ -31,6 +31,7 @@ const SessionDetailsModal = ({
   onEditSession, // Callback to open the edit modal
   onRescheduleToNextYear, // Callback to reschedule to next year
   showRescheduleOption = false, // Whether to show reschedule option
+  hideEditButton = false, // Whether to hide the edit button (for dashboard context)
 }) => {
   const [fullSessionData, setFullSessionData] = useState(null);
   const [schoolDetails, setSchoolDetails] = useState(null);
@@ -704,22 +705,24 @@ const SessionDetailsModal = ({
                 Publish Session
               </button>
             )}
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => {
-                onClose(); // Close this modal first
-                onEditSession(); // Then open the edit modal
-              }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
-            >
-              <Edit3 size={16} />
-              Edit Session
-            </button>
+            {!hideEditButton && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  onClose(); // Close this modal first
+                  onEditSession(); // Then open the edit modal
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}
+              >
+                <Edit3 size={16} />
+                Edit Session
+              </button>
+            )}
           </div>
         </div>
       </div>

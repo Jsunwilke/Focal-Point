@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from "react";
 import { Plus, Menu } from "lucide-react";
 import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
+import { updateSession } from "../../firebase/firestore";
 
 const WeekView = ({
   currentDate,
@@ -490,6 +491,17 @@ const WeekView = ({
     
     const colors = customColors && customColors.length >= 8 ? customColors : defaultColors;
     return colors[orderIndex] || colors[colors.length - 1];
+  };
+
+  // Update session color in database if it differs from calculated color
+  const updateSessionColorIfNeeded = async (session, calculatedColor) => {
+    if (session.sessionColor !== calculatedColor && !session.isTimeOff) {
+      try {
+        await updateSession(session.id, { sessionColor: calculatedColor });
+      } catch (error) {
+        console.warn("Failed to update session color:", error);
+      }
+    }
   };
 
   // Get session type color for badges using organization configuration
@@ -984,12 +996,19 @@ const WeekView = ({
 
 
                   {daySessions.map((session) => {
-                    // Get global order for this session
+                    // Calculate the color based on global order
                     const globalSessionOrder = getGlobalSessionOrderForDay(day);
                     const globalOrderIndex = globalSessionOrder.findIndex(
                       globalSession => globalSession.id === session.id || 
                       (globalSession.sessionId && globalSession.sessionId === session.sessionId)
                     );
+                    const calculatedColor = getSessionColorByOrder(globalOrderIndex);
+                    
+                    // Use stored sessionColor if available, otherwise use calculated color
+                    const sessionColor = session.sessionColor || calculatedColor;
+                    
+                    // Update stored color if it differs from calculated color
+                    updateSessionColorIfNeeded(session, calculatedColor);
                     
                     return (
                       <div
@@ -1004,7 +1023,23 @@ const WeekView = ({
                           }
                         }}
                         style={{
-                          ...getSessionBlockStyle(session, globalOrderIndex, isHoveredCell('unassigned', day)),
+                          backgroundColor: sessionColor,
+                          color: "white",
+                          padding: "var(--spacing-xs, 4px)",
+                          borderRadius: "var(--radius-sm, 4px)",
+                          marginBottom: "var(--spacing-xs, 4px)",
+                          fontSize: "var(--font-size-xs, 12px)",
+                          cursor: "grab",
+                          transition: "all 0.15s ease",
+                          userSelect: "none",
+                          minWidth: 0,
+                          display: "flex",
+                          flexDirection: "column",
+                          ...(session.isPublished === false ? {
+                            border: "2px dashed " + sessionColor,
+                            backgroundColor: sessionColor + "40",
+                            color: sessionColor
+                          } : {}),
                           ...(session.isPublished !== false ? {
                             backgroundColor: "#dc3545",
                             border: "1px dashed #ffffff",
@@ -1019,7 +1054,11 @@ const WeekView = ({
                             fontWeight: "500",
                             marginBottom: "3px",
                             opacity: 0.9,
-                            lineHeight: "1.2"
+                            lineHeight: "1.2",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            flex: "0 0 auto"
                           }}
                         >
                           {formatTime(session.startTime)} - {formatTime(session.endTime)}
@@ -1030,17 +1069,22 @@ const WeekView = ({
                         <div
                           className="session-block__school"
                           style={{ 
-                            fontSize: "12px",
+                            fontSize: "11px",
                             fontWeight: "600",
                             lineHeight: "1.2",
                             color: session.isTimeOff ? "#333" : "white",
-                            marginBottom: "3px"
+                            marginBottom: "3px",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            flex: "1 1 auto",
+                            minWidth: 0
                           }}
                         >
                           {session.isTimeOff ? (session.reason || 'Time Off') : (session.schoolName || 'School')}
                         </div>
                         {(session.sessionTypes || session.sessionType) && (
-                          <div style={{ display: 'flex', gap: '2px', flexWrap: 'wrap', marginTop: '2px' }}>
+                          <div style={{ display: 'flex', gap: '2px', flexWrap: 'nowrap', marginTop: '2px', overflow: 'hidden' }}>
                             {(() => {
                               const sessionTypes = normalizeSessionTypes(session.sessionTypes || session.sessionType);
                               const colors = getSessionTypeColors(sessionTypes, organization);
@@ -1084,12 +1128,14 @@ const WeekView = ({
                               fontStyle: "italic",
                               marginTop: "3px",
                               borderTop: "1px solid rgba(255,255,255,0.2)",
-                              paddingTop: "2px"
+                              paddingTop: "2px",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              flex: "0 0 auto"
                             }}
                           >
-                            {session.notes.length > 25
-                              ? `${session.notes.substring(0, 25)}...`
-                              : session.notes}
+                            {session.notes}
                           </div>
                         )}
                       </div>
@@ -1385,13 +1431,22 @@ const WeekView = ({
 
 
                   {daySessions.map((session) => {
-                    // Get global order for this session - same logic as MonthView
-                    const globalSessionOrder = getGlobalSessionOrderForDay(day);
-                    const globalOrderIndex = globalSessionOrder.findIndex(
-                      globalSession => globalSession.id === session.id || 
-                      (globalSession.sessionId && globalSession.sessionId === session.sessionId)
-                    );
-                    
+                    // Calculate the color based on global order (skip for time off)
+                    let sessionColor = "#666"; // Default for time off
+                    if (!session.isTimeOff) {
+                      const globalSessionOrder = getGlobalSessionOrderForDay(day);
+                      const globalOrderIndex = globalSessionOrder.findIndex(
+                        globalSession => globalSession.id === session.id || 
+                        (globalSession.sessionId && globalSession.sessionId === session.sessionId)
+                      );
+                      const calculatedColor = getSessionColorByOrder(globalOrderIndex);
+                      
+                      // Use stored sessionColor if available, otherwise use calculated color
+                      sessionColor = session.sessionColor || calculatedColor;
+                      
+                      // Update stored color if it differs from calculated color
+                      updateSessionColorIfNeeded(session, calculatedColor);
+                    }
                     
                     return (
                       <div
@@ -1408,11 +1463,19 @@ const WeekView = ({
                           }
                         }}
                         style={{
-                          ...getSessionBlockStyle(session, globalOrderIndex, isHoveredCell(member.id, day)),
-                          ...(session.isTimeOff ? {} : (session.isPublished !== false ? {
-                            backgroundColor: getSessionColorByOrder(globalOrderIndex),
+                          ...getSessionBlockStyle(session, null, isHoveredCell(member.id, day)),
+                          ...(session.isTimeOff ? {} : {
+                            backgroundColor: sessionColor,
                             color: "white"
-                          } : {}))
+                          }),
+                          ...(session.isPublished === false && !session.isTimeOff ? {
+                            border: "2px dashed " + sessionColor,
+                            backgroundColor: sessionColor + "40",
+                            color: sessionColor
+                          } : {}),
+                          minWidth: 0,
+                          display: "flex",
+                          flexDirection: "column"
                         }}
                       >
                       <div
@@ -1422,7 +1485,11 @@ const WeekView = ({
                           fontWeight: "500",
                           marginBottom: "3px",
                           opacity: 0.9,
-                          lineHeight: "1.2"
+                          lineHeight: "1.2",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          flex: "0 0 auto"
                         }}
                       >
                         {formatTime(session.startTime)} - {formatTime(session.endTime)}
@@ -1433,17 +1500,22 @@ const WeekView = ({
                       <div
                         className="session-block__school"
                         style={{ 
-                          fontSize: "12px",
+                          fontSize: "11px",
                           fontWeight: "600",
                           lineHeight: "1.2",
                           color: session.isTimeOff ? "#333" : "white",
-                          marginBottom: "3px"
+                          marginBottom: "3px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          flex: "1 1 auto",
+                          minWidth: 0
                         }}
                       >
                         {session.isTimeOff ? (session.reason || 'Time Off') : (session.schoolName || 'School')}
                       </div>
                       {(session.sessionTypes || session.sessionType) && (
-                        <div style={{ display: 'flex', gap: '2px', flexWrap: 'wrap', marginTop: '2px' }}>
+                        <div style={{ display: 'flex', gap: '2px', flexWrap: 'nowrap', marginTop: '2px', overflow: 'hidden' }}>
                           {(() => {
                             const sessionTypes = normalizeSessionTypes(session.sessionTypes || session.sessionType);
                             const colors = getSessionTypeColors(sessionTypes, organization);
@@ -1488,12 +1560,14 @@ const WeekView = ({
                             fontStyle: "italic",
                             marginTop: "3px",
                             borderTop: "1px solid rgba(255,255,255,0.2)",
-                            paddingTop: "2px"
+                            paddingTop: "2px",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            flex: "0 0 auto"
                           }}
                         >
-                          {session.notes.length > 25
-                            ? `${session.notes.substring(0, 25)}...`
-                            : session.notes}
+                          {session.notes}
                         </div>
                       )}
                     </div>

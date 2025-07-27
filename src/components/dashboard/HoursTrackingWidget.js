@@ -270,21 +270,34 @@ const HoursTrackingWidget = () => {
 
   const { week: weekTarget, period: periodTarget } = getTargetHours();
   
-  // Calculate progress with overtime handling
+  // Calculate progress with proportional overtime handling
   const calculateProgress = (hours, target) => {
-    const regularHours = Math.min(hours, target);
     const overtimeHours = Math.max(hours - target, 0);
+    const hasOvertime = overtimeHours > 0;
     const totalProgress = (hours / target) * 100;
-    const regularProgress = (regularHours / target) * 100;
-    const overtimeProgress = totalProgress > 100 ? ((overtimeHours / hours) * 100) : 0;
     
-    return {
-      total: totalProgress,
-      regular: regularProgress,
-      overtime: overtimeProgress,
-      overtimeHours: overtimeHours,
-      hasOvertime: overtimeHours > 0
-    };
+    // When over 100%, show proportional blue/orange within 100% bar width
+    if (hasOvertime) {
+      const regularPortion = (target / hours) * 100;  // Blue portion as % of total bar
+      const overtimePortion = (overtimeHours / hours) * 100;  // Orange portion as % of total bar
+      
+      return {
+        total: totalProgress,
+        regular: regularPortion,
+        overtime: overtimePortion,
+        overtimeHours: overtimeHours,
+        hasOvertime: true
+      };
+    } else {
+      // Under 100%, show normal progress
+      return {
+        total: totalProgress,
+        regular: totalProgress,
+        overtime: 0,
+        overtimeHours: 0,
+        hasOvertime: false
+      };
+    }
   };
 
   const weekStats = calculateProgress(weekHours, weekTarget);
@@ -315,14 +328,14 @@ const HoursTrackingWidget = () => {
             <div className="progress-bar enhanced">
               <div 
                 className="progress-fill progress-fill--regular"
-                style={{ width: `${Math.min(weekStats.regular, 100)}%` }}
+                style={{ width: `${weekStats.regular}%` }}
               />
               {weekStats.hasOvertime && (
                 <div 
                   className="progress-fill progress-fill--overtime"
                   style={{ 
-                    width: `${(weekStats.overtimeHours / weekHours) * 100}%`,
-                    left: `${Math.min(weekStats.regular, 100)}%`
+                    width: `${weekStats.overtime}%`,
+                    left: `${weekStats.regular}%`
                   }}
                 />
               )}
@@ -349,14 +362,14 @@ const HoursTrackingWidget = () => {
             <div className="progress-bar enhanced">
               <div 
                 className="progress-fill progress-fill--regular"
-                style={{ width: `${Math.min(periodStats.regular, 100)}%` }}
+                style={{ width: `${periodStats.regular}%` }}
               />
               {periodStats.hasOvertime && (
                 <div 
                   className="progress-fill progress-fill--overtime"
                   style={{ 
-                    width: `${(periodStats.overtimeHours / periodHours) * 100}%`,
-                    left: `${Math.min(periodStats.regular, 100)}%`
+                    width: `${periodStats.overtime}%`,
+                    left: `${periodStats.regular}%`
                   }}
                 />
               )}
