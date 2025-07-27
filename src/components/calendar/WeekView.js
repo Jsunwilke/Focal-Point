@@ -1,5 +1,5 @@
 // src/components/calendar/WeekView.js - Clean version with Multiple Photographers Support
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Plus, Menu } from "lucide-react";
 import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
 import { updateSession } from "../../firebase/firestore";
@@ -34,7 +34,9 @@ const WeekView = ({
   });
   const [draggedEmployee, setDraggedEmployee] = useState(null);
   const [dragOverEmployee, setDragOverEmployee] = useState(null);
-  const [dropPosition, setDropPosition] = useState(null); // "before" or "after"
+  const [dropPosition, setDropPosition] = useState(null);
+  
+  // No tracking needed - only update legacy sessions once // "before" or "after"
 
   // Generate days for the week
   const generateWeekDays = () => {
@@ -493,14 +495,22 @@ const WeekView = ({
     return colors[orderIndex] || colors[colors.length - 1];
   };
 
-  // Update session color in database if it differs from calculated color
+  // Smart session color updates - only for legacy sessions missing sessionColor
   const updateSessionColorIfNeeded = async (session, calculatedColor) => {
-    if (session.sessionColor !== calculatedColor && !session.isTimeOff) {
-      try {
-        await updateSession(session.id, { sessionColor: calculatedColor });
-      } catch (error) {
-        console.warn("Failed to update session color:", error);
-      }
+    // Only update legacy sessions that don't have a sessionColor field yet
+    if (!session || !session.id || session.isTimeOff || !calculatedColor) {
+      return;
+    }
+    
+    // Only update if session has no sessionColor field (legacy session)
+    if (session.sessionColor !== undefined) {
+      return; // Session already has a color, don't update
+    }
+
+    try {
+      await updateSession(session.id, { sessionColor: calculatedColor });
+    } catch (error) {
+      console.error("Failed to update legacy session color:", error);
     }
   };
 
@@ -1002,13 +1012,16 @@ const WeekView = ({
                       globalSession => globalSession.id === session.id || 
                       (globalSession.sessionId && globalSession.sessionId === session.sessionId)
                     );
-                    const calculatedColor = getSessionColorByOrder(globalOrderIndex);
+                    
+                    // Handle case where session is not found in global order
+                    const validOrderIndex = globalOrderIndex >= 0 ? globalOrderIndex : 0;
+                    const calculatedColor = getSessionColorByOrder(validOrderIndex);
                     
                     // Use stored sessionColor if available, otherwise use calculated color
                     const sessionColor = session.sessionColor || calculatedColor;
                     
-                    // Update stored color if it differs from calculated color
-                    updateSessionColorIfNeeded(session, calculatedColor);
+                    // DISABLED: Update legacy sessions that don't have sessionColor field
+                    // updateSessionColorIfNeeded(session, calculatedColor);
                     
                     return (
                       <div
@@ -1439,13 +1452,16 @@ const WeekView = ({
                         globalSession => globalSession.id === session.id || 
                         (globalSession.sessionId && globalSession.sessionId === session.sessionId)
                       );
-                      const calculatedColor = getSessionColorByOrder(globalOrderIndex);
+                      
+                      // Handle case where session is not found in global order
+                      const validOrderIndex = globalOrderIndex >= 0 ? globalOrderIndex : 0;
+                      const calculatedColor = getSessionColorByOrder(validOrderIndex);
                       
                       // Use stored sessionColor if available, otherwise use calculated color
                       sessionColor = session.sessionColor || calculatedColor;
                       
-                      // Update stored color if it differs from calculated color
-                      updateSessionColorIfNeeded(session, calculatedColor);
+                      // DISABLED: Update legacy sessions that don't have sessionColor field
+                      // updateSessionColorIfNeeded(session, calculatedColor);
                     }
                     
                     return (

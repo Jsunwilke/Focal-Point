@@ -20,6 +20,90 @@ import {
 import { firestore } from "./config";
 import secureLogger from '../utils/secureLogger';
 
+// Shared function to recalculate session colors for a specific date
+const recalculateSessionColorsForDate = async (organizationID, date, orgData = null) => {
+  try {
+    // Get organization data if not provided
+    if (!orgData) {
+      const orgDoc = await getDoc(doc(firestore, "organizations", organizationID));
+      orgData = orgDoc.data();
+    }
+
+    // Get all sessions for this date
+    const sessionsQuery = query(
+      collection(firestore, "sessions"),
+      where("organizationID", "==", organizationID),
+      where("date", "==", date)
+    );
+    
+    const sessionsSnapshot = await getDocs(sessionsQuery);
+    const allSessions = sessionsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    // Separate time off from regular sessions
+    const regularSessions = allSessions.filter(session => !session.isTimeOff);
+    const timeOffSessions = allSessions.filter(session => session.isTimeOff);
+
+    // Sort regular sessions by start time for consistent ordering
+    const sortedRegularSessions = regularSessions.sort((a, b) => {
+      if (a.startTime && b.startTime) {
+        const timeComparison = a.startTime.localeCompare(b.startTime);
+        if (timeComparison !== 0) {
+          return timeComparison;
+        }
+        // Use school ID for consistency when times are identical
+        return (a.schoolId || '').localeCompare(b.schoolId || '');
+      }
+      return 0;
+    });
+
+    // Calculate color function
+    const getSessionColorByOrder = (orderIndex) => {
+      const customColors = orgData?.sessionOrderColors;
+      const defaultColors = [
+        "#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", 
+        "#ef4444", "#06b6d4", "#8b5a3c", "#6b7280"
+      ];
+      const colors = customColors && customColors.length >= 8 ? customColors : defaultColors;
+      return colors[orderIndex] || colors[colors.length - 1];
+    };
+
+    // Batch update session colors
+    const batch = writeBatch(firestore);
+    let hasUpdates = false;
+
+    // Update regular sessions with ordered colors
+    for (let i = 0; i < sortedRegularSessions.length; i++) {
+      const session = sortedRegularSessions[i];
+      const expectedColor = getSessionColorByOrder(i);
+      if (session.sessionColor !== expectedColor) {
+        batch.update(doc(firestore, "sessions", session.id), { sessionColor: expectedColor });
+        hasUpdates = true;
+      }
+    }
+
+    // Update time off sessions with fixed color
+    for (const session of timeOffSessions) {
+      const expectedColor = "#666";
+      if (session.sessionColor !== expectedColor) {
+        batch.update(doc(firestore, "sessions", session.id), { sessionColor: expectedColor });
+        hasUpdates = true;
+      }
+    }
+
+    // Commit batch updates if there are any
+    if (hasUpdates) {
+      await batch.commit();
+      console.log(`Updated session colors for ${date}`);
+    }
+
+  } catch (error) {
+    console.warn("Failed to recalculate session colors for date:", date, error);
+  }
+};
+
 // Get user profile
 export const getUserProfile = async (uid) => {
   try {
@@ -739,6 +823,87 @@ export const createSession = async (organizationID, sessionData) => {
     const orgData = orgDoc.data();
     const enableSessionPublishing = orgData?.enableSessionPublishing || false;
     
+    // Calculate session color - different logic for time off vs regular sessions
+    let sessionColor = null;
+    
+    if (sessionData.isTimeOff) {
+      // Time off sessions get a fixed color
+      sessionColor = "#666";
+    } else if (sessionData.date && sessionData.startTime) {
+      try {
+        // Get existing non-time-off sessions for the same date
+        const existingSessionsQuery = query(
+          collection(firestore, "sessions"),
+          where("organizationID", "==", organizationID),
+          where("date", "==", sessionData.date)
+        );
+        
+        const existingSessionsSnapshot = await getDocs(existingSessionsQuery);
+        const existingSessions = existingSessionsSnapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(session => !session.isTimeOff); // Filter out time off sessions
+        
+        // Add the new session to the list for color calculation
+        const allSessionsForDay = [...existingSessions, { ...sessionData, id: 'temp' }];
+        
+        // Sort by start time for consistent ordering
+        const sortedSessions = allSessionsForDay.sort((a, b) => {
+          if (a.startTime && b.startTime) {
+            const timeComparison = a.startTime.localeCompare(b.startTime);
+            if (timeComparison !== 0) {
+              return timeComparison;
+            }
+            // Use school ID for consistency when times are identical
+            return (a.schoolId || '').localeCompare(b.schoolId || '');
+          }
+          return 0;
+        });
+        
+        // Find the index of our new session
+        const newSessionIndex = sortedSessions.findIndex(s => s.id === 'temp');
+        
+        // Calculate color based on order
+        const getSessionColorByOrder = (orderIndex) => {
+          const customColors = orgData?.sessionOrderColors;
+          const defaultColors = [
+            "#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", 
+            "#ef4444", "#06b6d4", "#8b5a3c", "#6b7280"
+          ];
+          const colors = customColors && customColors.length >= 8 ? customColors : defaultColors;
+          return colors[orderIndex] || colors[colors.length - 1];
+        };
+        
+        sessionColor = getSessionColorByOrder(newSessionIndex);
+        
+        // Update existing sessions if their colors changed due to this insertion
+        const batch = writeBatch(firestore);
+        let hasUpdates = false;
+        
+        for (let i = 0; i < sortedSessions.length; i++) {
+          const session = sortedSessions[i];
+          if (session.id !== 'temp') { // Skip our new session
+            const expectedColor = getSessionColorByOrder(i);
+            if (session.sessionColor !== expectedColor) {
+              batch.update(doc(firestore, "sessions", session.id), { sessionColor: expectedColor });
+              hasUpdates = true;
+            }
+          }
+        }
+        
+        if (hasUpdates) {
+          await batch.commit();
+        }
+        
+      } catch (colorError) {
+        console.warn("Failed to calculate session color during creation:", colorError);
+        // Set a default color for regular sessions if calculation fails
+        sessionColor = "#3b82f6";
+      }
+    } else {
+      // Regular session without required fields - set default color
+      sessionColor = "#3b82f6";
+    }
+    
     const sessionRef = await addDoc(collection(firestore, "sessions"), {
       ...sessionData,
       organizationID,
@@ -746,6 +911,7 @@ export const createSession = async (organizationID, sessionData) => {
       isPublished: !enableSessionPublishing, // Auto-publish if feature is disabled
       hasJobBoxAssigned: false,
       jobBoxRecordId: null,
+      sessionColor: sessionColor, // Always include sessionColor field
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -884,6 +1050,11 @@ export const updateSession = async (sessionId, updateData) => {
     const currentSessionDoc = await getDoc(sessionRef);
     const currentSession = currentSessionDoc.exists() ? currentSessionDoc.data() : null;
 
+    // Check if update affects session ordering (date or startTime changes)
+    const affectsOrdering = updateData.date || updateData.startTime;
+    const oldDate = currentSession?.date;
+    const newDate = updateData.date || oldDate;
+
     // Add timestamp to track when the update occurred
     const dataWithTimestamp = {
       ...updateData,
@@ -891,6 +1062,21 @@ export const updateSession = async (sessionId, updateData) => {
     };
 
     await updateDoc(sessionRef, dataWithTimestamp);
+
+    // Recalculate colors if session ordering might have changed
+    if (affectsOrdering && currentSession?.organizationID) {
+      try {
+        // Recalculate colors for old date if date changed
+        if (updateData.date && oldDate && oldDate !== newDate) {
+          await recalculateSessionColorsForDate(currentSession.organizationID, oldDate);
+        }
+        
+        // Recalculate colors for new/current date
+        await recalculateSessionColorsForDate(currentSession.organizationID, newDate);
+      } catch (colorError) {
+        console.warn("Failed to recalculate session colors after update:", colorError);
+      }
+    }
 
     // Note: Workflow creation now happens when session is created, not when completed
 
@@ -947,6 +1133,17 @@ export const deleteSession = async (sessionId, organizationID = null) => {
   try {
     console.log("🗑️ Starting session deletion process for:", sessionId);
     
+    // Get session data before deletion for color recalculation
+    let sessionData = null;
+    try {
+      const sessionDoc = await getDoc(doc(firestore, "sessions", sessionId));
+      if (sessionDoc.exists()) {
+        sessionData = sessionDoc.data();
+      }
+    } catch (error) {
+      console.warn("Could not fetch session data before deletion:", error);
+    }
+    
     // First, find and delete all workflows associated with this session
     console.log("🔍 Finding workflows for session:", sessionId);
     const associatedWorkflows = await getWorkflowsForSession(sessionId, organizationID);
@@ -988,6 +1185,15 @@ export const deleteSession = async (sessionId, organizationID = null) => {
     // Delete the session
     console.log("🗑️ Deleting session document:", sessionId);
     await deleteDoc(doc(firestore, "sessions", sessionId));
+    
+    // Recalculate session colors for the date if we have session data
+    if (sessionData?.date && sessionData?.organizationID) {
+      try {
+        await recalculateSessionColorsForDate(sessionData.organizationID, sessionData.date);
+      } catch (colorError) {
+        console.warn("Failed to recalculate session colors after deletion:", colorError);
+      }
+    }
     
     console.log("✅ Session deletion completed successfully:", sessionId);
   } catch (error) {
