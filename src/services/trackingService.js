@@ -355,6 +355,39 @@ export const getLatestJobBoxStatuses = async (organizationID) => {
   }
 };
 
+// Get job box by shift UID
+export const getJobBoxByShiftUid = async (shiftUid, organizationID) => {
+  try {
+    const q = query(
+      collection(firestore, 'jobBoxes'),
+      where('shiftUid', '==', shiftUid),
+      where('organizationID', '==', organizationID),
+      orderBy('timestamp', 'desc'),
+      limit(1)
+    );
+
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) {
+      return { success: true, data: null };
+    }
+
+    const doc = querySnapshot.docs[0];
+    const jobBoxData = { id: doc.id, ...doc.data() };
+    
+    // Resolve user name
+    const userName = await resolveUserName(jobBoxData.userId, organizationID);
+    jobBoxData.userName = userName;
+
+    return { success: true, data: jobBoxData };
+  } catch (error) {
+    secureLogger.error('Error fetching job box by shift UID', error);
+    return { 
+      success: false, 
+      error: 'Unable to load job box data. Please check your connection and try again.' 
+    };
+  }
+};
+
 // Search functionality
 export const searchSDCards = async (organizationID, searchTerm, searchField = 'all') => {
   try {

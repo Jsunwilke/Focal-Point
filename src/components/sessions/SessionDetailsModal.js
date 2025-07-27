@@ -15,6 +15,10 @@ import {
 } from "lucide-react";
 import { getSession, getSchools, publishSession } from "../../firebase/firestore";
 import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
+import { getJobBoxByShiftUid } from "../../services/trackingService";
+import { collection, query, where, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { firestore } from "../../firebase/config";
+import JobBoxStatusTracker from "./JobBoxStatusTracker";
 import secureLogger from "../../utils/secureLogger";
 
 const SessionDetailsModal = ({
@@ -33,6 +37,8 @@ const SessionDetailsModal = ({
   const [loading, setLoading] = useState(true);
   const [showRescheduleConfirm, setShowRescheduleConfirm] = useState(false);
   const [nextYearDate, setNextYearDate] = useState(null);
+  const [jobBoxData, setJobBoxData] = useState(null);
+  const [jobBoxLoading, setJobBoxLoading] = useState(true);
 
   // Helper function to check if there's a leap day (Feb 29) between two dates
   const hasLeapDayBetween = (startDate, endDate) => {
@@ -147,6 +153,47 @@ const SessionDetailsModal = ({
 
     loadSessionData();
   }, [isOpen, session]);
+
+  // Set up real-time listener for job box data
+  useEffect(() => {
+    if (!isOpen || !session || !organization?.id) {
+      setJobBoxData(null);
+      setJobBoxLoading(false);
+      return;
+    }
+
+    setJobBoxLoading(true);
+    const sessionId = session.sessionId || session.id;
+
+    // Set up real-time listener
+    const q = query(
+      collection(firestore, 'jobBoxes'),
+      where('shiftUid', '==', sessionId),
+      where('organizationID', '==', organization.id),
+      orderBy('timestamp', 'desc'),
+      limit(1)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        if (snapshot.empty) {
+          setJobBoxData(null);
+        } else {
+          const doc = snapshot.docs[0];
+          setJobBoxData({ id: doc.id, ...doc.data() });
+        }
+        setJobBoxLoading(false);
+      },
+      (error) => {
+        secureLogger.error("Error listening to job box updates:", error);
+        setJobBoxLoading(false);
+      }
+    );
+
+    // Cleanup listener on unmount or when modal closes
+    return () => unsubscribe();
+  }, [isOpen, session, organization?.id]);
 
   if (!isOpen || !session) return null;
 
@@ -499,6 +546,14 @@ const SessionDetailsModal = ({
                   })}
                 </div>
               </div>
+
+              {/* Job Box Status */}
+              {!jobBoxLoading && jobBoxData && (
+                <JobBoxStatusTracker 
+                  jobBox={jobBoxData}
+                  organizationID={organization?.id}
+                />
+              )}
 
               {/* Session Notes */}
               {fullSessionData?.notes && (
