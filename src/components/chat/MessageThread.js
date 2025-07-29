@@ -1,7 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useChat } from '../../contexts/ChatContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatDistanceToNow, format, isToday, isYesterday } from 'date-fns';
+import { Settings } from 'lucide-react';
+import ConversationSettingsModal from './ConversationSettingsModal';
 import './MessageThread.css';
 
 const MessageThread = () => {
@@ -11,11 +13,13 @@ const MessageThread = () => {
     hasMoreMessages, 
     loadMoreMessages,
     getConversationDisplayName,
-    activeConversation
+    activeConversation,
+    organizationUsers
   } = useChat();
   const { userProfile } = useAuth();
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -118,6 +122,39 @@ const MessageThread = () => {
     }
   };
 
+  const getUserName = (userId) => {
+    const user = organizationUsers.find(u => u.id === userId);
+    return user ? `${user.firstName} ${user.lastName}` : 'Unknown User';
+  };
+
+  const renderSystemMessage = (message) => {
+    let content = '';
+    
+    switch (message.systemAction) {
+      case 'participants_added':
+        const addedNames = message.addedParticipants?.map(id => getUserName(id)).join(', ') || '';
+        content = `${message.addedByName || 'Someone'} added ${addedNames} to the group`;
+        break;
+      
+      case 'participant_removed':
+        content = `${message.removedByName || 'Someone'} removed ${message.removedParticipantName || 'a participant'} from the group`;
+        break;
+      
+      case 'participant_left':
+        content = `${message.leftUserName || 'Someone'} left the group`;
+        break;
+      
+      default:
+        content = 'System message';
+    }
+    
+    return (
+      <div className="message-thread__system-message">
+        <span>{content}</span>
+      </div>
+    );
+  };
+
   if (!activeConversation) {
     return null;
   }
@@ -125,12 +162,21 @@ const MessageThread = () => {
   return (
     <div className="message-thread">
       <div className="message-thread__header">
-        <h3 className="message-thread__title">
-          {getConversationDisplayName(activeConversation)}
-        </h3>
-        <span className="message-thread__participant-count">
-          {activeConversation.participants?.length || 0} participants
-        </span>
+        <div className="message-thread__header-info">
+          <h3 className="message-thread__title">
+            {getConversationDisplayName(activeConversation)}
+          </h3>
+          <span className="message-thread__participant-count">
+            {activeConversation.participants?.length || 0} participants
+          </span>
+        </div>
+        <button 
+          className="message-thread__settings-btn"
+          onClick={() => setShowSettings(true)}
+          title="Conversation settings"
+        >
+          <Settings size={20} />
+        </button>
       </div>
 
       <div 
@@ -156,9 +202,25 @@ const MessageThread = () => {
         ) : (
           messages.filter(message => message && message.id).map((message, index) => {
             const previousMessage = messages[index - 1];
+            const showDateSeparator = shouldShowDateSeparator(message, previousMessage);
+
+            // Handle system messages differently
+            if (message.type === 'system') {
+              return (
+                <div key={message.id || `message-${index}`}>
+                  {showDateSeparator && (
+                    <div className="message-thread__date-separator">
+                      <span>{formatDateSeparator(message.timestamp)}</span>
+                    </div>
+                  )}
+                  {renderSystemMessage(message)}
+                </div>
+              );
+            }
+
+            // Regular message handling
             const isOwnMessage = message.senderId === userProfile?.id;
             const isConsecutive = isConsecutiveMessage(message, previousMessage);
-            const showDateSeparator = shouldShowDateSeparator(message, previousMessage);
 
             return (
               <div key={message.id || `message-${index}`}>
@@ -219,6 +281,12 @@ const MessageThread = () => {
         
         <div ref={messagesEndRef} />
       </div>
+
+      <ConversationSettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        conversation={activeConversation}
+      />
     </div>
   );
 };

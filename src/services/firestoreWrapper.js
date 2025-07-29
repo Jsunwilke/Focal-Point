@@ -41,9 +41,9 @@ const getCollectionName = (reference) => {
   return 'unknown';
 };
 
-// Wrapped collection function
-export const collection = (db, path) => {
-  return firestoreCollection(db, path);
+// Wrapped collection function - now accepts multiple path segments
+export const collection = (db, ...pathSegments) => {
+  return firestoreCollection(db, ...pathSegments);
 };
 
 // Wrapped doc function

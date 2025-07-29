@@ -53,19 +53,47 @@ export const ChatProvider = ({ children }) => {
     loadOrganizationUsers();
   }, [userProfile, showToast]);
 
+  // Force refresh conversations (bypasses cache)
+  const forceRefreshConversations = useCallback(async () => {
+    console.log('[ChatContext] Force refreshing conversations...');
+    if (!userProfile?.id) return;
+    
+    try {
+      // Clear cache first
+      chatCacheService.clearConversationsCache();
+      
+      // Reload conversations directly
+      const conversations = await chatService.getUserConversations(userProfile.id);
+      setConversations(conversations);
+      chatCacheService.setCachedConversations(conversations);
+      
+      console.log('[ChatContext] Force refresh complete, found', conversations.length, 'conversations');
+    } catch (error) {
+      console.error('[ChatContext] Error force refreshing conversations:', error);
+      showToast('Failed to refresh conversations', 'error');
+    }
+  }, [userProfile?.id, showToast]);
+
   // Set up conversations listener with cache-first loading
   useEffect(() => {
-    if (!userProfile?.id) return;
+    if (!userProfile?.id) {
+      console.log('[ChatContext] No user profile, skipping conversation setup');
+      return;
+    }
+
+    console.log('[ChatContext] Setting up conversations for user:', userProfile.id);
 
     // Load conversations from cache first for instant display
     const cachedConversations = chatCacheService.getCachedConversations();
     if (cachedConversations) {
+      console.log('[ChatContext] Loading', cachedConversations.length, 'conversations from cache');
       setConversations(cachedConversations);
       setLoading(false);
       
       // Track cache hit
       readCounter.recordCacheHit('conversations', 'ChatContext', cachedConversations.length);
     } else {
+      console.log('[ChatContext] No cached conversations found');
       // Track cache miss
       readCounter.recordCacheMiss('conversations', 'ChatContext');
     }
@@ -73,6 +101,7 @@ export const ChatProvider = ({ children }) => {
     const unsubscribe = chatService.subscribeToUserConversations(
       userProfile.id,
       (updatedConversations) => {
+        console.log('[ChatContext] Received', updatedConversations.length, 'conversations from listener');
         setConversations(updatedConversations);
         setLoading(false);
         
@@ -85,6 +114,7 @@ export const ChatProvider = ({ children }) => {
 
     return () => {
       if (unsubscribe) {
+        console.log('[ChatContext] Cleaning up conversations listener');
         unsubscribe();
       }
     };
@@ -210,7 +240,21 @@ export const ChatProvider = ({ children }) => {
 
   // Send message
   const sendMessage = useCallback(async (text, type = 'text', fileUrl = null) => {
+    console.log('[ChatContext] sendMessage called:', {
+      hasActiveConversation: !!activeConversation?.id,
+      activeConversationId: activeConversation?.id,
+      hasUserProfile: !!userProfile?.id,
+      userProfileId: userProfile?.id,
+      textLength: text?.trim()?.length,
+      textContent: text?.substring(0, 50) + '...'
+    });
+
     if (!activeConversation?.id || !userProfile?.id || !text.trim()) {
+      console.error('[ChatContext] Cannot send message - missing required data:', {
+        activeConversation: activeConversation?.id,
+        userProfile: userProfile?.id,
+        textEmpty: !text.trim()
+      });
       return;
     }
 
@@ -222,6 +266,13 @@ export const ChatProvider = ({ children }) => {
                         userProfile.email || 
                         'Unknown User';
 
+      console.log('[ChatContext] Calling chatService.sendMessage with:', {
+        conversationId: activeConversation.id,
+        userId: userProfile.id,
+        senderName,
+        type
+      });
+
       await chatService.sendMessage(
         activeConversation.id,
         userProfile.id,
@@ -231,11 +282,12 @@ export const ChatProvider = ({ children }) => {
         senderName
       );
 
+      console.log('[ChatContext] Message sent successfully');
       // Note: The real-time listener will handle updating the cache
       // when the new message comes through
     } catch (error) {
-      console.error('Error sending message:', error);
-      showToast('Failed to send message', 'error');
+      console.error('[ChatContext] Error sending message:', error);
+      showToast(`Failed to send message: ${error.message}`, 'error');
     } finally {
       setSendingMessage(false);
     }
@@ -296,12 +348,154 @@ export const ChatProvider = ({ children }) => {
   const updateConversationName = useCallback(async (conversationId, newName) => {
     try {
       await chatService.updateConversationName(conversationId, newName);
+      
+      // Update local state
+      setConversations(prev => prev.map(conv => 
+        conv.id === conversationId ? { ...conv, name: newName } : conv
+      ));
+      
+      // Update active conversation if it's the one being renamed
+      if (activeConversation?.id === conversationId) {
+        setActiveConversation(prev => ({ ...prev, name: newName }));
+      }
+      
       showToast('Conversation name updated', 'success');
     } catch (error) {
       console.error('Error updating conversation name:', error);
       showToast('Failed to update conversation name', 'error');
     }
-  }, [showToast]);
+  }, [activeConversation?.id, showToast]);
+
+  // Toggle pin conversation
+  const togglePinConversation = useCallback(async (conversationId, isPinned) => {
+    if (!userProfile?.id) return;
+    
+    try {
+      await chatService.togglePinConversation(conversationId, userProfile.id, isPinned);
+      
+      // Update local state
+      setConversations(prev => prev.map(conv => {
+        if (conv.id === conversationId) {
+          const pinnedBy = conv.pinnedBy || [];
+          if (isPinned) {
+            return { ...conv, pinnedBy: [...pinnedBy, userProfile.id] };
+          } else {
+            return { ...conv, pinnedBy: pinnedBy.filter(id => id !== userProfile.id) };
+          }
+        }
+        return conv;
+      }));
+      
+      showToast(isPinned ? 'Conversation pinned' : 'Conversation unpinned', 'success');
+    } catch (error) {
+      console.error('Error toggling pin:', error);
+      showToast('Failed to update pin status', 'error');
+    }
+  }, [userProfile?.id, showToast]);
+
+  // Add participants to conversation
+  const addParticipantsToConversation = useCallback(async (conversationId, newParticipants) => {
+    try {
+      const newParticipantIds = newParticipants.map(user => user.id);
+      const addedByUserName = `${userProfile.firstName} ${userProfile.lastName}`;
+      
+      await chatService.addParticipantsToConversation(
+        conversationId, 
+        newParticipantIds, 
+        userProfile.id,
+        addedByUserName
+      );
+      
+      // Update local state
+      setConversations(prev => prev.map(conv => {
+        if (conv.id === conversationId) {
+          return { 
+            ...conv, 
+            participants: [...new Set([...conv.participants, ...newParticipantIds])]
+          };
+        }
+        return conv;
+      }));
+      
+      if (activeConversation?.id === conversationId) {
+        setActiveConversation(prev => ({
+          ...prev,
+          participants: [...new Set([...prev.participants, ...newParticipantIds])]
+        }));
+      }
+      
+      showToast(`Added ${newParticipants.length} participant${newParticipants.length > 1 ? 's' : ''}`, 'success');
+    } catch (error) {
+      console.error('Error adding participants:', error);
+      showToast('Failed to add participants', 'error');
+    }
+  }, [activeConversation?.id, userProfile?.id, userProfile?.firstName, userProfile?.lastName, showToast]);
+
+  // Remove participant from conversation
+  const removeParticipantFromConversation = useCallback(async (conversationId, participantId) => {
+    try {
+      const removedByUserName = `${userProfile.firstName} ${userProfile.lastName}`;
+      
+      // Get the name of the user being removed
+      const removedUser = organizationUsers.find(u => u.id === participantId);
+      const removedUserName = removedUser 
+        ? `${removedUser.firstName} ${removedUser.lastName}`
+        : 'Unknown User';
+      
+      await chatService.removeParticipantFromConversation(
+        conversationId, 
+        participantId,
+        userProfile.id,
+        removedByUserName,
+        removedUserName
+      );
+      
+      // Update local state
+      setConversations(prev => prev.map(conv => {
+        if (conv.id === conversationId) {
+          return { 
+            ...conv, 
+            participants: conv.participants.filter(id => id !== participantId)
+          };
+        }
+        return conv;
+      }));
+      
+      if (activeConversation?.id === conversationId) {
+        setActiveConversation(prev => ({
+          ...prev,
+          participants: prev.participants.filter(id => id !== participantId)
+        }));
+      }
+      
+      showToast('Participant removed', 'success');
+    } catch (error) {
+      console.error('Error removing participant:', error);
+      showToast('Failed to remove participant', 'error');
+    }
+  }, [activeConversation?.id, organizationUsers, userProfile?.id, userProfile?.firstName, userProfile?.lastName, showToast]);
+
+  // Leave a conversation
+  const leaveConversation = useCallback(async (conversationId) => {
+    try {
+      const userName = `${userProfile.firstName} ${userProfile.lastName}`;
+      await chatService.leaveConversation(conversationId, userProfile.id, userName);
+      
+      // Remove from local state
+      setConversations(prev => prev.filter(conv => conv.id !== conversationId));
+      
+      // Clear active conversation if it's the one being left
+      if (activeConversation?.id === conversationId) {
+        setActiveConversation(null);
+        setMessages([]);
+      }
+      
+      showToast('Left conversation', 'success');
+    } catch (error) {
+      console.error('Error leaving conversation:', error);
+      showToast(error.message || 'Failed to leave conversation', 'error');
+    }
+  }, [activeConversation?.id, userProfile?.id, userProfile?.firstName, userProfile?.lastName, showToast]);
 
   // Get conversation display name
   const getConversationDisplayName = useCallback((conversation) => {
@@ -367,6 +561,11 @@ export const ChatProvider = ({ children }) => {
     loadMoreMessages,
     updateConversationName,
     getConversationDisplayName,
+    forceRefreshConversations,
+    togglePinConversation,
+    addParticipantsToConversation,
+    removeParticipantFromConversation,
+    leaveConversation,
   };
 
   return (

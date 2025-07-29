@@ -60,11 +60,24 @@ class ChatService {
 
   // Send a message to a conversation
   async sendMessage(conversationId, senderId, text, type = 'text', fileUrl = null, senderName = 'Unknown User') {
+    console.log('[ChatService] Attempting to send message:', {
+      conversationId,
+      senderId,
+      textLength: text?.length,
+      type,
+      senderName,
+      timestamp: new Date().toISOString()
+    });
+
     try {
-      const batch = writeBatch(firestore);
+      // Debug: Check if conversationId is valid
+      if (!conversationId) {
+        throw new Error('conversationId is empty or undefined');
+      }
       
-      // Add message to messages subcollection
-      const messageRef = doc(collection(firestore, `messages/${conversationId}/messages`));
+      console.log('[ChatService] Creating message for conversation:', conversationId);
+      
+      // Create message data
       const messageData = {
         senderId,
         senderName,
@@ -75,7 +88,29 @@ class ChatService {
         createdAt: serverTimestamp()
       };
       
-      batch.set(messageRef, messageData);
+      console.log('[ChatService] Message data prepared:', { 
+        messageData: { ...messageData, timestamp: 'serverTimestamp()' }
+      });
+      
+      // Create a new document reference in the subcollection
+      let messageRef;
+      try {
+        console.log('[ChatService] About to create message doc ref with:', {
+          firestore: !!firestore,
+          conversationId,
+          path: `messages/${conversationId}/messages`
+        });
+        
+        const messagesCollectionRef = collection(firestore, 'messages', conversationId, 'messages');
+        console.log('[ChatService] Messages collection ref created, adding document...');
+        
+        // Use addDoc to create a new document with auto-generated ID
+        messageRef = await addDoc(messagesCollectionRef, messageData);
+        console.log('[ChatService] Message added successfully with ID:', messageRef.id);
+      } catch (collectionError) {
+        console.error('[ChatService] Error creating message:', collectionError);
+        throw collectionError;
+      }
       
       // Update conversation with last message and activity
       const conversationRef = doc(firestore, 'conversations', conversationId);
@@ -85,10 +120,14 @@ class ChatService {
         timestamp: serverTimestamp()
       };
       
+      console.log('[ChatService] Fetching conversation for unread count update...');
+      
       // Get current conversation to update unread counts
       const conversationDoc = await getDoc(conversationRef, 'chatService.sendMessage');
       if (conversationDoc.exists()) {
         const conversation = conversationDoc.data();
+        console.log('[ChatService] Conversation found, participants:', conversation.participants);
+        
         const unreadCounts = { ...conversation.unreadCounts };
         
         // Increment unread count for all participants except sender
@@ -98,17 +137,31 @@ class ChatService {
           }
         });
         
-        batch.update(conversationRef, {
+        console.log('[ChatService] Updated unread counts:', unreadCounts);
+        
+        // Update conversation document
+        await updateDoc(conversationRef, {
           lastMessage: lastMessageData,
           lastActivity: serverTimestamp(),
           unreadCounts
         });
+        
+        console.log('[ChatService] Conversation updated successfully');
+      } else {
+        console.error('[ChatService] Conversation not found:', conversationId);
+        throw new Error(`Conversation ${conversationId} not found`);
       }
       
-      await batch.commit();
+      console.log('[ChatService] Message sent successfully:', messageRef.id);
       return messageRef.id;
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('[ChatService] Error sending message:', {
+        error: error.message,
+        code: error.code,
+        stack: error.stack,
+        conversationId,
+        senderId
+      });
       throw error;
     }
   }
@@ -196,8 +249,213 @@ class ChatService {
     }
   }
 
+  // Toggle pin status for a conversation
+  async togglePinConversation(conversationId, userId, isPinned) {
+    try {
+      const conversationRef = doc(firestore, 'conversations', conversationId);
+      
+      if (isPinned) {
+        // Add user to pinnedBy array
+        await updateDoc(conversationRef, {
+          pinnedBy: arrayUnion(userId)
+        });
+      } else {
+        // Remove user from pinnedBy array
+        await updateDoc(conversationRef, {
+          pinnedBy: arrayRemove(userId)
+        });
+      }
+    } catch (error) {
+      console.error('Error toggling pin status:', error);
+      throw error;
+    }
+  }
+
+  // Add participants to a conversation
+  async addParticipantsToConversation(conversationId, newParticipantIds, addedByUserId, addedByUserName) {
+    try {
+      const conversationRef = doc(firestore, 'conversations', conversationId);
+      
+      // Get current conversation data
+      const conversationDoc = await getDoc(conversationRef, 'chatService.addParticipants');
+      if (!conversationDoc.exists()) {
+        throw new Error('Conversation not found');
+      }
+      
+      const conversation = conversationDoc.data();
+      const currentUnreadCounts = conversation.unreadCounts || {};
+      
+      // Initialize unread counts for new participants
+      const updatedUnreadCounts = { ...currentUnreadCounts };
+      newParticipantIds.forEach(participantId => {
+        if (!updatedUnreadCounts[participantId]) {
+          updatedUnreadCounts[participantId] = 0;
+        }
+      });
+      
+      // Update conversation with new participants
+      await updateDoc(conversationRef, {
+        participants: arrayUnion(...newParticipantIds),
+        unreadCounts: updatedUnreadCounts
+      });
+      
+      // Add system message about new participants
+      const messagesCollectionRef = collection(firestore, 'messages', conversationId, 'messages');
+      const systemMessageData = {
+        type: 'system',
+        systemAction: 'participants_added',
+        addedBy: addedByUserId,
+        addedByName: addedByUserName,
+        addedParticipants: newParticipantIds,
+        timestamp: serverTimestamp(),
+        createdAt: serverTimestamp()
+      };
+      
+      await addDoc(messagesCollectionRef, systemMessageData);
+    } catch (error) {
+      console.error('Error adding participants:', error);
+      throw error;
+    }
+  }
+
+  // Remove a participant from a conversation
+  async removeParticipantFromConversation(conversationId, participantId, removedByUserId, removedByUserName, removedUserName) {
+    try {
+      const conversationRef = doc(firestore, 'conversations', conversationId);
+      
+      // Get current conversation data
+      const conversationDoc = await getDoc(conversationRef, 'chatService.removeParticipant');
+      if (!conversationDoc.exists()) {
+        throw new Error('Conversation not found');
+      }
+      
+      const conversation = conversationDoc.data();
+      const updatedUnreadCounts = { ...conversation.unreadCounts };
+      
+      // Remove unread count for the participant
+      delete updatedUnreadCounts[participantId];
+      
+      // Update conversation
+      await updateDoc(conversationRef, {
+        participants: arrayRemove(participantId),
+        unreadCounts: updatedUnreadCounts
+      });
+      
+      // Add system message about participant removal
+      const messagesCollectionRef = collection(firestore, 'messages', conversationId, 'messages');
+      const systemMessageData = {
+        type: 'system',
+        systemAction: 'participant_removed',
+        removedBy: removedByUserId,
+        removedByName: removedByUserName,
+        removedParticipant: participantId,
+        removedParticipantName: removedUserName,
+        timestamp: serverTimestamp(),
+        createdAt: serverTimestamp()
+      };
+      
+      await addDoc(messagesCollectionRef, systemMessageData);
+    } catch (error) {
+      console.error('Error removing participant:', error);
+      throw error;
+    }
+  }
+
+  // Leave a conversation (removes user from participants)
+  async leaveConversation(conversationId, userId, userName) {
+    try {
+      const conversationRef = doc(firestore, 'conversations', conversationId);
+      
+      // Get current conversation data
+      const conversationDoc = await getDoc(conversationRef, 'chatService.leaveConversation');
+      if (!conversationDoc.exists()) {
+        throw new Error('Conversation not found');
+      }
+      
+      const conversation = conversationDoc.data();
+      
+      // Check if user is a participant
+      if (!conversation.participants.includes(userId)) {
+        throw new Error('User is not a participant in this conversation');
+      }
+      
+      // For direct conversations, we can't leave (would need to delete)
+      if (conversation.type === 'direct') {
+        throw new Error('Cannot leave direct conversations');
+      }
+      
+      // Check if this would leave less than 2 participants
+      if (conversation.participants.length <= 2) {
+        throw new Error('Cannot leave group - would have less than 2 participants');
+      }
+      
+      // Remove user from participants and unread counts
+      const updatedUnreadCounts = { ...conversation.unreadCounts };
+      delete updatedUnreadCounts[userId];
+      
+      await updateDoc(conversationRef, {
+        participants: arrayRemove(userId),
+        unreadCounts: updatedUnreadCounts
+      });
+      
+      // Add system message about user leaving
+      const messagesCollectionRef = collection(firestore, 'messages', conversationId, 'messages');
+      const systemMessageData = {
+        type: 'system',
+        systemAction: 'participant_left',
+        leftUserId: userId,
+        leftUserName: userName,
+        timestamp: serverTimestamp(),
+        createdAt: serverTimestamp()
+      };
+      
+      await addDoc(messagesCollectionRef, systemMessageData);
+    } catch (error) {
+      console.error('Error leaving conversation:', error);
+      throw error;
+    }
+  }
+
+  // Delete a conversation (admin only or last participant in group)
+  async deleteConversation(conversationId, userId) {
+    try {
+      const conversationRef = doc(firestore, 'conversations', conversationId);
+      
+      // Get conversation to check permissions
+      const conversationDoc = await getDoc(conversationRef, 'chatService.deleteConversation');
+      if (!conversationDoc.exists()) {
+        throw new Error('Conversation not found');
+      }
+      
+      const conversation = conversationDoc.data();
+      
+      // Check if user is a participant
+      if (!conversation.participants.includes(userId)) {
+        throw new Error('Not authorized to delete this conversation');
+      }
+      
+      // For now, we'll just remove the user from the conversation
+      // Full deletion would require admin permissions or additional logic
+      // You could implement soft delete by adding a 'deletedBy' field
+      if (conversation.type === 'direct') {
+        // For direct conversations, we could implement soft delete
+        // by adding a deletedBy array to hide it from specific users
+        console.warn('Direct conversation deletion not fully implemented');
+        throw new Error('Direct conversation deletion coming soon');
+      } else {
+        // For groups, just leave the conversation
+        await this.leaveConversation(conversationId, userId, 'User');
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      throw error;
+    }
+  }
+
   // Real-time listeners
   subscribeToUserConversations(userId, callback) {
+    console.log('[ChatService] Setting up conversations listener for user:', userId);
+    
     const q = query(
       collection(firestore, 'conversations'),
       where('participants', 'array-contains', userId),
@@ -205,15 +463,37 @@ class ChatService {
       limit(50)
     );
     
-    return onSnapshot(q, (querySnapshot) => {
-      const conversations = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      callback(conversations);
-    }, (error) => {
-      console.error('Error in conversations listener:', error);
-    });
+    return onSnapshot(q, 
+      (querySnapshot) => {
+        console.log('[ChatService] Conversations snapshot received:', {
+          size: querySnapshot.size,
+          fromCache: querySnapshot.metadata.fromCache,
+          hasPendingWrites: querySnapshot.metadata.hasPendingWrites
+        });
+        
+        const conversations = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        console.log('[ChatService] Processed conversations:', 
+          conversations.map(c => ({ 
+            id: c.id, 
+            participants: c.participants,
+            lastActivity: c.lastActivity?.toDate?.() || c.lastActivity 
+          }))
+        );
+        
+        callback(conversations);
+      }, 
+      (error) => {
+        console.error('[ChatService] Error in conversations listener:', {
+          error: error.message,
+          code: error.code,
+          userId
+        });
+      }
+    );
   }
 
   subscribeToConversationMessages(conversationId, callback, limitCount = 20, startAfterTimestamp = null) {

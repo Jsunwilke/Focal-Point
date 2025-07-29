@@ -23,6 +23,34 @@ import Button from '../shared/Button';
 import '../shared/Modal.css';
 import './TimeOffApprovalModal.css';
 
+// Utility function to get day of week abbreviation
+const getDayOfWeek = (date) => {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dateObj = date.toDate ? date.toDate() : new Date(date);
+  return days[dateObj.getDay()];
+};
+
+// Format date range with day of week
+const formatDateRangeWithDays = (startDate, endDate, isPartialDay = false) => {
+  const start = startDate.toDate ? startDate.toDate() : new Date(startDate);
+  const end = endDate.toDate ? endDate.toDate() : new Date(endDate);
+  const diffTime = Math.abs(end - start);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  
+  if (isPartialDay) {
+    return `Partial day, ${getDayOfWeek(startDate)}`;
+  }
+  
+  const startDay = getDayOfWeek(startDate);
+  const endDay = getDayOfWeek(endDate);
+  
+  if (diffDays === 1) {
+    return `1 day, ${startDay}`;
+  }
+  
+  return `${diffDays} days, ${startDay}-${endDay}`;
+};
+
 const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onStatusChange }) => {
   const [activeTab, setActiveTab] = useState('pending');
   const [allRequests, setAllRequests] = useState([]);
@@ -140,6 +168,22 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
       day: 'numeric', 
       year: 'numeric' 
     });
+  };
+
+  const formatSubmissionDate = (timestamp) => {
+    if (!timestamp) return '';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const dateStr = date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+    const timeStr = date.toLocaleTimeString('en-US', { 
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+    return `${dateStr} at ${timeStr}`;
   };
 
   const calculateDays = (startDate, endDate, isPartialDay = false) => {
@@ -300,7 +344,7 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
                         ) : (
                           <>
                             {formatDate(request.startDate)} - {formatDate(request.endDate)}
-                            <strong> ({calculateDays(request.startDate, request.endDate, request.isPartialDay)})</strong>
+                            <strong> ({formatDateRangeWithDays(request.startDate, request.endDate, request.isPartialDay)})</strong>
                           </>
                         )}
                       </span>
@@ -314,6 +358,12 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
                         <span className="notes">Notes: {request.notes}</span>
                       </div>
                     )}
+                    <div className="detail-row" style={{ marginTop: '8px' }}>
+                      <Clock size={16} style={{ color: '#6c757d' }} />
+                      <span style={{ fontSize: '12px', color: '#6c757d' }}>
+                        Submitted: {formatSubmissionDate(request.createdAt)}
+                      </span>
+                    </div>
                     {request.priorityReason && (
                       <div style={{ 
                         marginTop: '8px',

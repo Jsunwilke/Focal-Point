@@ -6,6 +6,13 @@ import Button from '../shared/Button';
 import '../shared/Modal.css';
 import './TimeOffDetailsModal.css';
 
+// Utility function to get day of week abbreviation
+const getDayOfWeek = (dateStr) => {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const date = new Date(dateStr);
+  return days[date.getDay()];
+};
+
 const TimeOffDetailsModal = ({ isOpen, onClose, timeOffEntry, userProfile, onStatusChange }) => {
   const [loading, setLoading] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
@@ -20,6 +27,34 @@ const TimeOffDetailsModal = ({ isOpen, onClose, timeOffEntry, userProfile, onSta
       month: 'long',
       day: 'numeric'
     });
+  };
+
+  const formatDateRange = (startDate, endDate) => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const startFormatted = start.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    const endFormatted = end.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    // Calculate number of days
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    
+    const startDay = getDayOfWeek(startDate);
+    const endDay = getDayOfWeek(endDate);
+    
+    if (diffDays === 1) {
+      return `${startFormatted} (${startDay})`;
+    }
+    
+    return `${startFormatted} - ${endFormatted} (${diffDays} days, ${startDay}-${endDay})`;
   };
 
   const formatTime = (time) => {
@@ -141,7 +176,7 @@ const TimeOffDetailsModal = ({ isOpen, onClose, timeOffEntry, userProfile, onSta
                 <Calendar size={16} />
                 <div className="detail-content">
                   <div className="detail-label">Date</div>
-                  <div className="detail-value">{formatDate(timeOffEntry.date)}</div>
+                  <div className="detail-value">{formatDate(timeOffEntry.date)} ({getDayOfWeek(timeOffEntry.date)})</div>
                 </div>
               </div>
             </div>

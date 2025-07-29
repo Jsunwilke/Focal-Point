@@ -6,7 +6,14 @@ import { X, Search, Users, User } from 'lucide-react';
 import '../shared/Modal.css';
 import './EmployeeSelector.css';
 
-const EmployeeSelector = ({ isOpen, onClose }) => {
+const EmployeeSelector = ({ 
+  isOpen, 
+  onClose, 
+  onSelect, 
+  multiSelect = false, 
+  excludeUsers = [], 
+  title = "Select Employee" 
+}) => {
   const { organizationUsers, createConversation } = useChat();
   const { userProfile } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
@@ -16,6 +23,9 @@ const EmployeeSelector = ({ isOpen, onClose }) => {
   const [isCreating, setIsCreating] = useState(false);
 
   const filteredUsers = organizationUsers.filter(user => {
+    // Exclude specified users
+    if (excludeUsers.includes(user.id)) return false;
+    
     const fullName = `${user.firstName} ${user.lastName}`.toLowerCase();
     const email = user.email?.toLowerCase() || '';
     const search = searchTerm.toLowerCase();
@@ -47,6 +57,15 @@ const EmployeeSelector = ({ isOpen, onClose }) => {
 
   const handleCreateConversation = async () => {
     if (selectedUsers.length === 0) return;
+
+    // If onSelect is provided, use that instead of creating a conversation
+    if (onSelect) {
+      onSelect(selectedUsers);
+      setSelectedUsers([]);
+      setSearchTerm('');
+      onClose();
+      return;
+    }
 
     setIsCreating(true);
     try {
@@ -99,7 +118,7 @@ const EmployeeSelector = ({ isOpen, onClose }) => {
       >
         <div className="modal__header">
           <div className="modal__header-content">
-            <h2 className="modal__title">Start New Conversation</h2>
+            <h2 className="modal__title">{title || 'Start New Conversation'}</h2>
           </div>
           <button className="modal__close" onClick={onClose}>
             <X size={24} />
@@ -107,17 +126,18 @@ const EmployeeSelector = ({ isOpen, onClose }) => {
         </div>
 
         <div className="modal__content employee-selector__content">
-          {/* Conversation Type Selection */}
-          <div className="employee-selector__type-selection">
-            <button
-              className={`employee-selector__type-btn ${
-                conversationType === 'direct' ? 'employee-selector__type-btn--active' : ''
-              }`}
-              onClick={() => handleTypeChange('direct')}
-            >
-              <User size={20} />
-              Direct Message
-            </button>
+          {/* Conversation Type Selection - only show when not in select mode */}
+          {!onSelect && (
+            <div className="employee-selector__type-selection">
+              <button
+                className={`employee-selector__type-btn ${
+                  conversationType === 'direct' ? 'employee-selector__type-btn--active' : ''
+                }`}
+                onClick={() => handleTypeChange('direct')}
+              >
+                <User size={20} />
+                Direct Message
+              </button>
             <button
               className={`employee-selector__type-btn ${
                 conversationType === 'group' ? 'employee-selector__type-btn--active' : ''
@@ -127,10 +147,11 @@ const EmployeeSelector = ({ isOpen, onClose }) => {
               <Users size={20} />
               Group Chat
             </button>
-          </div>
+            </div>
+          )}
 
-          {/* Group Name Input */}
-          {conversationType === 'group' && (
+          {/* Group Name Input - only show when creating new group */}
+          {!onSelect && conversationType === 'group' && (
             <div className="employee-selector__group-name">
               <label htmlFor="groupName">Group Name (optional)</label>
               <input
@@ -182,8 +203,10 @@ const EmployeeSelector = ({ isOpen, onClose }) => {
           <div className="employee-selector__list">
             <h4>
               Team Members 
-              {conversationType === 'direct' && ' (select one)'}
-              {conversationType === 'group' && ' (select multiple)'}
+              {!onSelect && conversationType === 'direct' && ' (select one)'}
+              {!onSelect && conversationType === 'group' && ' (select multiple)'}
+              {onSelect && multiSelect && ' (select multiple)'}
+              {onSelect && !multiSelect && ' (select one)'}
             </h4>
             <div className="employee-selector__users">
               {filteredUsers.length === 0 ? (
@@ -214,6 +237,7 @@ const EmployeeSelector = ({ isOpen, onClose }) => {
                           type="checkbox"
                           checked={!!isSelected}
                           onChange={() => handleUserToggle(user)}
+                          onClick={(e) => e.stopPropagation()}
                         />
                       </div>
                     </div>

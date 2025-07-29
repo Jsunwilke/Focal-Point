@@ -9,6 +9,14 @@
   border-bottom: 1px solid #e5e7eb;
   background: white;
   flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.message-thread__header-info {
+  flex: 1;
+  min-width: 0;
 }
 
 .message-thread__title {
@@ -21,6 +29,25 @@
 .message-thread__participant-count {
   font-size: 0.875rem;
   color: #6b7280;
+}
+
+.message-thread__settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.message-thread__settings-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #e5e7eb;
 }
 
 .message-thread__messages {
@@ -200,4 +227,22 @@
 
 .message-thread__messages::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
+}
+
+/* System messages */
+.message-thread__system-message {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0;
+  padding: 0 1rem;
+}
+
+.message-thread__system-message span {
+  background: #f3f4f6;
+  color: #6b7280;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.8125rem;
+  text-align: center;
+  max-width: 80%;
 }
