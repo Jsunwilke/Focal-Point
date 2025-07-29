@@ -272,6 +272,17 @@ const HoursTrackingWidget = () => {
   
   // Calculate progress with proportional overtime handling
   const calculateProgress = (hours, target) => {
+    // Handle zero hours case explicitly
+    if (hours === 0) {
+      return {
+        total: 0,
+        regular: 0,
+        overtime: 0,
+        overtimeHours: 0,
+        hasOvertime: false
+      };
+    }
+    
     const overtimeHours = Math.max(hours - target, 0);
     const hasOvertime = overtimeHours > 0;
     const totalProgress = (hours / target) * 100;
@@ -325,11 +336,16 @@ const HoursTrackingWidget = () => {
             </span>
           </div>
           <div className="progress-container">
-            <div className="progress-bar enhanced">
-              <div 
-                className="progress-fill progress-fill--regular"
-                style={{ width: `${weekStats.regular}%` }}
-              />
+            <div 
+              className={`progress-bar enhanced ${weekHours === 0 ? 'progress-bar--empty' : ''}`}
+              style={weekHours === 0 ? { background: '#e5e7eb' } : {}}
+            >
+              {weekStats.regular > 0 && (
+                <div 
+                  className="progress-fill progress-fill--regular"
+                  style={{ width: `${weekStats.regular}%` }}
+                />
+              )}
               {weekStats.hasOvertime && (
                 <div 
                   className="progress-fill progress-fill--overtime"
@@ -359,11 +375,16 @@ const HoursTrackingWidget = () => {
             </span>
           </div>
           <div className="progress-container">
-            <div className="progress-bar enhanced">
-              <div 
-                className="progress-fill progress-fill--regular"
-                style={{ width: `${periodStats.regular}%` }}
-              />
+            <div 
+              className={`progress-bar enhanced ${periodHours === 0 ? 'progress-bar--empty' : ''}`}
+              style={periodHours === 0 ? { background: '#e5e7eb' } : {}}
+            >
+              {periodStats.regular > 0 && (
+                <div 
+                  className="progress-fill progress-fill--regular"
+                  style={{ width: `${periodStats.regular}%` }}
+                />
+              )}
               {periodStats.hasOvertime && (
                 <div 
                   className="progress-fill progress-fill--overtime"

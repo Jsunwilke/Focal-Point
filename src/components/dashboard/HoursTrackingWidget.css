@@ -92,7 +92,7 @@
 .progress-bar {
   flex: 1;
   height: 6px;
-  background: var(--background-muted, #f3f4f6);
+  background: var(--background-muted, #f3f4f6) !important;
   border-radius: var(--radius-sm, 3px);
   overflow: hidden;
   position: relative;
@@ -101,6 +101,12 @@
 .progress-bar.enhanced {
   height: 20px;
   border-radius: 10px;
+  background: var(--background-muted, #f3f4f6) !important;
+}
+
+/* Empty progress bar state */
+.progress-bar--empty {
+  background: var(--background-muted, #e5e7eb) !important;
 }
 
 .progress-fill {

@@ -60,7 +60,8 @@ const Dashboard = () => {
     column1: [
       { id: 'time-tracking', component: TimeTrackingWidget, props: {} },
       { id: 'pto-balance', component: PTOBalanceWidget, props: {} },
-      { id: 'read-counter', component: ReadCounterWidget, props: {} }
+      // Only show read counter widget in development
+      ...(process.env.NODE_ENV === 'development' ? [{ id: 'read-counter', component: ReadCounterWidget, props: {} }] : [])
     ],
     column2: [
       { id: 'hours-tracking', component: HoursTrackingWidget, props: {} },
@@ -75,16 +76,8 @@ const Dashboard = () => {
       // Old format was array - convert to column structure
       console.log('Migrating old widget format to column structure');
       return {
-        column1: [
-          defaultWidgets.column1[0], // time-tracking
-          defaultWidgets.column1[1], // pto-balance
-          defaultWidgets.column1[2]  // read-counter
-        ],
-        column2: [
-          defaultWidgets.column2[0], // hours-tracking
-          defaultWidgets.column2[1], // upcoming-sessions
-          defaultWidgets.column2[2]  // placeholder-1
-        ]
+        column1: defaultWidgets.column1, // This already handles dev/prod conditionally
+        column2: defaultWidgets.column2
       };
     }
     // If migrating from old column structure - add read-counter if missing
@@ -92,9 +85,12 @@ const Dashboard = () => {
       const filteredColumn1 = oldData.column1.filter(w => w.id !== 'placeholder-2');
       const filteredColumn2 = oldData.column2.filter(w => w.id !== 'placeholder-2');
       
-      // Add read-counter widget if not present
-      if (!filteredColumn1.find(w => w.id === 'read-counter')) {
-        filteredColumn1.push(defaultWidgets.column1[2]); // Add read-counter
+      // Add read-counter widget if not present (only in development)
+      if (process.env.NODE_ENV === 'development' && !filteredColumn1.find(w => w.id === 'read-counter')) {
+        const readCounterWidget = defaultWidgets.column1.find(w => w.id === 'read-counter');
+        if (readCounterWidget) {
+          filteredColumn1.push(readCounterWidget);
+        }
       }
       
       // Keep only one placeholder in column2

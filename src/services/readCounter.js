@@ -26,7 +26,8 @@ class FirestoreReadCounter {
     };
     
     this.listeners = new Set();
-    this.isEnabled = process.env.NODE_ENV === 'development' || localStorage.getItem('enableReadCounter') === 'true';
+    // Always enable read counter for now (can still be disabled via localStorage)
+    this.isEnabled = localStorage.getItem('enableReadCounter') !== 'false';
     
     // Load persisted data
     this.loadPersistedData();
