@@ -1,11 +1,12 @@
 // src/contexts/WorkflowContext.jsx
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { 
   getWorkflowsForUser,
   getWorkflowsForOrganization,
   getWorkflowTemplate,
   getTeamMembers,
   getSession,
+  getSessionsBatch,
   deleteWorkflowInstance
 } from '../firebase/firestore';
 import { 
@@ -13,11 +14,14 @@ import {
   query, 
   where, 
   onSnapshot,
-  orderBy 
-} from 'firebase/firestore';
-import { firestore } from '../firebase/config';
+  orderBy,
+  limit,
+  firestore
+} from '../services/firestoreWrapper';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
+import workflowCacheService from '../services/workflowCacheService';
+import { readCounter } from '../services/readCounter';
 
 const WorkflowContext = createContext();
 
@@ -40,6 +44,16 @@ export const WorkflowProvider = ({ children }) => {
   
   const { showToast } = useToast();
   const { userProfile, organization } = useAuth();
+  
+  // Use ref to store listener unsubscribe function
+  const listenerUnsubscribeRef = useRef(null);
+  // Rate limiting for listener updates
+  const lastListenerUpdateRef = useRef(0);
+  const LISTENER_UPDATE_COOLDOWN = 5000; // 5 seconds minimum between updates
+  // Store templates in ref to avoid dependency issues
+  const workflowTemplatesRef = useRef({});
+  // Periodic refresh interval
+  const refreshIntervalRef = useRef(null);
 
   // Load team members
   const loadTeamMembers = useCallback(async () => {
@@ -53,19 +67,69 @@ export const WorkflowProvider = ({ children }) => {
     }
   }, [organization?.id]);
 
-  // Load user workflows
+  // Load user workflows with caching
   const loadUserWorkflows = useCallback(async () => {
     if (!userProfile?.id || !organization?.id) {
       return;
     }
     
     try {
+      // Check cache first
+      const cachedWorkflows = workflowCacheService.getCachedWorkflows(userProfile.id, organization.id, 'active');
+      if (cachedWorkflows) {
+        setUserWorkflows(cachedWorkflows);
+        readCounter.recordCacheHit('workflows', 'WorkflowContext-user', cachedWorkflows.length);
+        
+        // Still need to load templates for cached workflows
+        const templatePromises = cachedWorkflows.map(async (workflow) => {
+          if (!workflowTemplatesRef.current[workflow.templateId]) {
+            const cachedTemplate = workflowCacheService.getCachedTemplate(workflow.templateId);
+            if (cachedTemplate) {
+              readCounter.recordCacheHit('workflowTemplates', 'WorkflowContext-template', 1);
+              return { templateId: workflow.templateId, template: cachedTemplate };
+            }
+          }
+          return null;
+        }).filter(p => p !== null);
+        
+        const templateResults = await Promise.all(templatePromises);
+        const newTemplates = {};
+        templateResults.forEach(result => {
+          if (result) {
+            newTemplates[result.templateId] = result.template;
+            workflowTemplatesRef.current[result.templateId] = result.template;
+          }
+        });
+        
+        if (Object.keys(newTemplates).length > 0) {
+          setWorkflowTemplates(prev => ({ ...prev, ...newTemplates }));
+        }
+        
+        checkForNotifications(cachedWorkflows);
+        return; // Exit early if cache hit
+      }
+      
+      // Only call API if cache miss
+      readCounter.recordCacheMiss('workflows', 'WorkflowContext-user');
       const workflows = await getWorkflowsForUser(userProfile.id, organization.id, 'active');
+      
+      // Cache the workflows
+      workflowCacheService.setCachedWorkflows(userProfile.id, organization.id, 'active', workflows);
       
       // Load templates for each workflow if not already loaded
       const templatePromises = workflows.map(async (workflow) => {
-        if (!workflowTemplates[workflow.templateId]) {
+        // Check template cache first
+        const cachedTemplate = workflowCacheService.getCachedTemplate(workflow.templateId);
+        if (cachedTemplate) {
+          readCounter.recordCacheHit('workflowTemplates', 'WorkflowContext-template', 1);
+          return { templateId: workflow.templateId, template: cachedTemplate };
+        }
+        
+        if (!workflowTemplatesRef.current[workflow.templateId]) {
+          readCounter.recordCacheMiss('workflowTemplates', 'WorkflowContext-template');
           const template = await getWorkflowTemplate(workflow.templateId);
+          workflowCacheService.setCachedTemplate(workflow.templateId, template);
+          workflowTemplatesRef.current[workflow.templateId] = template;
           return { templateId: workflow.templateId, template };
         }
         return null;
@@ -85,41 +149,29 @@ export const WorkflowProvider = ({ children }) => {
       // Load session data for workflows
       if (workflows && workflows.length > 0) {
         try {
-          const sessionPromises = [];
           const sessionIds = new Set();
           
           // Collect unique session IDs
           workflows.forEach(workflow => {
-            if (workflow.sessionId && !sessionIds.has(workflow.sessionId)) {
+            if (workflow.sessionId) {
               sessionIds.add(workflow.sessionId);
-              // Wrap getSession in a promise that catches permission errors
-              sessionPromises.push(
-                getSession(workflow.sessionId).catch(error => {
-                  // Silently ignore permission errors - the session might belong to a different org
-                  if (error.code === 'permission-denied') {
-                    return null;
-                  }
-                  // Re-throw other errors
-                  throw error;
-                })
-              );
             }
           });
           
-          if (sessionPromises.length > 0) {
-            // Load all sessions in parallel
-            const sessions = await Promise.all(sessionPromises);
+          if (sessionIds.size > 0) {
+            // Batch load all sessions
+            const sessionIdsArray = Array.from(sessionIds);
+            const sessionsMap = await getSessionsBatch(sessionIdsArray);
             
-            // Create session data map
-            const newSessionData = {};
-            sessions.forEach((session, index) => {
+            // Filter out null sessions (permission denied or not found)
+            const validSessions = {};
+            Object.entries(sessionsMap).forEach(([id, session]) => {
               if (session) {
-                const sessionId = Array.from(sessionIds)[index];
-                newSessionData[sessionId] = session;
+                validSessions[id] = session;
               }
             });
             
-            setSessionData(prev => ({ ...prev, ...newSessionData }));
+            setSessionData(prev => ({ ...prev, ...validSessions }));
           }
         } catch (error) {
           // Only log non-permission errors
@@ -137,15 +189,28 @@ export const WorkflowProvider = ({ children }) => {
       // Set empty arrays on error to prevent repeated failed requests
       setUserWorkflows([]);
     }
-  }, [userProfile?.id, organization?.id, workflowTemplates]);
+  }, [userProfile?.id, organization?.id]);
 
-  // Load organization workflows (for admins)
+  // Load organization workflows (for admins) with caching
   const loadOrganizationWorkflows = useCallback(async () => {
     if (!organization?.id || userProfile?.role !== 'admin') return;
     
     try {
+      // Check cache first
+      const cachedWorkflows = workflowCacheService.getCachedOrgWorkflows(organization.id);
+      if (cachedWorkflows) {
+        setOrganizationWorkflows(cachedWorkflows);
+        readCounter.recordCacheHit('workflows', 'WorkflowContext-org', cachedWorkflows.length);
+        return; // Exit early if cache hit - don't make API call
+      }
+      
+      // Only call API if cache miss
+      readCounter.recordCacheMiss('workflows', 'WorkflowContext-org');
       const workflows = await getWorkflowsForOrganization(organization.id);
       setOrganizationWorkflows(workflows);
+      
+      // Cache the workflows
+      workflowCacheService.setCachedOrgWorkflows(organization.id, workflows);
     } catch (error) {
       console.error('Error loading organization workflows:', error);
       // Set empty arrays on error to prevent repeated failed requests
@@ -205,7 +270,7 @@ export const WorkflowProvider = ({ children }) => {
     });
     
     setLastCheck(currentCheck);
-  }, [userProfile?.id, workflowTemplates, teamMembers, lastCheck, showToast]);
+  }, [userProfile?.id, teamMembers, showToast]);
 
   // Update a single workflow in local state
   const updateWorkflowInState = useCallback((workflowId, updates) => {
@@ -360,26 +425,87 @@ export const WorkflowProvider = ({ children }) => {
   // Load data on mount and when dependencies change
   useEffect(() => {
     if (userProfile?.id && organization?.id) {
-      refreshWorkflows();
+      // Initial load from cache
+      loadUserWorkflows();
+      loadOrganizationWorkflows();
+      loadTeamMembers();
     }
   }, [userProfile?.id, organization?.id]);
 
-  // Set up real-time listener for workflows
+  // Set up periodic refresh for data freshness
+  useEffect(() => {
+    if (!userProfile?.id || !organization?.id) return;
+
+    // Set up periodic refresh every 60 seconds
+    refreshIntervalRef.current = setInterval(() => {
+      console.log('Periodic workflow refresh');
+      loadUserWorkflows();
+    }, 60000); // 60 seconds
+
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
+  }, [userProfile?.id, organization?.id]);
+
+  // Set up real-time listener for workflows (only for immediate updates)
   useEffect(() => {
     if (!organization?.id || !userProfile?.id) return;
 
+    // Clean up any existing listener
+    if (listenerUnsubscribeRef.current) {
+      listenerUnsubscribeRef.current();
+      listenerUnsubscribeRef.current = null;
+    }
+
     // Query for active workflows in the organization
+    // For now, we still need to fetch all org workflows because Firestore doesn't support
+    // querying nested fields in stepProgress. This should be refactored to add assignedTo
+    // array at the root level of workflow documents.
     const workflowsQuery = query(
       collection(firestore, 'workflows'),
       where('organizationID', '==', organization.id),
       where('status', '==', 'active'),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(100) // Limit to most recent 100 workflows to prevent excessive reads
     );
 
-    // Set up the listener
+    // Check if we have cached data first
+    const cachedWorkflows = workflowCacheService.getCachedWorkflows(userProfile.id, organization.id, 'active');
+    if (cachedWorkflows && cachedWorkflows.length > 0) {
+      console.log('Using cached workflows for initial display');
+      setUserWorkflows(cachedWorkflows);
+    }
+
+    // Set up the listener for real-time updates only
     const unsubscribe = onSnapshot(
       workflowsQuery,
+      { includeMetadataChanges: false }, // Only listen for actual data changes
       async (snapshot) => {
+        // Skip if this is from cache
+        if (snapshot.metadata.fromCache) {
+          console.log('Skipping cached snapshot');
+          return;
+        }
+
+        // Rate limit updates
+        const now = Date.now();
+        if (now - lastListenerUpdateRef.current < LISTENER_UPDATE_COOLDOWN) {
+          console.log('Skipping workflow update due to rate limit');
+          return;
+        }
+        lastListenerUpdateRef.current = now;
+
+        // Only process if there are actual changes
+        const changes = snapshot.docChanges();
+        if (changes.length === 0) {
+          console.log('No changes detected, skipping update');
+          return;
+        }
+
+        console.log(`Processing ${changes.length} workflow changes`);
+
         // Process workflow changes
         const workflows = [];
         snapshot.forEach((doc) => {
@@ -402,29 +528,82 @@ export const WorkflowProvider = ({ children }) => {
         });
 
         // Load templates for new workflows
-        const templatePromises = userWorkflows.map(async (workflow) => {
-          if (!workflowTemplates[workflow.templateId]) {
-            const template = await getWorkflowTemplate(workflow.templateId);
-            return { templateId: workflow.templateId, template };
+        const templatesToLoad = [];
+        
+        userWorkflows.forEach(workflow => {
+          if (workflow.templateId && !workflowTemplatesRef.current[workflow.templateId]) {
+            // First check cache
+            const cachedTemplate = workflowCacheService.getCachedTemplate(workflow.templateId);
+            if (cachedTemplate) {
+              workflowTemplatesRef.current[workflow.templateId] = cachedTemplate;
+              setWorkflowTemplates(prev => ({ ...prev, [workflow.templateId]: cachedTemplate }));
+            } else {
+              templatesToLoad.push(workflow.templateId);
+            }
           }
-          return null;
         });
         
-        const templateResults = await Promise.all(templatePromises);
-        const newTemplates = {};
-        templateResults.forEach(result => {
-          if (result) {
-            newTemplates[result.templateId] = result.template;
+        // Only fetch templates if there are new ones to load
+        if (templatesToLoad.length > 0) {
+          console.log(`Loading ${templatesToLoad.length} templates`);
+          
+          // Batch load templates in groups of 10 (Firestore 'in' query limit)
+          const templateGroups = [];
+          for (let i = 0; i < templatesToLoad.length; i += 10) {
+            templateGroups.push(templatesToLoad.slice(i, i + 10));
           }
-        });
+          
+          const allTemplatePromises = templateGroups.map(async (group) => {
+            try {
+              // This would be more efficient with a batch query, but for now load individually
+              const promises = group.map(templateId => getWorkflowTemplate(templateId));
+              const results = await Promise.all(promises);
+              return group.map((templateId, index) => ({ templateId, template: results[index] }));
+            } catch (error) {
+              console.error('Failed to load template group:', error);
+              return [];
+            }
+          });
+          
+          const allResults = await Promise.all(allTemplatePromises);
+          const templateResults = allResults.flat();
+          
+          const newTemplates = {};
+          templateResults.forEach(result => {
+            if (result && result.template) {
+              newTemplates[result.templateId] = result.template;
+              workflowTemplatesRef.current[result.templateId] = result.template;
+              // Cache the template
+              workflowCacheService.setCachedTemplate(result.templateId, result.template);
+            }
+          });
+          
+          // Update templates only if there are new ones
+          if (Object.keys(newTemplates).length > 0) {
+            setWorkflowTemplates(prev => ({ ...prev, ...newTemplates }));
+          }
+        }
         
-        // Update state
-        setWorkflowTemplates(prev => ({ ...prev, ...newTemplates }));
         setUserWorkflows(userWorkflows);
         
-        // Check for notifications on changes
-        if (snapshot.docChanges().length > 0) {
-          checkForNotifications(userWorkflows);
+        // Update cache with new data
+        workflowCacheService.setCachedWorkflows(userProfile.id, organization.id, 'active', userWorkflows);
+        
+        // Check for notifications on changes (debounced)
+        if (changes.length > 0) {
+          // Only check notifications if we have actual changes
+          const hasRelevantChanges = changes.some(change => {
+            const workflow = { id: change.doc.id, ...change.doc.data() };
+            if (!workflow.stepProgress) return false;
+            
+            return Object.values(workflow.stepProgress).some(step => 
+              step.assignedTo === userProfile.id
+            );
+          });
+          
+          if (hasRelevantChanges) {
+            checkForNotifications(userWorkflows);
+          }
         }
       },
       (error) => {
@@ -434,9 +613,17 @@ export const WorkflowProvider = ({ children }) => {
       }
     );
 
-    // Cleanup listener on unmount
-    return () => unsubscribe();
-  }, [organization?.id, userProfile?.id, workflowTemplates, checkForNotifications, loadUserWorkflows]);
+    // Store the unsubscribe function
+    listenerUnsubscribeRef.current = unsubscribe;
+
+    // Cleanup listener on unmount or when dependencies change
+    return () => {
+      if (listenerUnsubscribeRef.current) {
+        listenerUnsubscribeRef.current();
+        listenerUnsubscribeRef.current = null;
+      }
+    };
+  }, [organization?.id, userProfile?.id]);
 
 
   const value = {

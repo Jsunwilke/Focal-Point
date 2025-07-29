@@ -9,9 +9,11 @@ import {
   where,
   orderBy,
   serverTimestamp,
-  Timestamp
-} from 'firebase/firestore';
-import { firestore } from './config';
+  Timestamp,
+  firestore
+} from '../services/firestoreWrapper';
+import ptoCacheService from '../services/ptoCacheService';
+import { readCounter } from '../services/readCounter';
 
 // Create a new blocked date range
 export const createBlockedDateRange = async (blockedDateData) => {
@@ -23,6 +25,12 @@ export const createBlockedDateRange = async (blockedDateData) => {
     };
     
     const docRef = await addDoc(blockedDatesRef, newBlockedDate);
+    
+    // Clear cache
+    if (blockedDateData.organizationID) {
+      ptoCacheService.clearBlockedDatesCache(blockedDateData.organizationID);
+    }
+    
     return { id: docRef.id, ...newBlockedDate };
   } catch (error) {
     console.error('Error creating blocked date range:', error);
@@ -33,6 +41,14 @@ export const createBlockedDateRange = async (blockedDateData) => {
 // Get all blocked dates for an organization
 export const getBlockedDates = async (organizationId) => {
   try {
+    // Check cache first
+    const cachedBlockedDates = ptoCacheService.getCachedBlockedDates(organizationId);
+    if (cachedBlockedDates) {
+      readCounter.recordCacheHit('blockedDates', 'getBlockedDates', cachedBlockedDates.length);
+      return cachedBlockedDates;
+    }
+    readCounter.recordCacheMiss('blockedDates', 'getBlockedDates');
+
     const blockedDatesRef = collection(firestore, 'blockedDates');
     const q = query(
       blockedDatesRef,
@@ -40,11 +56,16 @@ export const getBlockedDates = async (organizationId) => {
       orderBy('startDate', 'asc')
     );
 
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
+    const snapshot = await getDocs(q, 'getBlockedDates');
+    const blockedDates = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+    
+    // Cache the results
+    ptoCacheService.setCachedBlockedDates(organizationId, blockedDates);
+    
+    return blockedDates;
   } catch (error) {
     console.error('Error getting blocked dates:', error);
     throw error;
@@ -63,7 +84,7 @@ export const checkDateIsBlocked = async (organizationId, startDate, endDate) => 
       where('startDate', '<=', Timestamp.fromDate(endDate))
     );
 
-    const snapshot = await getDocs(q);
+    const snapshot = await getDocs(q, 'checkDateIsBlocked');
     const blockedDates = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -90,10 +111,16 @@ export const checkDateIsBlocked = async (organizationId, startDate, endDate) => 
 };
 
 // Delete a blocked date range
-export const deleteBlockedDateRange = async (blockedDateId) => {
+export const deleteBlockedDateRange = async (blockedDateId, organizationId) => {
   try {
     const docRef = doc(firestore, 'blockedDates', blockedDateId);
     await deleteDoc(docRef);
+    
+    // Clear cache
+    if (organizationId) {
+      ptoCacheService.clearBlockedDatesCache(organizationId);
+    }
+    
     return true;
   } catch (error) {
     console.error('Error deleting blocked date range:', error);
@@ -113,7 +140,7 @@ export const getBlockedDatesForDateRange = async (organizationId, startDate, end
       where('startDate', '<=', Timestamp.fromDate(endDate))
     );
 
-    const snapshot = await getDocs(q);
+    const snapshot = await getDocs(q, 'getBlockedDatesForDateRange');
     const blockedDates = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -146,7 +173,7 @@ export const getBlockedDatesForDate = async (organizationId, date) => {
       where('startDate', '<=', Timestamp.fromDate(endOfDay))
     );
 
-    const snapshot = await getDocs(q);
+    const snapshot = await getDocs(q, 'getBlockedDatesForDate');
     const blockedDates = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()

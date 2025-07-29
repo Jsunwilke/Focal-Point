@@ -8,41 +8,18 @@ import {
   query, 
   where, 
   orderBy, 
-  limit
-} from 'firebase/firestore';
-import { firestore } from '../firebase/config';
-import { updateSession } from '../firebase/firestore';
+  limit,
+  firestore
+} from '../services/firestoreWrapper';
+import { updateSession, getTeamMembers } from '../firebase/firestore';
 import secureLogger from '../utils/secureLogger';
-
-// User resolution cache
-let userCache = null;
-let userCacheTimestamp = null;
-const USER_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+import { readCounter } from './readCounter';
 
 // User resolution functions
 export const getUsersForOrganization = async (organizationID) => {
   try {
-    // Check cache first
-    if (userCache && userCacheTimestamp && (Date.now() - userCacheTimestamp) < USER_CACHE_DURATION) {
-      return userCache[organizationID] || [];
-    }
-
-    const usersQuery = query(
-      collection(firestore, 'users'),
-      where('organizationID', '==', organizationID)
-    );
-    
-    const querySnapshot = await getDocs(usersQuery);
-    const users = [];
-    querySnapshot.forEach((doc) => {
-      users.push({ id: doc.id, ...doc.data() });
-    });
-
-    // Update cache
-    if (!userCache) userCache = {};
-    userCache[organizationID] = users;
-    userCacheTimestamp = Date.now();
-
+    // Use the centralized getTeamMembers function which has built-in caching
+    const users = await getTeamMembers(organizationID);
     return users;
   } catch (error) {
     secureLogger.error('Error fetching users', error);
@@ -149,7 +126,7 @@ export const getSDCardRecords = async (organizationID, filters = {}) => {
       q = query(q, limit(filters.limit));
     }
 
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await getDocs(q, 'getSDCardRecords');
     const records = [];
     querySnapshot.forEach((doc) => {
       records.push({ id: doc.id, ...doc.data() });
@@ -237,7 +214,7 @@ export const getJobBoxRecords = async (organizationID, filters = {}) => {
       q = query(q, limit(filters.limit));
     }
 
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await getDocs(q, 'getJobBoxRecords');
     const records = [];
     querySnapshot.forEach((doc) => {
       records.push({ id: doc.id, ...doc.data() });
@@ -257,7 +234,7 @@ export const deleteJobBoxRecord = async (recordId) => {
   try {
     // Get the job box record before deletion to extract shiftUid
     const jobBoxRef = doc(firestore, 'jobBoxes', recordId);
-    const jobBoxDoc = await getDoc(jobBoxRef);
+    const jobBoxDoc = await getDoc(jobBoxRef, 'deleteJobBoxRecord');
     
     let shiftUid = null;
     if (jobBoxDoc.exists()) {
@@ -366,7 +343,7 @@ export const getJobBoxByShiftUid = async (shiftUid, organizationID) => {
       limit(1)
     );
 
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await getDocs(q, 'getJobBoxByShiftUid');
     if (querySnapshot.empty) {
       return { success: true, data: null };
     }

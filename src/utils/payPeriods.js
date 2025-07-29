@@ -227,6 +227,8 @@ const generateBiWeeklyPeriods = (start, end, config, periods) => {
       });
     }
 
+    // IMPORTANT: Start next period the day AFTER current period ends
+    // This prevents dates from appearing in multiple periods
     current.setDate(current.getDate() + 14);
   }
 };
@@ -337,8 +339,20 @@ export const getCurrentPayPeriod = (payPeriodSettings) => {
     payPeriodSettings
   );
 
+  // Validate periods don't overlap
+  const validation = validatePayPeriodBoundaries(periods);
+  if (!validation.isValid) {
+    console.warn('[PayPeriods] Warning: Overlapping pay periods detected:', validation.overlaps);
+  }
+
   // Find the period that includes today
-  return periods.find(period => period.start <= todayStr && period.end >= todayStr) || null;
+  const currentPeriod = periods.find(period => period.start <= todayStr && period.end >= todayStr) || null;
+  
+  if (currentPeriod) {
+    console.log(`[PayPeriods DEBUG] Current period: ${currentPeriod.start} to ${currentPeriod.end}`);
+  }
+  
+  return currentPeriod;
 };
 
 /**
@@ -351,8 +365,12 @@ export const getPreviousPayPeriod = (payPeriodSettings) => {
   if (!currentPeriod) return null;
 
   const currentStart = new Date(currentPeriod.start);
+  
+  // Calculate the end of the previous period as one day before current period starts
+  // This ensures no overlap between periods
   const previousEnd = new Date(currentStart);
   previousEnd.setDate(previousEnd.getDate() - 1);
+  previousEnd.setHours(23, 59, 59, 999); // End at the very end of the previous day
 
   // Get a range that includes the previous period
   const rangeStart = new Date(previousEnd);
@@ -364,8 +382,61 @@ export const getPreviousPayPeriod = (payPeriodSettings) => {
     payPeriodSettings
   );
 
-  // Return the last period in the list (most recent before current)
-  return periods.length > 0 ? periods[periods.length - 1] : null;
+  // Find the period that ends exactly on our calculated previousEnd date
+  // This ensures we get the period immediately before the current one
+  const previousEndDateStr = formatDate(previousEnd);
+  const previousPeriod = periods.find(period => period.end === previousEndDateStr);
+  
+  if (previousPeriod) {
+    console.log(`[PayPeriods DEBUG] Previous period: ${previousPeriod.start} to ${previousPeriod.end}`);
+    console.log(`[PayPeriods DEBUG] Current period: ${currentPeriod.start} to ${currentPeriod.end}`);
+    console.log(`[PayPeriods DEBUG] No overlap: Previous ends ${previousPeriod.end}, Current starts ${currentPeriod.start}`);
+    return previousPeriod;
+  }
+
+  // Fallback: Return the last period in the list (most recent before current)
+  const fallbackPeriod = periods.length > 0 ? periods[periods.length - 1] : null;
+  if (fallbackPeriod) {
+    console.warn(`[PayPeriods DEBUG] Using fallback period: ${fallbackPeriod.start} to ${fallbackPeriod.end}`);
+  }
+  return fallbackPeriod;
+};
+
+/**
+ * Validate that pay periods don't overlap
+ * @param {Array} periods - Array of pay period objects
+ * @returns {object} - { isValid: boolean, overlaps: Array }
+ */
+export const validatePayPeriodBoundaries = (periods) => {
+  const overlaps = [];
+  
+  for (let i = 0; i < periods.length; i++) {
+    for (let j = i + 1; j < periods.length; j++) {
+      const period1 = periods[i];
+      const period2 = periods[j];
+      
+      const start1 = new Date(period1.start);
+      const end1 = new Date(period1.end);
+      const start2 = new Date(period2.start);
+      const end2 = new Date(period2.end);
+      
+      // Check if periods overlap
+      const hasOverlap = (start1 <= end2 && end1 >= start2);
+      
+      if (hasOverlap) {
+        overlaps.push({
+          period1: period1,
+          period2: period2,
+          overlapType: 'date_range_overlap'
+        });
+      }
+    }
+  }
+  
+  return {
+    isValid: overlaps.length === 0,
+    overlaps: overlaps
+  };
 };
 
 /**

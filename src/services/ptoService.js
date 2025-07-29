@@ -12,21 +12,34 @@ import {
   orderBy,
   serverTimestamp,
   Timestamp,
-  writeBatch
-} from 'firebase/firestore';
-import { firestore } from '../firebase/config';
+  writeBatch,
+  firestore
+} from '../services/firestoreWrapper';
 import { getAllTimeEntries } from '../firebase/firestore';
 import secureLogger from '../utils/secureLogger';
+import ptoCacheService from './ptoCacheService';
+import { readCounter } from './readCounter';
 
 /**
  * Get or create PTO balance record for a user
  */
 export const getPTOBalance = async (userId, organizationID) => {
   try {
+    // Check cache first
+    const cachedBalances = ptoCacheService.getCachedPTOBalances(organizationID);
+    if (cachedBalances) {
+      const userBalance = cachedBalances.find(b => b.userId === userId);
+      if (userBalance) {
+        readCounter.recordCacheHit('ptoBalances', 'getPTOBalance', 1);
+        return userBalance;
+      }
+    }
+    readCounter.recordCacheMiss('ptoBalances', 'getPTOBalance');
+
     // Use predictable document ID to avoid query permission issues
     const balanceId = `${organizationID}_${userId}`;
     const docRef = doc(firestore, 'ptoBalances', balanceId);
-    const docSnap = await getDoc(docRef);
+    const docSnap = await getDoc(docRef, 'getPTOBalance');
     
     if (!docSnap.exists()) {
       // Create initial balance record with predictable ID
@@ -46,7 +59,16 @@ export const getPTOBalance = async (userId, organizationID) => {
       return { id: balanceId, ...initialBalance };
     }
     
-    return { id: docSnap.id, ...docSnap.data() };
+    const balance = { id: docSnap.id, ...docSnap.data() };
+    
+    // Update cache
+    if (cachedBalances) {
+      ptoCacheService.setCachedPTOBalances(organizationID, [...cachedBalances, balance]);
+    } else {
+      ptoCacheService.setCachedPTOBalances(organizationID, [balance]);
+    }
+    
+    return balance;
   } catch (error) {
     secureLogger.error('Error getting PTO balance:', error);
     throw error;
@@ -67,6 +89,9 @@ export const addPTOHours = async (userId, organizationID, hours, reason = 'Manua
     
     const balanceId = `${organizationID}_${userId}`;
     await updateDoc(doc(firestore, 'ptoBalances', balanceId), updates);
+    
+    // Clear cache after update
+    ptoCacheService.clearPTOBalancesCache(organizationID);
     
     return {
       ...balance,
@@ -90,7 +115,7 @@ export const processYearEndPTO = async (organizationID, ptoSettings) => {
       where('organizationID', '==', organizationID)
     );
     
-    const querySnapshot = await getDocs(balancesQuery);
+    const querySnapshot = await getDocs(balancesQuery, 'processYearEndPTO');
     const batch = writeBatch(firestore);
     
     querySnapshot.docs.forEach(balanceDoc => {
@@ -155,6 +180,9 @@ export const reservePTOHours = async (userId, organizationID, hours) => {
     const balanceId = `${organizationID}_${userId}`;
     await updateDoc(doc(firestore, 'ptoBalances', balanceId), updates);
     
+    // Clear cache after update
+    ptoCacheService.clearPTOBalancesCache(organizationID);
+    
     return {
       ...balance,
       ...updates
@@ -180,6 +208,9 @@ export const usePTOHours = async (userId, organizationID, hours) => {
     
     const balanceId = `${organizationID}_${userId}`;
     await updateDoc(doc(firestore, 'ptoBalances', balanceId), updates);
+    
+    // Clear cache after update
+    ptoCacheService.clearPTOBalancesCache(organizationID);
     
     return {
       ...balance,
@@ -207,6 +238,9 @@ export const releasePTOHours = async (userId, organizationID, hours) => {
     const balanceId = `${organizationID}_${userId}`;
     await updateDoc(doc(firestore, 'ptoBalances', balanceId), updates);
     
+    // Clear cache after update
+    ptoCacheService.clearPTOBalancesCache(organizationID);
+    
     return {
       ...balance,
       ...updates
@@ -222,17 +256,30 @@ export const releasePTOHours = async (userId, organizationID, hours) => {
  */
 export const getAllPTOBalances = async (organizationID) => {
   try {
+    // Check cache first
+    const cachedBalances = ptoCacheService.getCachedPTOBalances(organizationID);
+    if (cachedBalances) {
+      readCounter.recordCacheHit('ptoBalances', 'getAllPTOBalances', cachedBalances.length);
+      return cachedBalances;
+    }
+    readCounter.recordCacheMiss('ptoBalances', 'getAllPTOBalances');
+
     const balancesQuery = query(
       collection(firestore, 'ptoBalances'),
       where('organizationID', '==', organizationID),
       orderBy('updatedAt', 'desc')
     );
     
-    const querySnapshot = await getDocs(balancesQuery);
-    return querySnapshot.docs.map(doc => ({
+    const querySnapshot = await getDocs(balancesQuery, 'getAllPTOBalances');
+    const balances = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+    
+    // Cache the results
+    ptoCacheService.setCachedPTOBalances(organizationID, balances);
+    
+    return balances;
   } catch (error) {
     secureLogger.error('Error getting all PTO balances:', error);
     throw error;

@@ -1,6 +1,6 @@
 const { onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
-const { onRequest } = require('firebase-functions/v2/https');
+const { onRequest, onCall } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 
 // Initialize admin (only once)
@@ -866,3 +866,158 @@ function getMonthName(monthIndex) {
     ];
     return months[monthIndex];
 }
+
+// Function 4: Search Daily Reports with Server-Side Pagination
+exports.searchDailyReports = onCall({
+    cors: true,
+    memory: '512MB',
+    timeoutSeconds: 60
+}, async (request) => {
+    const startTime = Date.now();
+    
+    try {
+        // Validate authentication
+        if (!request.auth) {
+            throw new Error('Authentication required');
+        }
+
+        const {
+            organizationId,
+            searchQuery = '',
+            page = 1,
+            limit = 50,
+            filters = {},
+            sortBy = 'timestamp',
+            sortOrder = 'desc'
+        } = request.data;
+
+        // Validate required parameters
+        if (!organizationId) {
+            throw new Error('Organization ID is required');
+        }
+
+        // Validate pagination parameters
+        const pageNum = Math.max(1, parseInt(page));
+        const limitNum = Math.min(100, Math.max(1, parseInt(limit))); // Max 100 per page
+        const offset = (pageNum - 1) * limitNum;
+
+        // Build base query
+        let query = db.collection('dailyJobReports')
+            .where('organizationID', '==', organizationId);
+
+        // Apply filters
+        if (filters.photographer) {
+            query = query.where('yourName', '==', filters.photographer);
+        }
+
+        if (filters.school) {
+            query = query.where('schoolOrDestination', '==', filters.school);
+        }
+
+        if (filters.startDate) {
+            const startDate = admin.firestore.Timestamp.fromDate(new Date(filters.startDate));
+            query = query.where('timestamp', '>=', startDate);
+        }
+
+        if (filters.endDate) {
+            const endDate = admin.firestore.Timestamp.fromDate(new Date(filters.endDate + 'T23:59:59'));
+            query = query.where('timestamp', '<=', endDate);
+        }
+
+        // Apply sorting
+        const sortField = sortBy === 'date' ? 'timestamp' : sortBy;
+        const sortDirection = sortOrder === 'asc' ? 'asc' : 'desc';
+        query = query.orderBy(sortField, sortDirection);
+
+        // Get total count for pagination (if no search query)
+        let totalCount = 0;
+        if (!searchQuery.trim()) {
+            try {
+                const countQuery = await query.count().get();
+                totalCount = countQuery.data().count;
+            } catch (error) {
+                console.warn('Count query failed, using fallback method:', error);
+                // Fallback: estimate based on query results
+                const allResults = await query.limit(1000).get();
+                totalCount = allResults.size;
+            }
+        }
+
+        // Apply pagination
+        query = query.offset(offset).limit(limitNum);
+
+        // Execute main query
+        const snapshot = await query.get();
+        let reports = [];
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            reports.push({
+                id: doc.id,
+                ...data,
+                // Convert Firestore timestamps to ISO strings for JSON serialization
+                timestamp: data.timestamp?.toDate?.()?.toISOString() || data.timestamp,
+                date: data.date?.toDate?.()?.toISOString() || data.date,
+                startDate: data.startDate?.toDate?.()?.toISOString() || data.startDate,
+                endDate: data.endDate?.toDate?.()?.toISOString() || data.endDate,
+                createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
+                updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt
+            });
+        });
+
+        // Apply search filtering if search query provided
+        if (searchQuery.trim()) {
+            const searchTerm = searchQuery.toLowerCase();
+            reports = reports.filter(report => {
+                const searchableFields = [
+                    report.yourName,
+                    report.schoolOrDestination,
+                    Array.isArray(report.jobDescriptions) ? report.jobDescriptions.join(' ') : '',
+                    Array.isArray(report.extraItems) ? report.extraItems.join(' ') : '',
+                    report.photoshootNoteText,
+                    report.jobDescriptionText,
+                    report.jobBoxAndCameraCards,
+                    report.sportsBackgroundShot,
+                    report.cardsScannedChoice
+                ];
+
+                return searchableFields.some(field => 
+                    field && String(field).toLowerCase().includes(searchTerm)
+                );
+            });
+
+            // Update total count for search results
+            totalCount = reports.length;
+        }
+
+        // Calculate pagination metadata
+        const totalPages = Math.ceil(totalCount / limitNum);
+        const hasNextPage = pageNum < totalPages;
+        const hasPrevPage = pageNum > 1;
+
+        const executionTime = Date.now() - startTime;
+
+        // Return structured response
+        return {
+            reports,
+            pagination: {
+                currentPage: pageNum,
+                totalPages,
+                totalResults: totalCount,
+                resultsPerPage: limitNum,
+                hasNextPage,
+                hasPrevPage
+            },
+            searchMeta: {
+                query: searchQuery,
+                executionTime,
+                cached: false,
+                appliedFilters: filters
+            }
+        };
+
+    } catch (error) {
+        console.error('Error in searchDailyReports:', error);
+        throw new Error(`Search failed: ${error.message}`);
+    }
+});

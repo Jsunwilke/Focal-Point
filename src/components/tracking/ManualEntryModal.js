@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { addSDCardRecord, addJobBoxRecord, SD_CARD_STATUSES, JOB_BOX_STATUSES } from '../../services/trackingService';
-import { getDocs, collection, query, where } from 'firebase/firestore';
-import { firestore } from '../../firebase/config';
+import { getSchools, getTeamMembers } from '../../firebase/firestore';
 import NotificationModal from '../shared/NotificationModal';
 import { sanitizeFormData, validateInput, defaultRateLimiter } from '../../utils/inputSanitizer';
 import '../shared/NotificationModal.css';
@@ -32,15 +31,7 @@ const ManualEntryModal = ({ type, organizationID, onClose, onSave }) => {
 
   const loadSchools = async () => {
     try {
-      const schoolsQuery = query(
-        collection(firestore, 'schools'),
-        where('organizationID', '==', organizationID)
-      );
-      const schoolsSnapshot = await getDocs(schoolsQuery);
-      const schoolsList = schoolsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const schoolsList = await getSchools(organizationID);
       setSchools(schoolsList);
     } catch (error) {
       setNotificationData({
@@ -54,15 +45,7 @@ const ManualEntryModal = ({ type, organizationID, onClose, onSave }) => {
 
   const loadUsers = async () => {
     try {
-      const usersQuery = query(
-        collection(firestore, 'users'),
-        where('organizationID', '==', organizationID)
-      );
-      const usersSnapshot = await getDocs(usersQuery);
-      const usersList = usersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const usersList = await getTeamMembers(organizationID);
       setUsers(usersList);
     } catch (error) {
       setNotificationData({

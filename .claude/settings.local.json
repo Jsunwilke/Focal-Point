@@ -62,7 +62,8 @@
       "Bash(GENERATE_SOURCEMAP=false npm start)",
       "Bash(timeout 15 npm start)",
       "Bash(kill:*)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(touch:*)"
     ],
     "deny": []
   }

@@ -4,8 +4,7 @@ import { X, Calendar, RefreshCw } from "lucide-react";
 import { useJobs } from "../../../contexts/JobsContext";
 import { useToast } from "../../../contexts/ToastContext";
 import FileUploadPreview from "../roster/FileUploadPreview";
-import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
-import { firestore } from "../../../firebase/config";
+import { getSchools } from "../../../firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
 
 const CreateJobModal = ({ show, onHide }) => {
@@ -54,22 +53,12 @@ const CreateJobModal = ({ show, onHide }) => {
 
   const loadSchoolNames = async () => {
     try {
-      const schoolsQuery = query(
-        collection(firestore, "schools"),
-        where("organizationID", "==", organization.id),
-        orderBy("value", "asc")
-      );
-
-      const querySnapshot = await getDocs(schoolsQuery);
-      const schoolList = [];
-
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.value) {
-          schoolList.push(data.value);
-        }
-      });
-
+      const schoolsData = await getSchools(organization.id);
+      const schoolList = schoolsData
+        .filter(school => school.name || school.value)
+        .map(school => school.name || school.value)
+        .sort();
+      
       setSchools(schoolList);
     } catch (error) {
       console.error("Error loading school names:", error);

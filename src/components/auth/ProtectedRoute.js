@@ -32,6 +32,20 @@ const ProtectedRoute = ({ children }) => {
       missingUserProfile: !userProfile, 
       missingOrganization: !organization
     });
+    
+    // If user exists but profile doesn't, show a more helpful message
+    if (user && !userProfile) {
+      return (
+        <div className="protected-route-loading">
+          <LoadingSpinner size="large" />
+          <p>Setting up your profile...</p>
+          <p style={{ fontSize: '0.9em', color: '#666', marginTop: '10px' }}>
+            If this takes too long, please contact support.
+          </p>
+        </div>
+      );
+    }
+    
     // This will trigger the auth flow in App.js
     return null;
   }

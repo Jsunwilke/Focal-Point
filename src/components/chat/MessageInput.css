@@ -1,0 +1,150 @@
+.message-input {
+  border-top: 1px solid #e5e7eb;
+  background: white;
+  padding: 1rem;
+  flex-shrink: 0;
+}
+
+.message-input__form {
+  width: 100%;
+}
+
+.message-input__container {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  padding: 0.5rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.message-input__container:focus-within {
+  border-color: var(--primary-color, #007bff);
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.message-input__file-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.message-input__file-btn:hover:not(:disabled) {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.message-input__file-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.message-input__textarea {
+  flex: 1;
+  border: none;
+  background: transparent;
+  resize: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  padding: 0.5rem;
+  min-height: 20px;
+  max-height: 120px;
+  color: #374151;
+}
+
+.message-input__textarea::placeholder {
+  color: #9ca3af;
+}
+
+.message-input__textarea:disabled {
+  opacity: 0.5;
+}
+
+.message-input__send-btn {
+  background: #e5e7eb;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s, color 0.2s, transform 0.1s;
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.message-input__send-btn--active {
+  background: var(--primary-color, #007bff);
+  color: white;
+}
+
+.message-input__send-btn--active:hover:not(:disabled) {
+  background: var(--primary-hover, #0056b3);
+  transform: scale(1.05);
+}
+
+.message-input__send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.message-input__loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.message-input__typing-indicator {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* Focus styles for accessibility */
+.message-input__file-btn:focus-visible,
+.message-input__send-btn:focus-visible {
+  outline: 2px solid var(--primary-color, #007bff);
+  outline-offset: 2px;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .message-input {
+    padding: 0.75rem;
+  }
+  
+  .message-input__container {
+    gap: 0.25rem;
+    padding: 0.25rem;
+  }
+  
+  .message-input__file-btn,
+  .message-input__send-btn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0.375rem;
+  }
+}

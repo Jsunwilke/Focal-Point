@@ -58,7 +58,12 @@ export const AuthProvider = ({ children }) => {
   // Load user profile - exposed as a function so it can be called after updates
   const loadUserProfile = async (uid = null) => {
     const userId = uid || user?.uid;
-    secureLogger.debug("loadUserProfile called", { hasUserId: !!userId });
+    secureLogger.debug("loadUserProfile called", { 
+      hasUserId: !!userId,
+      userId,
+      passedUid: uid,
+      currentUserUid: user?.uid
+    });
     if (!userId) {
       secureLogger.warn("No userId provided to loadUserProfile");
       return null;
@@ -70,12 +75,17 @@ export const AuthProvider = ({ children }) => {
         hasProfile: !!profile, 
         hasOrganizationID: !!profile?.organizationID,
         isActive: profile?.isActive,
-        hasEmail: !!profile?.email 
+        hasEmail: !!profile?.email,
+        profileId: profile?.id
       });
       setUserProfile(profile);
       return profile;
     } catch (error) {
-      secureLogger.error("Error in loadUserProfile", error);
+      secureLogger.error("Error in loadUserProfile", {
+        error: error.message,
+        code: error.code,
+        userId
+      });
       return null;
     }
   };

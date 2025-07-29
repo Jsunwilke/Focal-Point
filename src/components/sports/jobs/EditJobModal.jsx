@@ -2,11 +2,12 @@ import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { X } from "lucide-react";
 import { useJobs } from "../../../contexts/JobsContext";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
-import { firestore } from "../../../firebase/config";
+import { useAuth } from "../../../contexts/AuthContext";
+import { getSchools } from "../../../firebase/firestore";
 
 const EditJobModal = ({ show, onHide, job }) => {
   const { updateJob } = useJobs();
+  const { organization } = useAuth();
 
   const [formData, setFormData] = useState({
     schoolName: "",
@@ -83,22 +84,12 @@ const EditJobModal = ({ show, onHide, job }) => {
 
   const loadSchoolNames = async () => {
     try {
-      // Adjust this to match your current app's school collection structure
-      const schoolsQuery = query(
-        collection(firestore, "schools"),
-        orderBy("name", "asc")
-      );
-
-      const querySnapshot = await getDocs(schoolsQuery);
-      const schoolList = [];
-
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.name) {
-          schoolList.push(data.name);
-        }
-      });
-
+      const schoolsData = await getSchools(organization.id);
+      const schoolList = schoolsData
+        .filter(school => school.name || school.value)
+        .map(school => school.name || school.value)
+        .sort();
+      
       setSchools(schoolList);
     } catch (error) {
       console.error("Error loading school names:", error);

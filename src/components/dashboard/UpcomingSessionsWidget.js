@@ -2,37 +2,56 @@
 import React, { useState, useEffect } from 'react';
 import { CalendarClock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { getUserUpcomingSessions } from '../../firebase/firestore';
+import { useDataCache } from '../../contexts/DataCacheContext';
 import { getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from '../../utils/sessionTypes';
 import './UpcomingSessionsWidget.css';
 
 const UpcomingSessionsWidget = ({ onSessionClick }) => {
   const { user, organization } = useAuth();
+  const { sessions: cachedSessions, loading: cacheLoading } = useDataCache();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const loadUpcomingSessions = async () => {
-      if (!user || !organization) return;
+    const filterUpcomingSessions = () => {
+      if (!user || !organization || cacheLoading.sessions) {
+        setLoading(cacheLoading.sessions);
+        return;
+      }
 
       try {
         setLoading(true);
         setError('');
 
-        // Get upcoming sessions for the next 14 days to have more to show
-        const upcomingSessions = await getUserUpcomingSessions(user.uid, organization.id, 14);
-        setSessions(upcomingSessions.slice(0, 8)); // Limit to 8 sessions for display
+        // Filter cached sessions for upcoming user sessions
+        const today = new Date();
+        const endDate = new Date(today);
+        endDate.setDate(today.getDate() + 14); // Next 14 days
+
+        const upcomingSessions = cachedSessions
+          .filter(session => {
+            // Only include sessions assigned to this user
+            if (session.photographerId !== user.uid) return false;
+
+            // Check date range
+            const sessionDate = new Date(session.date);
+            return sessionDate >= today && sessionDate <= endDate;
+          })
+          .sort((a, b) => new Date(a.date) - new Date(b.date)) // Sort by date
+          .slice(0, 8); // Limit to 8 sessions for display
+
+        setSessions(upcomingSessions);
       } catch (err) {
-        console.error('Error loading upcoming sessions:', err);
+        console.error('Error filtering upcoming sessions:', err);
         setError('Unable to load sessions');
       } finally {
         setLoading(false);
       }
     };
 
-    loadUpcomingSessions();
-  }, [user, organization]);
+    filterUpcomingSessions();
+  }, [user, organization, cachedSessions, cacheLoading.sessions]);
 
   // Format time exactly like WeekView schedule cards
   const formatTime = (time) => {

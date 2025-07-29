@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableNetwork, disableNetwork } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 // Validate that all required environment variables are present
@@ -39,7 +39,16 @@ const auth = getAuth(app);
 // Use only the default database for all collections
 const firestore = getFirestore(app); // This connects to the (default) database
 
+// Enable offline persistence for better caching
+try {
+  // Enable network by default (this also enables offline persistence)
+  enableNetwork(firestore);
+} catch (error) {
+  // This is expected if offline persistence is already enabled
+  console.log('Firestore offline persistence already enabled or not supported');
+}
+
 // Initialize Firebase Storage
 const storage = getStorage(app);
 
-export { app, auth, firestore, storage };
+export { app, auth, firestore, storage, enableNetwork, disableNetwork };

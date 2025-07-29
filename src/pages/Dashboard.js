@@ -5,6 +5,7 @@ import TimeTrackingWidget from "../components/dashboard/TimeTrackingWidget";
 import PTOBalanceWidget from "../components/dashboard/PTOBalanceWidget";
 import HoursTrackingWidget from "../components/dashboard/HoursTrackingWidget";
 import UpcomingSessionsWidget from "../components/dashboard/UpcomingSessionsWidget";
+import ReadCounterWidget from "../components/dashboard/ReadCounterWidget";
 import SessionDetailsModal from "../components/sessions/SessionDetailsModal";
 import EditSessionModal from "../components/sessions/EditSessionModal";
 import { getTeamMembers } from "../firebase/firestore";
@@ -58,7 +59,8 @@ const Dashboard = () => {
   const defaultWidgets = {
     column1: [
       { id: 'time-tracking', component: TimeTrackingWidget, props: {} },
-      { id: 'pto-balance', component: PTOBalanceWidget, props: {} }
+      { id: 'pto-balance', component: PTOBalanceWidget, props: {} },
+      { id: 'read-counter', component: ReadCounterWidget, props: {} }
     ],
     column2: [
       { id: 'hours-tracking', component: HoursTrackingWidget, props: {} },
@@ -75,7 +77,8 @@ const Dashboard = () => {
       return {
         column1: [
           defaultWidgets.column1[0], // time-tracking
-          defaultWidgets.column1[1]  // pto-balance  
+          defaultWidgets.column1[1], // pto-balance
+          defaultWidgets.column1[2]  // read-counter
         ],
         column2: [
           defaultWidgets.column2[0], // hours-tracking
@@ -84,10 +87,15 @@ const Dashboard = () => {
         ]
       };
     }
-    // If migrating from old column structure with multiple placeholders
+    // If migrating from old column structure - add read-counter if missing
     if (oldData.column1 && oldData.column2) {
       const filteredColumn1 = oldData.column1.filter(w => w.id !== 'placeholder-2');
       const filteredColumn2 = oldData.column2.filter(w => w.id !== 'placeholder-2');
+      
+      // Add read-counter widget if not present
+      if (!filteredColumn1.find(w => w.id === 'read-counter')) {
+        filteredColumn1.push(defaultWidgets.column1[2]); // Add read-counter
+      }
       
       // Keep only one placeholder in column2
       if (!filteredColumn2.find(w => w.id === 'placeholder-1')) {

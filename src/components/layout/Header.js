@@ -5,6 +5,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import Button from "../shared/Button";
 import ProfileSettingsModal from "../settings/ProfileSettingsModal";
 import StudioSettingsModal from "../settings/StudioSettingsModal";
+import HeaderReadCounter from "./HeaderReadCounter";
 import "./Header.css";
 
 const Header = ({ onMenuToggle, isMobile }) => {
@@ -100,6 +101,8 @@ const Header = ({ onMenuToggle, isMobile }) => {
                 <span className="header__org-name">{organization.name}</span>
               </div>
             )}
+
+            <HeaderReadCounter />
 
             <div className="header__user">
               <button

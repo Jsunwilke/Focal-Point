@@ -22,18 +22,108 @@ import {
   Plus,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { useToast } from "../contexts/ToastContext";
 import {
   subscribeToDailyJobReports,
+  subscribeToNewDailyJobReports,
   updateDailyJobReport,
+  deleteDailyJobReport,
+  deleteDailyJobReportsBatch,
   getSchools,
   getTeamMembers,
 } from "../firebase/firestore";
+import { dailyJobReportsCacheService } from "../services/dailyJobReportsCacheService";
+import { readCounter } from "../services/readCounter";
+
+// Global listener management to prevent duplicates across component instances
+let globalListener = null;
+let globalListenerOrgId = null;
+let globalComponentInstances = new Set();
 import Button from "../components/shared/Button";
 import CreateReportModal from "../components/reports/CreateReportModal";
+import ConfirmationModal from "../components/shared/ConfirmationModal";
 import "./DailyReports.css";
+
+// Utility function to parse various date formats
+const parseDateField = (dateField) => {
+  if (!dateField) return null;
+  
+  let date;
+  
+  // Firebase Timestamp with seconds property
+  if (dateField.seconds) {
+    date = new Date(dateField.seconds * 1000);
+  }
+  // Firebase Timestamp with toDate method
+  else if (typeof dateField.toDate === "function") {
+    date = dateField.toDate();
+  }
+  // String date (YYYY-MM-DD or ISO format)
+  else if (typeof dateField === 'string') {
+    // For YYYY-MM-DD format, ensure proper parsing
+    if (dateField.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      date = new Date(dateField + 'T00:00:00');
+    } else {
+      date = new Date(dateField);
+    }
+  }
+  // Already a Date object
+  else if (dateField instanceof Date) {
+    date = dateField;
+  }
+  // Unknown format
+  else {
+    return null;
+  }
+  
+  return isNaN(date.getTime()) ? null : date;
+};
 
 const DailyReports = () => {
   const { userProfile, organization } = useAuth();
+  const { showToast } = useToast();
+  
+  // Component instance tracking
+  const componentId = useMemo(() => `DailyReports-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, []);
+  console.log(`[${componentId}] Component mounted/rendered`);
+  
+  // Make cache inspection available globally for debugging
+  useEffect(() => {
+    if (organization?.id) {
+      window.inspectDailyReportsCache = () => {
+        console.log(`[${componentId}] Manual cache inspection requested`);
+        return dailyJobReportsCacheService.inspectCache(organization.id);
+      };
+      window.clearDailyReportsCache = () => {
+        console.log(`[${componentId}] Manual cache clear requested`);
+        dailyJobReportsCacheService.clearAllReportsCache(organization.id);
+        console.log(`[${componentId}] Cache cleared`);
+      };
+    }
+  }, [componentId, organization?.id]);
+  
+  // Register this component instance
+  useEffect(() => {
+    globalComponentInstances.add(componentId);
+    console.log(`[${componentId}] Component registered. Total instances: ${globalComponentInstances.size}`);
+    
+    return () => {
+      globalComponentInstances.delete(componentId);
+      console.log(`[${componentId}] Component unregistered. Remaining instances: ${globalComponentInstances.size}`);
+      
+      // Use setTimeout to handle React Strict Mode cleanup gracefully
+      // If no instances remain after a brief delay, clean up the listener
+      setTimeout(() => {
+        if (globalComponentInstances.size === 0 && globalListener) {
+          console.log(`[${componentId}] No instances remaining after delay - cleaning up global listener`);
+          globalListener();
+          globalListener = null;
+          globalListenerOrgId = null;
+        }
+      }, 100); // Small delay to allow for React Strict Mode remounting
+    };
+  }, [componentId]);
+  
   const [reports, setReports] = useState([]);
   const [schools, setSchools] = useState([]);
   const [photographers, setPhotographers] = useState([]);
@@ -48,6 +138,11 @@ const DailyReports = () => {
   const [editingReport, setEditingReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [pagination, setPagination] = useState(null);
+  
+  // All reports data (cached)
+  const [allReports, setAllReports] = useState([]);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   
   // Date filtering state
   const [dateFilter, setDateFilter] = useState("all"); // 'all', 'today', 'week', 'month', 'custom'
@@ -62,7 +157,7 @@ const DailyReports = () => {
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [reportsPerPage, setReportsPerPage] = useState(25);
+  const [reportsPerPage, setReportsPerPage] = useState(50);
   const [showPagination, setShowPagination] = useState(true);
   
   // Bulk selection state
@@ -74,6 +169,17 @@ const DailyReports = () => {
 
   // Report type filter state
   const [reportTypeFilter, setReportTypeFilter] = useState("all"); // 'all', 'template', 'legacy'
+  
+  // Delete confirmation modal state
+  const [deleteModal, setDeleteModal] = useState({
+    isOpen: false,
+    reportToDelete: null,
+    isBulkDelete: false,
+    deleteCount: 0
+  });
+  
+  // Real-time listener state
+  const [realtimeUnsubscribe, setRealtimeUnsubscribe] = useState(null);
 
   // Job description options (from your original app)
   const JOB_DESCRIPTION_OPTIONS = [
@@ -158,8 +264,6 @@ const DailyReports = () => {
   // Load data effect
   useEffect(() => {
     if (!organization?.id) return;
-
-    let unsubscribe;
     
     const loadInitialData = async () => {
       try {
@@ -176,19 +280,8 @@ const DailyReports = () => {
           photographersData.map((p) => p.firstName).filter(Boolean)
         );
 
-        // Subscribe to real-time reports updates
-        unsubscribe = subscribeToDailyJobReports(
-          organization.id,
-          (reportsData) => {
-            setReports(reportsData);
-            setLoading(false);
-          },
-          (err) => {
-            setError("Failed to load daily reports");
-            console.error("Error loading reports:", err);
-            setLoading(false);
-          }
-        );
+        // Load all reports with cache-first approach
+        await loadAllReports();
       } catch (err) {
         setError("Failed to load data");
         console.error("Error loading data:", err);
@@ -197,48 +290,153 @@ const DailyReports = () => {
     };
 
     loadInitialData();
+  }, [organization?.id]);
 
-    // Cleanup subscription on unmount
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
-  }, [organization]);
-
-  // Helper function to check if a date falls within the selected range
-  const isDateInRange = useCallback((reportDate) => {
-    if (!reportDate || dateFilter === "all") return true;
+  // Function to load all reports (cache-first)
+  const loadAllReports = useCallback(async () => {
+    if (!organization?.id) return;
     
-    const date = reportDate.toDate ? reportDate.toDate() : new Date(reportDate);
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const loadId = Date.now();
+    console.log(`[LoadAllReports-${loadId}] Starting load for organization ${organization.id}`);
     
-    switch (dateFilter) {
-      case "today":
-        return date >= startOfToday;
-      case "week":
-        const startOfWeek = new Date(startOfToday);
-        startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-        return date >= startOfWeek;
-      case "month":
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        return date >= startOfMonth;
-      case "quarter":
-        const currentQuarter = Math.floor(now.getMonth() / 3);
-        const startOfQuarter = new Date(now.getFullYear(), currentQuarter * 3, 1);
-        return date >= startOfQuarter;
-      case "year":
-        const startOfYear = new Date(now.getFullYear(), 0, 1);
-        return date >= startOfYear;
-      case "custom":
-        if (!customDateRange.start || !customDateRange.end) return true;
-        const startDate = new Date(customDateRange.start);
-        const endDate = new Date(customDateRange.end);
-        endDate.setHours(23, 59, 59, 999); // Include the entire end date
-        return date >= startDate && date <= endDate;
-      default:
-        return true;
+    try {
+      setLoading(true);
+      
+      // 1. Load from cache immediately
+      const cachedData = dailyJobReportsCacheService.getCachedFullDataset(organization.id);
+      
+      if (cachedData) {
+        setAllReports(cachedData.reports);
+        readCounter.recordCacheHit('dailyReports', 'DailyReports', cachedData.reports.length);
+        console.log(`[LoadAllReports-${loadId}] Cache hit: loaded ${cachedData.reports.length} reports from cache`);
+        setIsInitialLoad(false);
+      } else {
+        readCounter.recordCacheMiss('dailyReports', 'DailyReports');
+        console.log(`[LoadAllReports-${loadId}] Cache miss: will load from Firebase`);
+      }
+      
+      // 2. Set up smart real-time listener (simplified approach)
+      // Prevent multiple instances from setting up listeners simultaneously
+      if (globalListener && globalListenerOrgId === organization.id) {
+        console.log(`[LoadAllReports-${loadId}] ⚠️  Global listener already exists, skipping setup to prevent duplicates`);
+        return;
+      }
+      
+      // Clean up existing listener for different organization
+      if (globalListener && globalListenerOrgId !== organization.id) {
+        console.log(`[LoadAllReports-${loadId}] Cleaning up existing global listener for different organization`);
+        globalListener();
+        globalListener = null;
+        globalListenerOrgId = null;
+      }
+      
+      let unsubscribe;
+      const listenerId = `listener-${loadId}`;
+      
+      // Always show decision logic to debug race conditions
+      console.log(`[LoadAllReports-${loadId}] 🔍 LISTENER DECISION:`);
+      console.log(`[LoadAllReports-${loadId}]   Cache available: ${!!cachedData}`);
+      console.log(`[LoadAllReports-${loadId}]   Cache reports: ${cachedData?.reports?.length || 0}`);
+      console.log(`[LoadAllReports-${loadId}]   Will use: ${cachedData ? 'OPTIMIZED' : 'FULL'} listener`);
+      
+      if (cachedData) {
+        // Cache exists - use optimized listener for new reports only
+        const latestTimestamp = dailyJobReportsCacheService.getLatestTimestamp(organization.id);
+        console.log(`[LoadAllReports-${loadId}] ✅ CACHE EXISTS - Using optimized listener with cached data`);
+        console.log(`[LoadAllReports-${loadId}] Latest cached timestamp: ${latestTimestamp ? latestTimestamp.toISOString() : 'NULL/UNDEFINED'}`);
+        console.log(`[LoadAllReports-${loadId}] Timestamp type: ${typeof latestTimestamp}`);
+        console.log(`[LoadAllReports-${loadId}] Timestamp milliseconds: ${latestTimestamp ? latestTimestamp.getTime() : 'N/A'}`);
+        
+        // Log the most recent report for debugging
+        const cachedData = dailyJobReportsCacheService.getCachedFullDataset(organization.id);
+        if (cachedData && cachedData.reports && cachedData.reports.length > 0) {
+          const latestReport = cachedData.reports[0];
+          console.log(`[LoadAllReports-${loadId}] Most recent cached report:`, {
+            id: latestReport.id,
+            date: latestReport.date,
+            timestamp: latestReport.timestamp,
+            timestampType: typeof latestReport.timestamp,
+            timestampValue: latestReport.timestamp?.seconds ? `${latestReport.timestamp.seconds} seconds` : 'N/A'
+          });
+        }
+        
+        unsubscribe = subscribeToNewDailyJobReports(
+          organization.id,
+          (newReports, metadata) => {
+            console.log(`[${listenerId}] Callback received - isIncremental: ${metadata.isIncremental}, newReports.length: ${newReports.length}`);
+            
+            if (metadata.isIncremental && newReports.length > 0) {
+              console.log(`[${listenerId}] Optimized listener: received ${newReports.length} new reports`);
+              console.log(`[${listenerId}] Attempting to merge new reports into cache...`);
+              
+              // Merge new reports into existing cache and state
+              const success = dailyJobReportsCacheService.mergeNewReportsIntoCache(organization.id, newReports);
+              console.log(`[${listenerId}] Merge result: ${success ? 'SUCCESS' : 'FAILED'}`);
+              
+              if (success) {
+                // Get updated cached data and update ALL component instances
+                const updatedCachedData = dailyJobReportsCacheService.getCachedFullDataset(organization.id);
+                console.log(`[${listenerId}] Updated cache data: ${updatedCachedData ? `${updatedCachedData.reports.length} reports` : 'NULL'}`);
+                
+                if (updatedCachedData) {
+                  // Update current component
+                  console.log(`[${listenerId}] Updating component state with ${updatedCachedData.reports.length} reports`);
+                  setAllReports(updatedCachedData.reports);
+                  // Note: Other component instances will get updates from cache-first loading
+                }
+              } else {
+                console.error(`[${listenerId}] Failed to merge new reports into cache`);
+              }
+            } else {
+              console.log(`[${listenerId}] Skipping merge - conditions not met`);
+            }
+            
+            setError("");
+          },
+          (err) => {
+            console.error("Error in optimized real-time listener:", err);
+            setError("Failed to load new reports: " + err.message);
+          },
+          latestTimestamp
+        );
+      } else {
+        // No cache - use full listener to load all data
+        console.log(`[LoadAllReports-${loadId}] ❌ NO CACHE - Using full listener to load all reports`);
+        
+        unsubscribe = subscribeToDailyJobReports(
+          organization.id,
+          (reportsData, metadata) => {
+            console.log(`[${listenerId}] Full listener: received ${reportsData.length} reports`);
+            
+            // Update all reports and cache the full dataset
+            setAllReports(reportsData);
+            setIsInitialLoad(false);
+            dailyJobReportsCacheService.setCachedFullDataset(organization.id, reportsData);
+            
+            // Note: Read count already recorded in firestore.js subscribeToDailyJobReports
+            setError("");
+          },
+          (err) => {
+            console.error("Error in full real-time listener:", err);
+            setError("Failed to load reports: " + err.message);
+          }
+        );
+      }
+      
+      // Set global listener to prevent duplicates
+      globalListener = unsubscribe;
+      globalListenerOrgId = organization.id;
+      console.log(`[LoadAllReports-${loadId}] ✅ Global listener set for organization ${organization.id} (${cachedData ? 'OPTIMIZED' : 'FULL'})`);
+      
+      setRealtimeUnsubscribe(() => unsubscribe);
+      
+    } catch (err) {
+      console.error("Error loading all reports:", err);
+      setError("Failed to load reports: " + err.message);
+    } finally {
+      setLoading(false);
     }
-  }, [dateFilter, customDateRange]);
+  }, [organization?.id]);
 
   // Helper functions for template-based reports
   const isTemplateBased = (report) => {
@@ -270,9 +468,74 @@ const DailyReports = () => {
     }
   };
 
-  // Filtered and sorted reports
+  // Helper function to check if a date falls within the selected range
+  const isDateInRange = useCallback((reportDate) => {
+    if (!reportDate || dateFilter === "all") return true;
+    
+    // Convert various date formats to Date object
+    let date;
+    if (reportDate.seconds) {
+      // Firebase Timestamp with seconds property
+      date = new Date(reportDate.seconds * 1000);
+    } else if (typeof reportDate.toDate === 'function') {
+      // Firebase Timestamp with toDate method
+      date = reportDate.toDate();
+    } else if (typeof reportDate === 'string') {
+      // String date (YYYY-MM-DD or ISO format)
+      // For YYYY-MM-DD format, ensure proper parsing by adding time
+      if (reportDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        date = new Date(reportDate + 'T00:00:00');
+      } else {
+        date = new Date(reportDate);
+      }
+    } else if (reportDate instanceof Date) {
+      // Already a Date object
+      date = reportDate;
+    } else {
+      // Unknown format
+      return true;
+    }
+    
+    // Validate the date
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date in report:', reportDate);
+      return true;
+    }
+    
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    switch (dateFilter) {
+      case "today":
+        return date >= startOfToday;
+      case "week":
+        const startOfWeek = new Date(startOfToday);
+        startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+        return date >= startOfWeek;
+      case "month":
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        return date >= startOfMonth;
+      case "quarter":
+        const currentQuarter = Math.floor(now.getMonth() / 3);
+        const startOfQuarter = new Date(now.getFullYear(), currentQuarter * 3, 1);
+        return date >= startOfQuarter;
+      case "year":
+        const startOfYear = new Date(now.getFullYear(), 0, 1);
+        return date >= startOfYear;
+      case "custom":
+        if (!customDateRange.start || !customDateRange.end) return true;
+        const startDate = new Date(customDateRange.start);
+        const endDate = new Date(customDateRange.end);
+        endDate.setHours(23, 59, 59, 999); // Include the entire end date
+        return date >= startDate && date <= endDate;
+      default:
+        return true;
+    }
+  }, [dateFilter, customDateRange]);
+
+  // Client-side filtering, sorting, and pagination
   const filteredAndSortedReports = useMemo(() => {
-    let filtered = reports;
+    let filtered = allReports;
 
     // Filter by date range
     filtered = filtered.filter((report) => isDateInRange(report.date));
@@ -348,8 +611,36 @@ const DailyReports = () => {
 
       // Handle date fields
       if (sortField === "date" || sortField === "timestamp") {
-        aValue = a[sortField]?.seconds || a[sortField]?.toDate?.() || 0;
-        bValue = b[sortField]?.seconds || b[sortField]?.toDate?.() || 0;
+        // Convert various date formats to timestamps for sorting
+        const getDateValue = (dateField) => {
+          if (!dateField) return 0;
+          
+          // Firebase Timestamp with seconds property
+          if (dateField.seconds) {
+            return dateField.seconds * 1000;
+          }
+          
+          // Firebase Timestamp with toDate method
+          if (typeof dateField.toDate === 'function') {
+            return dateField.toDate().getTime();
+          }
+          
+          // String date (YYYY-MM-DD or ISO format)
+          if (typeof dateField === 'string') {
+            const parsed = new Date(dateField);
+            return isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+          }
+          
+          // Already a Date object
+          if (dateField instanceof Date) {
+            return dateField.getTime();
+          }
+          
+          return 0;
+        };
+        
+        aValue = getDateValue(a[sortField]);
+        bValue = getDateValue(b[sortField]);
       } else {
         // Convert to string for comparison
         aValue = String(aValue).toLowerCase();
@@ -364,9 +655,9 @@ const DailyReports = () => {
     });
 
     return sorted;
-  }, [reports, searchTerm, sortField, sortDirection, isDateInRange, selectedPhotographer, selectedSchool, selectedJobType, reportTypeFilter, isTemplateBased, getReportDisplayData]);
+  }, [allReports, searchTerm, sortField, sortDirection, isDateInRange, selectedPhotographer, selectedSchool, selectedJobType, reportTypeFilter, isTemplateBased, getReportDisplayData]);
   
-  // Paginated reports
+  // Client-side pagination
   const paginatedReports = useMemo(() => {
     if (!showPagination) return filteredAndSortedReports;
     
@@ -377,10 +668,29 @@ const DailyReports = () => {
   
   const totalPages = Math.ceil(filteredAndSortedReports.length / reportsPerPage);
   
+  // Update pagination metadata
+  const paginationData = useMemo(() => ({
+    currentPage,
+    totalPages,
+    totalReports: filteredAndSortedReports.length,
+    reportsPerPage,
+    hasNextPage: currentPage < totalPages,
+    hasPreviousPage: currentPage > 1
+  }), [currentPage, totalPages, filteredAndSortedReports.length, reportsPerPage]);
+  
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, dateFilter, selectedPhotographer, selectedSchool, selectedJobType, customDateRange, reportTypeFilter]);
+  
+  // Cleanup real-time listener on unmount
+  useEffect(() => {
+    return () => {
+      if (realtimeUnsubscribe) {
+        realtimeUnsubscribe();
+      }
+    };
+  }, [realtimeUnsubscribe]);
 
   // Setup column resizing after table renders - simplified
   useEffect(() => {
@@ -457,6 +767,12 @@ const DailyReports = () => {
 
   const clearSearch = useCallback(() => {
     setSearchTerm("");
+    setDateFilter("all");
+    setCustomDateRange({ start: "", end: "" });
+    setSelectedPhotographer("");
+    setSelectedSchool("");
+    setSelectedJobType("");
+    // This will trigger the useEffect that switches back to browse mode
   }, []);
 
   const handleSort = useCallback(
@@ -479,12 +795,8 @@ const DailyReports = () => {
   }, [sortField, sortDirection]);
 
   const formatDate = useCallback((dateField) => {
-    if (!dateField) return "N/A";
-    if (typeof dateField.toDate === "function") {
-      return dateField.toDate().toLocaleDateString();
-    }
-    const parsed = new Date(dateField);
-    return isNaN(parsed.getTime()) ? "N/A" : parsed.toLocaleDateString();
+    const date = parseDateField(dateField);
+    return date ? date.toLocaleDateString() : "N/A";
   }, []);
 
   const openImageModal = useCallback((imageSrc) => {
@@ -515,7 +827,7 @@ const DailyReports = () => {
       setSelectedReport(null);
     } catch (error) {
       console.error("Error saving report:", error);
-      alert("Failed to save changes. Please try again.");
+      showToast('Save Failed', 'Failed to save changes. Please try again.', 'error');
     }
   }, [editingReport]);
 
@@ -545,6 +857,7 @@ const DailyReports = () => {
     setReportTypeFilter("all");
     setSearchTerm("");
     setCurrentPage(1);
+    // This will trigger the useEffect that switches back to browse mode
   }, []);
   
   // Pagination handlers
@@ -600,7 +913,7 @@ const DailyReports = () => {
     );
     
     if (selectedReportsData.length === 0) {
-      alert('No reports selected for export');
+      showToast('No Selection', 'No reports selected for export', 'warning');
       return;
     }
     
@@ -612,17 +925,13 @@ const DailyReports = () => {
     ];
     
     const csvRows = selectedReportsData.map(report => {
-      const formatDate = (dateField) => {
-        if (!dateField) return '';
-        if (typeof dateField.toDate === 'function') {
-          return dateField.toDate().toLocaleDateString();
-        }
-        const parsed = new Date(dateField);
-        return isNaN(parsed.getTime()) ? '' : parsed.toLocaleDateString();
+      const formatDateForCSV = (dateField) => {
+        const date = parseDateField(dateField);
+        return date ? date.toLocaleDateString() : '';
       };
       
       return [
-        formatDate(report.date),
+        formatDateForCSV(report.date),
         report.yourName || '',
         report.schoolOrDestination || '',
         Array.isArray(report.jobDescriptions) ? report.jobDescriptions.join('; ') : '',
@@ -633,7 +942,7 @@ const DailyReports = () => {
         report.photoURLs ? report.photoURLs.length : 0,
         report.photoshootNoteText || '',
         report.jobDescriptionText || '',
-        formatDate(report.timestamp)
+        formatDateForCSV(report.timestamp)
       ].map(field => `"${String(field).replace(/"/g, '""')}"`); // Escape quotes
     });
     
@@ -661,30 +970,28 @@ const DailyReports = () => {
     }
     
     clearSelection();
-  }, [selectedReports, filteredAndSortedReports, clearSelection]);
+  }, [selectedReports, reports, clearSelection]);
   
-  const bulkDeleteSelected = useCallback(async () => {
+  const bulkDeleteSelected = useCallback(() => {
     if (selectedReports.size === 0) {
-      alert('No reports selected for deletion');
+      showToast('No Selection', 'No reports selected for deletion', 'warning');
       return;
     }
     
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${selectedReports.size} selected reports? This action cannot be undone.`
-    );
-    
-    if (!confirmed) return;
-    
-    try {
-      // Note: This would require implementing a batch delete function in firestore.js
-      // For now, show a placeholder message
-      alert('Bulk delete functionality would be implemented here with proper Firebase batch operations');
-      clearSelection();
-    } catch (error) {
-      console.error('Error deleting reports:', error);
-      alert('Failed to delete reports. Please try again.');
-    }
-  }, [selectedReports, clearSelection]);
+    // Open confirmation modal for bulk delete
+    setDeleteModal({
+      isOpen: true,
+      reportToDelete: null,
+      isBulkDelete: true,
+      deleteCount: selectedReports.size
+    });
+  }, [selectedReports, showToast]);
+  
+  // Clear search cache when needed
+  const clearSearchCache = useCallback(() => {
+    // Clear any legacy search cache if needed
+    // No longer needed since we use client-side operations
+  }, []);
   
   // Quick action handlers
   const handleQuickEdit = useCallback((report, e) => {
@@ -697,23 +1004,96 @@ const DailyReports = () => {
     openReportModal(report);
   }, [openReportModal]);
   
-  const handleQuickDelete = useCallback(async (report, e) => {
+  const handleQuickDelete = useCallback((report, e) => {
     e.stopPropagation();
     
-    const confirmed = window.confirm(
-      `Are you sure you want to delete the report for ${report.yourName || 'Unknown'} at ${report.schoolOrDestination || 'Unknown location'}? This action cannot be undone.`
-    );
-    
-    if (!confirmed) return;
+    // Open confirmation modal
+    setDeleteModal({
+      isOpen: true,
+      reportToDelete: report,
+      isBulkDelete: false,
+      deleteCount: 1
+    });
+  }, []);
+  
+  const handleConfirmDelete = useCallback(async () => {
+    const { reportToDelete, isBulkDelete } = deleteModal;
     
     try {
-      // Note: This would require implementing a delete function in firestore.js
-      alert('Delete functionality would be implemented here with proper Firebase operations');
+      if (isBulkDelete) {
+        // Handle bulk delete
+        const reportIds = Array.from(selectedReports);
+        console.log('[DailyReports] Attempting bulk delete of reports:', reportIds);
+        
+        // Delete from Firestore using batch operation
+        const result = await deleteDailyJobReportsBatch(reportIds);
+        
+        console.log('[DailyReports] Bulk delete result:', result);
+        
+        if (result.success) {
+          // Remove each report from cache
+          reportIds.forEach(reportId => {
+            dailyJobReportsCacheService.removeReportFromCache(organization.id, reportId);
+          });
+          
+          // Update local state to immediately reflect the deletion
+          setAllReports(prevReports => 
+            prevReports.filter(report => !reportIds.includes(report.id))
+          );
+          
+          // Clear selection
+          setSelectedReports(new Set());
+          setShowBulkActions(false);
+          
+          showToast('Reports Deleted', `Successfully deleted ${result.deletedCount} reports`, 'success');
+          console.log(`[DailyReports] Successfully bulk deleted ${result.deletedCount} reports`);
+        } else {
+          throw new Error(result.error || 'Failed to delete reports');
+        }
+      } else {
+        // Handle single delete
+        console.log('[DailyReports] Attempting to delete report:', reportToDelete.id);
+        
+        // Delete from Firestore
+        const result = await deleteDailyJobReport(reportToDelete.id);
+        
+        console.log('[DailyReports] Delete result:', result);
+        
+        if (result.success) {
+          // Remove from cache
+          dailyJobReportsCacheService.removeReportFromCache(organization.id, reportToDelete.id);
+          
+          // Update local state to immediately reflect the deletion
+          setAllReports(prevReports => prevReports.filter(r => r.id !== reportToDelete.id));
+          
+          // Clear from selection if it was selected
+          setSelectedReports(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(reportToDelete.id);
+            return newSet;
+          });
+          
+          showToast('Report Deleted', 'Report has been successfully deleted', 'success');
+          console.log(`[DailyReports] Successfully deleted report ${reportToDelete.id}`);
+        } else {
+          console.error('[DailyReports] Delete failed:', result.error);
+          throw new Error(result.error || 'Failed to delete report');
+        }
+      }
+      
+      // Close modal
+      setDeleteModal({
+        isOpen: false,
+        reportToDelete: null,
+        isBulkDelete: false,
+        deleteCount: 0
+      });
     } catch (error) {
-      console.error('Error deleting report:', error);
-      alert('Failed to delete report. Please try again.');
+      console.error('[DailyReports] Error deleting report(s):', error);
+      console.error('[DailyReports] Error details:', error.message, error.code);
+      showToast('Delete Failed', error.message || 'An error occurred while deleting', 'error');
     }
-  }, []);
+  }, [deleteModal, selectedReports, organization, showToast]);
   
   const handleQuickExport = useCallback((report, e) => {
     e.stopPropagation();
@@ -725,17 +1105,13 @@ const DailyReports = () => {
       'Photo Count', 'Photoshoot Notes', 'Extra Notes', 'Submitted Date'
     ];
     
-    const formatDate = (dateField) => {
-      if (!dateField) return '';
-      if (typeof dateField.toDate === 'function') {
-        return dateField.toDate().toLocaleDateString();
-      }
-      const parsed = new Date(dateField);
-      return isNaN(parsed.getTime()) ? '' : parsed.toLocaleDateString();
+    const formatDateForCSV = (dateField) => {
+      const date = parseDateField(dateField);
+      return date ? date.toLocaleDateString() : '';
     };
     
     const csvRow = [
-      formatDate(report.date),
+      formatDateForCSV(report.date),
       report.yourName || '',
       report.schoolOrDestination || '',
       Array.isArray(report.jobDescriptions) ? report.jobDescriptions.join('; ') : '',
@@ -746,7 +1122,7 @@ const DailyReports = () => {
       report.photoURLs ? report.photoURLs.length : 0,
       report.photoshootNoteText || '',
       report.jobDescriptionText || '',
-      formatDate(report.timestamp)
+      formatDateForCSV(report.timestamp)
     ].map(field => `"${String(field).replace(/"/g, '""')}"`); // Escape quotes
     
     const csvContent = [
@@ -775,9 +1151,9 @@ const DailyReports = () => {
   
   // Check if all current page reports are selected
   const isAllCurrentPageSelected = useMemo(() => {
-    const currentReports = showPagination ? paginatedReports : filteredAndSortedReports;
+    const currentReports = paginatedReports;
     return currentReports.length > 0 && currentReports.every(report => selectedReports.has(report.id));
-  }, [showPagination, paginatedReports, filteredAndSortedReports, selectedReports]);
+  }, [paginatedReports, selectedReports]);
   
   // Check if some reports are selected
   const isSomeSelected = selectedReports.size > 0;
@@ -792,7 +1168,7 @@ const DailyReports = () => {
   // Export functionality
   const exportToCSV = useCallback(() => {
     if (filteredAndSortedReports.length === 0) {
-      alert('No reports to export');
+      showToast('No Data', 'No reports to export', 'warning');
       return;
     }
     
@@ -824,7 +1200,7 @@ const DailyReports = () => {
       };
       
       return [
-        formatDate(report.date),
+        formatDateForCSV(report.date),
         report.yourName || '',
         report.schoolOrDestination || '',
         Array.isArray(report.jobDescriptions) ? report.jobDescriptions.join('; ') : '',
@@ -835,7 +1211,7 @@ const DailyReports = () => {
         report.photoURLs ? report.photoURLs.length : 0,
         report.photoshootNoteText || '',
         report.jobDescriptionText || '',
-        formatDate(report.timestamp)
+        formatDateForCSV(report.timestamp)
       ].map(field => `"${String(field).replace(/"/g, '""')}"`); // Escape quotes
     });
     
@@ -874,11 +1250,11 @@ const DailyReports = () => {
       link.click();
       document.body.removeChild(link);
     }
-  }, [filteredAndSortedReports, dateFilter, selectedPhotographer, selectedSchool]);
+  }, [reports, dateFilter, selectedPhotographer, selectedSchool]);
   
   const exportToJSON = useCallback(() => {
     if (filteredAndSortedReports.length === 0) {
-      alert('No reports to export');
+      showToast('No Data', 'No reports to export', 'warning');
       return;
     }
     
@@ -925,7 +1301,7 @@ const DailyReports = () => {
       link.click();
       document.body.removeChild(link);
     }
-  }, [filteredAndSortedReports, dateFilter, customDateRange, selectedPhotographer, selectedSchool, selectedJobType, searchTerm]);
+  }, [reports, dateFilter, customDateRange, selectedPhotographer, selectedSchool, selectedJobType, searchTerm]);
   
   // Keyboard shortcuts
   useEffect(() => {
@@ -1058,7 +1434,7 @@ const DailyReports = () => {
   // Export functionality
   // Render card view
   const renderCardView = () => {
-    const reportsToShow = showPagination ? paginatedReports : filteredAndSortedReports;
+    const reportsToShow = paginatedReports;
     return (
       <div className="reports-cards">
         {reportsToShow.map((report) => {
@@ -1175,6 +1551,38 @@ const DailyReports = () => {
       </div>
 
       {error && <div className="reports-error">{error}</div>}
+      
+      {/* Data info banner */}
+      {!isInitialLoad && (
+        <div className="reports-metadata-banner">
+          <div className="reports-metadata-info">
+            <CalendarDays size={16} />
+            <span>
+              📄 {allReports.length} total reports • 
+              {filteredAndSortedReports.length} filtered • 
+              Page {currentPage} of {totalPages} • 
+              Live Updates Enabled
+            </span>
+          </div>
+          <div className="reports-metadata-hint">
+            <span>
+              {searchTerm || dateFilter !== 'all' || selectedPhotographer || selectedSchool || selectedJobType ? (
+                <>
+                  Filters active • 
+                  <button 
+                    onClick={clearAllFilters} 
+                    style={{marginLeft: '8px', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline'}}
+                  >
+                    Clear all filters
+                  </button>
+                </>
+              ) : (
+                'All reports loaded • Real-time updates enabled • Search instantly filters from cache'
+              )}
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="reports-content">
         {/* Enhanced Analytics Dashboard */}
@@ -1184,7 +1592,7 @@ const DailyReports = () => {
               <h3 className="reports-stat__number">{filteredAndSortedReports.length}</h3>
               <p className="reports-stat__label">Filtered Reports</p>
               <span className="reports-stat__trend">
-                {reports.length > 0 && `${Math.round((filteredAndSortedReports.length / reports.length) * 100)}% of total`}
+                {allReports.length > 0 && `${Math.round((filteredAndSortedReports.length / allReports.length) * 100)}% of total`}
               </span>
             </div>
             <div className="reports-stat">
@@ -1243,7 +1651,7 @@ const DailyReports = () => {
                 {
                   (() => {
                     const jobTypeCounts = {};
-                    filteredAndSortedReports.forEach(report => {
+                    reports.forEach(report => {
                       if (Array.isArray(report.jobDescriptions)) {
                         report.jobDescriptions.forEach(job => {
                           jobTypeCounts[job] = (jobTypeCounts[job] || 0) + 1;
@@ -1260,7 +1668,7 @@ const DailyReports = () => {
                 {
                   (() => {
                     const jobTypeCounts = {};
-                    filteredAndSortedReports.forEach(report => {
+                    reports.forEach(report => {
                       if (Array.isArray(report.jobDescriptions)) {
                         report.jobDescriptions.forEach(job => {
                           jobTypeCounts[job] = (jobTypeCounts[job] || 0) + 1;
@@ -1285,7 +1693,7 @@ const DailyReports = () => {
                     const jobTypeCounts = {};
                     let totalJobs = 0;
                     
-                    filteredAndSortedReports.forEach(report => {
+                    reports.forEach(report => {
                       if (Array.isArray(report.jobDescriptions)) {
                         report.jobDescriptions.forEach(job => {
                           jobTypeCounts[job] = (jobTypeCounts[job] || 0) + 1;
@@ -1330,7 +1738,7 @@ const DailyReports = () => {
                   (() => {
                     const photographerStats = {};
                     
-                    filteredAndSortedReports.forEach(report => {
+                    reports.forEach(report => {
                       const name = report.yourName || 'Unknown';
                       if (!photographerStats[name]) {
                         photographerStats[name] = {
@@ -1700,12 +2108,12 @@ const DailyReports = () => {
               )}
               
               {/* Pagination Controls - Top */}
-              {filteredAndSortedReports.length > 10 && (
+              {pagination && pagination.totalReports > 10 && (
                 <div className="pagination-controls pagination-controls--top">
                   <div className="pagination-info">
                     <span className="pagination-summary">
-                      Showing {showPagination ? ((currentPage - 1) * reportsPerPage + 1) : 1}-
-                      {showPagination ? Math.min(currentPage * reportsPerPage, filteredAndSortedReports.length) : filteredAndSortedReports.length} of {filteredAndSortedReports.length} reports
+                      Showing {((currentPage - 1) * reportsPerPage + 1)}-
+                      {Math.min(currentPage * reportsPerPage, pagination.totalReports)} of {pagination.totalReports} reports
                     </span>
                   </div>
                   
@@ -1787,7 +2195,7 @@ const DailyReports = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {(showPagination ? paginatedReports : filteredAndSortedReports).map((report) => (
+                      {paginatedReports.map((report) => (
                         <tr 
                           key={report.id} 
                           className={selectedReports.has(report.id) ? 'row-selected' : ''}
@@ -1977,6 +2385,35 @@ const DailyReports = () => {
           onClick={() => setShowDatePicker(false)}
         />
       )}
+      
+      {/* Create Report Modal */}
+      {showCreateModal && (
+        <CreateReportModal
+          onClose={() => setShowCreateModal(false)}
+          onReportCreated={(newReport) => {
+            setShowCreateModal(false);
+            // The report will be added via real-time listener
+          }}
+        />
+      )}
+      
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, reportToDelete: null, isBulkDelete: false, deleteCount: 0 })}
+        onConfirm={handleConfirmDelete}
+        title={deleteModal.isBulkDelete ? "Delete Multiple Reports" : "Delete Report"}
+        message={
+          deleteModal.isBulkDelete
+            ? `Are you sure you want to delete ${deleteModal.deleteCount} selected reports? This action cannot be undone.`
+            : deleteModal.reportToDelete
+            ? `Are you sure you want to delete the report for ${deleteModal.reportToDelete.yourName || 'Unknown'} at ${deleteModal.reportToDelete.schoolOrDestination || 'Unknown location'}? This action cannot be undone.`
+            : "Are you sure you want to delete this report?"
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+      />
 
       {/* Image Modal */}
       {showImageModal && ReactDOM.createPortal(
@@ -2044,8 +2481,14 @@ const DailyReports = () => {
           onClose={() => setShowCreateModal(false)}
           onReportCreated={(reportData) => {
             console.log("New report created:", reportData);
-            // Refresh reports list
-            // You could call a refresh function here
+            // Refresh current page to show new report
+            if (isSearchMode) {
+              searchReports(currentPage, true);
+            } else {
+              // In browse mode, the real-time listener should automatically show new reports
+              // But we can also trigger a refresh to be sure
+              loadBrowseReports(currentPage);
+            }
           }}
         />
       )}
@@ -2070,12 +2513,8 @@ const ReportDetailModal = ({
   photographers,
 }) => {
   const formatDate = (dateField) => {
-    if (!dateField) return "N/A";
-    if (typeof dateField.toDate === "function") {
-      return dateField.toDate().toLocaleDateString();
-    }
-    const parsed = new Date(dateField);
-    return isNaN(parsed.getTime()) ? "N/A" : parsed.toLocaleDateString();
+    const date = parseDateField(dateField);
+    return date ? date.toLocaleDateString() : "N/A";
   };
 
   const handleEditChange = (field, value) => {
@@ -2419,9 +2858,21 @@ const ReportDetailModal = ({
           )}
         </div>
       </div>
+      
     </div>,
     document.body
   );
+  
+  // Cleanup tracking - ensure listener cleanup on unmount
+  useEffect(() => {
+    return () => {
+      console.log(`[${componentId}] Component unmounting - cleaning up listener`);
+      if (realtimeUnsubscribe) {
+        realtimeUnsubscribe();
+        setRealtimeUnsubscribe(null);
+      }
+    };
+  }, [componentId, realtimeUnsubscribe]);
 };
 
 export default DailyReports;

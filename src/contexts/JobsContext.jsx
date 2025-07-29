@@ -18,10 +18,14 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
-} from "firebase/firestore";
-import { firestore } from "../firebase/config"; // Use existing firebase config
+  firestore,
+  createTrackedOnSnapshot,
+  createTrackedGetDoc
+} from "../services/firestoreWrapper";
 import { useAuth } from "./AuthContext"; // Use existing auth context
 import { useToast } from "./ToastContext";
+import jobsCacheService from "../services/jobsCacheService";
+import { readCounter } from "../services/readCounter";
 
 const JobsContext = createContext();
 
@@ -56,11 +60,23 @@ export const JobsProvider = ({ children }) => {
     year: null,
   });
 
-  // Real-time jobs listener
+  // Real-time jobs listener with cache-first loading
   useEffect(() => {
     if (!organization?.id) return;
 
-    setLoading(true);
+    // Load from cache first for instant display
+    const cachedJobs = jobsCacheService.getCachedJobs(organization.id);
+    if (cachedJobs && cachedJobs.length > 0) {
+      setAllJobs(cachedJobs);
+      setLoading(false);
+      
+      // Track cache hit
+      readCounter.recordCacheHit('sportsJobs', 'JobsContext', cachedJobs.length);
+    } else {
+      setLoading(true);
+      // Track cache miss
+      readCounter.recordCacheMiss('sportsJobs', 'JobsContext');
+    }
 
     const jobsQuery = query(
       collection(firestore, SPORTS_JOBS_COLLECTION),
@@ -68,7 +84,8 @@ export const JobsProvider = ({ children }) => {
       orderBy("shootDate", "desc")
     );
 
-    const unsubscribe = onSnapshot(
+    const trackedOnSnapshot = createTrackedOnSnapshot('JobsContext');
+    const unsubscribe = trackedOnSnapshot(
       jobsQuery,
       (snapshot) => {
         const jobs = [];
@@ -80,6 +97,9 @@ export const JobsProvider = ({ children }) => {
 
         setAllJobs(jobs);
         setLoading(false);
+        
+        // Cache the updated jobs
+        jobsCacheService.setCachedJobs(organization.id, jobs);
       },
       (error) => {
         console.error("Error listening to jobs:", error);
@@ -106,6 +126,12 @@ export const JobsProvider = ({ children }) => {
         collection(firestore, SPORTS_JOBS_COLLECTION),
         job
       );
+      
+      // Update cache with new job
+      const newJob = { ...job, id: docRef.id };
+      const cachedJobs = jobsCacheService.getCachedJobs(organization.id) || [];
+      jobsCacheService.setCachedJobs(organization.id, [newJob, ...cachedJobs]);
+      
       showToast("Success", "Sports job created successfully");
       return docRef.id;
     } catch (error) {
@@ -123,6 +149,14 @@ export const JobsProvider = ({ children }) => {
         ...updates,
         updatedAt: serverTimestamp(),
       });
+      
+      // Update cache
+      const currentJob = allJobs.find(job => job.id === jobId);
+      if (currentJob) {
+        const updatedJob = { ...currentJob, ...updates, updatedAt: new Date() };
+        jobsCacheService.updateCachedJob(organization.id, updatedJob);
+      }
+      
       showToast("Success", "Job updated successfully");
     } catch (error) {
       console.error("Error updating job:", error);
@@ -135,6 +169,10 @@ export const JobsProvider = ({ children }) => {
   const deleteJob = async (jobId) => {
     try {
       await deleteDoc(doc(firestore, SPORTS_JOBS_COLLECTION, jobId));
+      
+      // Remove from cache
+      jobsCacheService.removeCachedJob(organization.id, jobId);
+      
       showToast("Success", "Job deleted successfully");
     } catch (error) {
       console.error("Error deleting job:", error);

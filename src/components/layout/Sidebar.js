@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Scan,
+  MessageCircle,
 } from "lucide-react";
 import "./Sidebar.css";
 
@@ -65,6 +66,13 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       label: "Workflows",
       icon: Workflow,
       path: "/workflows",
+      enabled: true,
+    },
+    {
+      id: "chat",
+      label: "Chat",
+      icon: MessageCircle,
+      path: "/chat",
       enabled: true,
     },
     {

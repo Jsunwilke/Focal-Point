@@ -4,6 +4,8 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { WorkflowProvider } from "./contexts/WorkflowContext";
 import { ToastProvider } from "./contexts/ToastContext";
+import { ChatProvider } from "./contexts/ChatContext";
+import { DataCacheProvider } from "./contexts/DataCacheContext";
 import LoginPage from "./components/auth/LoginPage";
 import StudioSignup from "./components/auth/StudioSignup";
 import InvitationAcceptance from "./components/auth/InvitationAcceptance";
@@ -25,6 +27,7 @@ import TemplateBuilder from "./pages/TemplateBuilder";
 import WorkflowDashboard from "./components/workflow/WorkflowDashboard";
 import WorkflowSettings from "./pages/WorkflowSettings";
 import Tracking from "./pages/Tracking";
+import Chat from "./pages/Chat";
 import "./App.css";
 
 const AppContent = () => {
@@ -110,6 +113,7 @@ const AppContent = () => {
                       <Route path="/schools" element={<SchoolManagement />} />
                       <Route path="/sports" element={<Sports />} />
                       <Route path="/tracking" element={<Tracking />} />
+                      <Route path="/chat" element={<Chat />} />
                       <Route path="/daily-reports" element={<DailyReports />} />
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/settings/templates" element={<TemplatesList />} />
@@ -129,11 +133,15 @@ const App = () => {
   return (
     <AuthProvider>
       <ToastProvider>
-        <WorkflowProvider>
-          <div className="app">
-            <AppContent />
-          </div>
-        </WorkflowProvider>
+        <DataCacheProvider>
+          <ChatProvider>
+            <WorkflowProvider>
+              <div className="app">
+                <AppContent />
+              </div>
+            </WorkflowProvider>
+          </ChatProvider>
+        </DataCacheProvider>
       </ToastProvider>
     </AuthProvider>
   );

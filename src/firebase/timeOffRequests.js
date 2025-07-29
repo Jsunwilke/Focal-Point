@@ -10,9 +10,11 @@ import {
   where,
   orderBy,
   serverTimestamp,
-  Timestamp
-} from 'firebase/firestore';
-import { firestore } from './config';
+  Timestamp,
+  firestore
+} from '../services/firestoreWrapper';
+import timeOffCacheService from '../services/timeOffCacheService';
+import { readCounter } from '../services/readCounter';
 
 // Create a new time off request
 export const createTimeOffRequest = async (requestData) => {
@@ -36,6 +38,16 @@ export const createTimeOffRequest = async (requestData) => {
 // Get all time off requests for an organization
 export const getTimeOffRequests = async (organizationId, filters = {}) => {
   try {
+    // Check cache first if no filters applied
+    if (!filters.status && !filters.photographerId && !filters.startDate && !filters.endDate) {
+      const cachedRequests = timeOffCacheService.getCachedTimeOffRequests(organizationId);
+      if (cachedRequests) {
+        readCounter.recordCacheHit('timeOffRequests', 'getTimeOffRequests', cachedRequests.length);
+        return cachedRequests;
+      }
+      readCounter.recordCacheMiss('timeOffRequests', 'getTimeOffRequests');
+    }
+
     const timeOffRef = collection(firestore, 'timeOffRequests');
     let q = query(
       timeOffRef,
@@ -57,11 +69,18 @@ export const getTimeOffRequests = async (organizationId, filters = {}) => {
       q = query(q, where('endDate', '<=', Timestamp.fromDate(filters.endDate)));
     }
 
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
+    const snapshot = await getDocs(q, 'getTimeOffRequests');
+    const requests = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+    
+    // Cache results if no filters
+    if (!filters.status && !filters.photographerId && !filters.startDate && !filters.endDate) {
+      timeOffCacheService.setCachedTimeOffRequests(organizationId, requests);
+    }
+    
+    return requests;
   } catch (error) {
     console.error('Error getting time off requests:', error);
     throw error;
@@ -71,6 +90,18 @@ export const getTimeOffRequests = async (organizationId, filters = {}) => {
 // Get time off requests for a specific photographer
 export const getPhotographerTimeOffRequests = async (organizationId, photographerId) => {
   try {
+    // Check user-specific cache first
+    const cachedUserRequests = timeOffCacheService.getCachedUserTimeOffRequests(photographerId);
+    if (cachedUserRequests) {
+      // Filter by organization
+      const orgRequests = cachedUserRequests.filter(r => r.organizationID === organizationId);
+      if (orgRequests.length > 0) {
+        readCounter.recordCacheHit('timeOffRequests', 'getPhotographerTimeOffRequests', orgRequests.length);
+        return orgRequests;
+      }
+    }
+    readCounter.recordCacheMiss('timeOffRequests', 'getPhotographerTimeOffRequests');
+
     const timeOffRef = collection(firestore, 'timeOffRequests');
     const q = query(
       timeOffRef,
@@ -79,11 +110,16 @@ export const getPhotographerTimeOffRequests = async (organizationId, photographe
       orderBy('createdAt', 'desc')
     );
 
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
+    const snapshot = await getDocs(q, 'getPhotographerTimeOffRequests');
+    const requests = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+    
+    // Cache user requests
+    timeOffCacheService.setCachedUserTimeOffRequests(photographerId, requests);
+    
+    return requests;
   } catch (error) {
     console.error('Error getting photographer time off requests:', error);
     throw error;
@@ -94,7 +130,7 @@ export const getPhotographerTimeOffRequests = async (organizationId, photographe
 export const getTimeOffRequest = async (requestId) => {
   try {
     const docRef = doc(firestore, 'timeOffRequests', requestId);
-    const docSnap = await getDoc(docRef);
+    const docSnap = await getDoc(docRef, 'getTimeOffRequest');
     
     if (docSnap.exists()) {
       return { id: docSnap.id, ...docSnap.data() };
@@ -114,6 +150,15 @@ export const updateTimeOffRequest = async (requestId, updates) => {
       ...updates,
       updatedAt: serverTimestamp()
     });
+    
+    // Clear relevant caches
+    if (updates.organizationID) {
+      timeOffCacheService.clearTimeOffRequestsCache(updates.organizationID);
+    }
+    if (updates.photographerId || updates.userId) {
+      timeOffCacheService.clearUserTimeOffRequestsCache(updates.photographerId || updates.userId);
+    }
+    
     return { id: requestId, ...updates };
   } catch (error) {
     console.error('Error updating time off request:', error);
@@ -134,6 +179,17 @@ export const approveTimeOffRequest = async (requestId, approverId, approverName)
     };
     
     await updateDoc(docRef, updates);
+    
+    // Get the request to clear relevant caches
+    const requestDoc = await getDoc(docRef);
+    if (requestDoc.exists()) {
+      const requestData = requestDoc.data();
+      timeOffCacheService.clearTimeOffRequestsCache(requestData.organizationID);
+      if (requestData.photographerId) {
+        timeOffCacheService.clearUserTimeOffRequestsCache(requestData.photographerId);
+      }
+    }
+    
     return { id: requestId, ...updates };
   } catch (error) {
     console.error('Error approving time off request:', error);
@@ -155,6 +211,17 @@ export const denyTimeOffRequest = async (requestId, denierId, denierName, denial
     };
     
     await updateDoc(docRef, updates);
+    
+    // Get the request to clear relevant caches
+    const requestDoc = await getDoc(docRef);
+    if (requestDoc.exists()) {
+      const requestData = requestDoc.data();
+      timeOffCacheService.clearTimeOffRequestsCache(requestData.organizationID);
+      if (requestData.photographerId) {
+        timeOffCacheService.clearUserTimeOffRequestsCache(requestData.photographerId);
+      }
+    }
+    
     return { id: requestId, ...updates };
   } catch (error) {
     console.error('Error denying time off request:', error);
@@ -175,6 +242,17 @@ export const markTimeOffRequestUnderReview = async (requestId, reviewerId, revie
     };
     
     await updateDoc(docRef, updates);
+    
+    // Get the request to clear relevant caches
+    const requestDoc = await getDoc(docRef);
+    if (requestDoc.exists()) {
+      const requestData = requestDoc.data();
+      timeOffCacheService.clearTimeOffRequestsCache(requestData.organizationID);
+      if (requestData.photographerId) {
+        timeOffCacheService.clearUserTimeOffRequestsCache(requestData.photographerId);
+      }
+    }
+    
     return { id: requestId, ...updates };
   } catch (error) {
     console.error('Error marking time off request as under review:', error);
@@ -193,6 +271,17 @@ export const cancelTimeOffRequest = async (requestId) => {
     };
     
     await updateDoc(docRef, updates);
+    
+    // Get the request to clear relevant caches
+    const requestDoc = await getDoc(docRef);
+    if (requestDoc.exists()) {
+      const requestData = requestDoc.data();
+      timeOffCacheService.clearTimeOffRequestsCache(requestData.organizationID);
+      if (requestData.photographerId) {
+        timeOffCacheService.clearUserTimeOffRequestsCache(requestData.photographerId);
+      }
+    }
+    
     return { id: requestId, ...updates };
   } catch (error) {
     console.error('Error cancelling time off request:', error);
@@ -212,7 +301,7 @@ export const getApprovedTimeOffForDateRange = async (organizationId, startDate, 
       where('endDate', '>=', Timestamp.fromDate(startDate))
     );
 
-    const snapshot = await getDocs(q);
+    const snapshot = await getDocs(q, 'getApprovedTimeOffForDateRange');
     return snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -234,7 +323,7 @@ export const checkTimeOffConflicts = async (organizationId, photographerId, star
       where('photographers', 'array-contains', { id: photographerId })
     );
 
-    const snapshot = await getDocs(q);
+    const snapshot = await getDocs(q, 'checkTimeOffConflicts');
     const conflicts = [];
 
     snapshot.docs.forEach(doc => {

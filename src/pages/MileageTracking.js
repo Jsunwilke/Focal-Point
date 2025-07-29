@@ -12,7 +12,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserMileageDataForPeriod, getUserMileageDataForCurrentMonth, getUserMileageDataForCurrentYear, exportMileageToCSV } from '../firebase/mileageQueries';
+import { getUserMileageDataForPeriod, getUserMileageDataForCurrentMonth, getUserMileageDataForCurrentYear, exportMileageToCSV, preloadDailyReportsForMileage } from '../firebase/mileageQueries';
 import PayPeriodSelector from '../components/payroll/PayPeriodSelector';
 import MileageTable from '../components/mileage/MileageTable';
 import Button from '../components/shared/Button';
@@ -37,6 +37,8 @@ const MileageTracking = () => {
 
   useEffect(() => {
     if (organization?.id && user?.uid) {
+      // Check if daily reports cache is available for optimized mileage loading
+      preloadDailyReportsForMileage(organization.id);
       loadMonthlyAndYearlyStats();
     }
   }, [organization, user]);
@@ -48,6 +50,15 @@ const MileageTracking = () => {
     setError('');
 
     try {
+      console.log(`[MileageTracking] 📅 Loading mileage data for period: ${selectedPeriod.value}`);
+      console.log(`[MileageTracking] 📅 Selected period object:`, selectedPeriod);
+      
+      // Check cache status before loading
+      const cacheAvailable = await preloadDailyReportsForMileage(organization.id);
+      if (!cacheAvailable) {
+        console.log(`[MileageTracking] ⚠️ Daily reports cache not available - may require Firebase reads`);
+      }
+      
       let data;
       
       if (selectedPeriod.value === 'custom') {
@@ -81,6 +92,7 @@ const MileageTracking = () => {
         );
       }
 
+      console.log(`[MileageTracking] ✅ Successfully loaded mileage data: ${data.userBreakdown?.totalMiles || 0} miles, ${data.userBreakdown?.totalJobs || 0} jobs`);
       setMileageData(data);
     } catch (err) {
       console.error('Error loading mileage data:', err);
@@ -127,11 +139,20 @@ const MileageTracking = () => {
 
     setLoadingStats(true);
     try {
+      console.log(`[MileageTracking] Loading monthly and yearly stats`);
+      
+      // Check cache status for stats
+      const cacheAvailable = await preloadDailyReportsForMileage(organization.id);
+      if (!cacheAvailable) {
+        console.log(`[MileageTracking] ⚠️ Daily reports cache not available for stats - may require Firebase reads`);
+      }
+      
       const [monthlyResult, yearlyResult] = await Promise.all([
         getUserMileageDataForCurrentMonth(organization.id, user.uid),
         getUserMileageDataForCurrentYear(organization.id, user.uid)
       ]);
       
+      console.log(`[MileageTracking] ✅ Stats loaded - Monthly: ${monthlyResult?.userBreakdown?.totalMiles || 0} miles, Yearly: ${yearlyResult?.userBreakdown?.totalMiles || 0} miles`);
       setMonthlyData(monthlyResult);
       setYearlyData(yearlyResult);
     } catch (err) {

@@ -14,11 +14,23 @@ import {
   deleteDoc,
   onSnapshot,
   orderBy,
+  startAfter,
+  limit,
   Timestamp,
   writeBatch,
-} from "firebase/firestore";
-import { firestore } from "./config";
+  documentId,
+  increment,
+  arrayUnion,
+  arrayRemove,
+  firestore
+} from "../services/firestoreWrapper";
 import secureLogger from '../utils/secureLogger';
+import organizationCacheService from '../services/organizationCacheService';
+import { readCounter } from '../services/readCounter';
+import sessionCacheService from '../services/sessionCacheService';
+import timeEntryCacheService from '../services/timeEntryCacheService';
+import sessionsCacheService from '../services/sessionsCacheService';
+import dailyJobReportsCacheService from '../services/dailyJobReportsCacheService';
 
 // Shared function to recalculate session colors for a specific date
 const recalculateSessionColorsForDate = async (organizationID, date, orgData = null) => {
@@ -107,13 +119,34 @@ const recalculateSessionColorsForDate = async (organizationID, date, orgData = n
 // Get user profile
 export const getUserProfile = async (uid) => {
   try {
-    const userDoc = await getDoc(doc(firestore, "users", uid));
+    secureLogger.debug("getUserProfile: Fetching user document", { uid });
+    const userRef = doc(firestore, "users", uid);
+    const userDoc = await getDoc(userRef, 'getUserProfile');
+    
+    secureLogger.debug("getUserProfile: Document fetched", { 
+      exists: userDoc.exists(),
+      uid,
+      docId: userDoc.id
+    });
+    
     if (userDoc.exists()) {
-      return { id: userDoc.id, ...userDoc.data() };
+      const userData = userDoc.data();
+      secureLogger.debug("getUserProfile: User data retrieved", {
+        hasData: !!userData,
+        hasOrganizationID: !!userData?.organizationID,
+        isActive: userData?.isActive
+      });
+      return { id: userDoc.id, ...userData };
     }
+    
+    secureLogger.warn("getUserProfile: User document does not exist", { uid });
     return null;
   } catch (error) {
-    secureLogger.error("Error fetching user profile", error);
+    secureLogger.error("Error fetching user profile", { 
+      error: error.message,
+      code: error.code,
+      uid 
+    });
     throw error;
   }
 };
@@ -122,7 +155,8 @@ export const getUserProfile = async (uid) => {
 export const getOrganization = async (organizationID) => {
   try {
     const orgDoc = await getDoc(
-      doc(firestore, "organizations", organizationID)
+      doc(firestore, "organizations", organizationID),
+      'getOrganization'
     );
     if (orgDoc.exists()) {
       return { id: orgDoc.id, ...orgDoc.data() };
@@ -226,13 +260,24 @@ export const updateOrganization = async (organizationID, data) => {
 // Get team members for an organization (including pending invitations)
 export const getTeamMembers = async (organizationID) => {
   try {
+    // Check cache first
+    const cachedMembers = organizationCacheService.getCachedTeamMembers(organizationID);
+    if (cachedMembers) {
+      // Track cache hit
+      readCounter.recordCacheHit('users', 'getTeamMembers', cachedMembers.length);
+      return cachedMembers;
+    }
+    
+    // Track cache miss
+    readCounter.recordCacheMiss('users', 'getTeamMembers');
+    
     const q = query(
       collection(firestore, "users"),
       where("organizationID", "==", organizationID)
       // Removed isActive filter to show both active and pending users
     );
 
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await getDocs(q, 'getTeamMembers');
     const members = [];
 
     querySnapshot.forEach((doc) => {
@@ -243,7 +288,7 @@ export const getTeamMembers = async (organizationID) => {
     });
 
     // Sort by active status first, then by name
-    return members.sort((a, b) => {
+    const sortedMembers = members.sort((a, b) => {
       if (a.isActive !== b.isActive) {
         return b.isActive ? 1 : -1; // Active users first
       }
@@ -251,6 +296,11 @@ export const getTeamMembers = async (organizationID) => {
       const nameB = b.displayName || `${b.firstName} ${b.lastName}` || b.email;
       return nameA.localeCompare(nameB);
     });
+    
+    // Cache the results
+    organizationCacheService.setCachedTeamMembers(organizationID, sortedMembers);
+    
+    return sortedMembers;
   } catch (error) {
     console.error("Error fetching team members:", error);
     throw error;
@@ -476,75 +526,154 @@ export const createDailyJobReport = async (reportData) => {
 export const getDailyJobReports = async (
   organizationID,
   startDate = null,
-  endDate = null
+  endDate = null,
+  pageSize = 50,
+  lastDocSnapshot = null
 ) => {
   try {
-    // Fetch all reports for the organization (no date filtering at database level)
-    const q = query(
-      collection(firestore, "dailyJobReports"),
+    // Check cache first if this is the first page (no lastDocSnapshot)
+    if (!lastDocSnapshot) {
+      const pageNum = 1;
+      const cachedData = dailyJobReportsCacheService.getCachedReportsPage(organizationID, startDate, endDate, pageNum);
+      if (cachedData) {
+        readCounter.recordCacheHit('dailyJobReports', 'getDailyJobReports', cachedData.reports.length);
+        return cachedData;
+      }
+      readCounter.recordCacheMiss('dailyJobReports', 'getDailyJobReports');
+    }
+    
+    let q;
+    
+    // Build base query with date filtering
+    const queryConstraints = [
       where("organizationID", "==", organizationID)
+    ];
+    
+    // Add date filtering at database level for string dates
+    // This will catch most documents and dramatically reduce reads
+    if (startDate && endDate) {
+      console.log(`🔍 Querying dailyJobReports for organization: ${organizationID} from ${startDate} to ${endDate}`);
+      // For string dates in YYYY-MM-DD format
+      queryConstraints.push(where("date", ">=", startDate));
+      queryConstraints.push(where("date", "<=", endDate));
+    } else {
+      console.log(`🔍 Querying all dailyJobReports for organization: ${organizationID}`);
+    }
+    
+    // Add ordering and pagination
+    queryConstraints.push(orderBy("date", "desc"));
+    queryConstraints.push(orderBy("timestamp", "desc"));
+    queryConstraints.push(limit(pageSize));
+    
+    // Build the query
+    let baseQuery = query(
+      collection(firestore, "dailyJobReports"),
+      ...queryConstraints
     );
+    
+    q = baseQuery;
+    
+    // If we have a last document, start after it
+    if (lastDocSnapshot) {
+      q = query(q, startAfter(lastDocSnapshot));
+    }
 
-    console.log(`🔍 Querying all dailyJobReports for organization: ${organizationID}`);
     const querySnapshot = await getDocs(q);
-    const allReports = [];
+    const reports = [];
+    let lastDoc = null;
 
     querySnapshot.forEach((doc) => {
       const data = doc.data();
-      allReports.push({
+      reports.push({
         id: doc.id,
         ...data,
       });
+      lastDoc = doc;
     });
 
-    console.log(`📊 Total reports found: ${allReports.length}`);
+    console.log(`📊 Total reports found: ${reports.length} (paginated)`);
 
-    // Client-side date filtering to handle both old and new date formats
-    let filteredReports = allReports;
+    // Apply date filtering on client side since dates can be in different formats
+    let filteredReports = reports;
     
     if (startDate || endDate) {
       // Convert filter dates to Date objects for comparison
       const startDateObj = startDate ? new Date(startDate + 'T00:00:00.000Z') : null;
       const endDateObj = endDate ? new Date(endDate + 'T23:59:59.999Z') : null;
       
-      console.log(`🔍 Client-side filtering from ${startDate} to ${endDate}`);
-      
-      filteredReports = allReports.filter(report => {
-        const reportDate = parseReportDate(report.date);
-        
-        if (!reportDate) {
-          console.warn(`⚠️ Could not parse date for report ${report.id}:`, report.date);
-          return false; // Exclude reports with unparseable dates
-        }
-        
-        // Apply date range filters
-        if (startDateObj && reportDate < startDateObj) {
-          return false;
-        }
-        if (endDateObj && reportDate > endDateObj) {
-          return false;
-        }
-        
-        return true;
+      // Only filter client-side for reports that might have been missed by database query
+      // (e.g., those using Timestamp format instead of string)
+      const needsClientFilter = reports.some(report => {
+        return report.date && typeof report.date !== 'string';
       });
       
-      console.log(`📊 Reports after date filtering: ${filteredReports.length}`);
+      if (needsClientFilter) {
+        console.log(`🔍 Additional client-side filtering needed for legacy timestamp formats`);
+        
+        filteredReports = reports.filter(report => {
+          // If date is already a string and was caught by the query, include it
+          if (typeof report.date === 'string') {
+            return true;
+          }
+          
+          // Otherwise, parse and check the date
+          const reportDate = parseReportDate(report.date);
+          
+          if (!reportDate) {
+            console.warn(`⚠️ Could not parse date for report ${report.id}:`, report.date);
+            return false;
+          }
+          
+          // Apply date range filters
+          if (startDateObj && reportDate < startDateObj) {
+            return false;
+          }
+          if (endDateObj && reportDate > endDateObj) {
+            return false;
+          }
+          
+          return true;
+        });
+        
+        console.log(`📊 Reports after additional filtering: ${filteredReports.length}`);
+      }
     }
 
     // Log sample of found reports with their parsed dates
-    filteredReports.slice(0, 5).forEach(report => {
-      const parsedDate = parseReportDate(report.date);
-      console.log(`📄 Report ${report.id}: original date=${report.date}, parsed=${parsedDate}, mileage=${report.totalMileage || 'N/A'}`);
-    });
+    if (filteredReports.length <= 10) {
+      filteredReports.forEach(report => {
+        const parsedDate = parseReportDate(report.date);
+        console.log(`📄 Report ${report.id}: original date=${report.date}, parsed=${parsedDate}, mileage=${report.totalMileage || 'N/A'}`);
+      });
+    }
 
     const reportsWithMileage = filteredReports.filter(r => r.totalMileage && r.totalMileage > 0);
     console.log(`🚗 Reports with mileage: ${reportsWithMileage.length}`);
 
-    return filteredReports;
+    // Return paginated results with metadata
+    const result = {
+      reports: filteredReports,
+      lastDoc: lastDoc,
+      hasMore: reports.length === pageSize
+    };
+    
+    // Cache the results if this is the first page
+    if (!lastDocSnapshot) {
+      const pageNum = 1;
+      dailyJobReportsCacheService.setCachedReportsPage(organizationID, startDate, endDate, pageNum, result);
+    }
+    
+    return result;
   } catch (error) {
     console.error("Error fetching daily job reports:", error);
     throw error;
   }
+};
+
+// Backward compatibility wrapper for getDailyJobReports
+export const getDailyJobReportsSimple = async (organizationID, startDate = null, endDate = null) => {
+  const result = await getDailyJobReports(organizationID, startDate, endDate, 50, null);
+  return result.reports;
 };
 
 /**
@@ -661,7 +790,40 @@ export const updateDailyJobReport = async (reportId, reportData) => {
   }
 };
 
-// Subscribe to real-time daily job reports updates
+// Delete a daily job report
+export const deleteDailyJobReport = async (reportId) => {
+  try {
+    await deleteDoc(doc(firestore, "dailyJobReports", reportId));
+    readCounter.recordRead('deleteDoc', 'dailyJobReports', 'DailyReports', 1);
+    console.log(`[DailyReports] Successfully deleted report ${reportId}`);
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting daily job report:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Delete multiple daily job reports (batch operation)
+export const deleteDailyJobReportsBatch = async (reportIds) => {
+  try {
+    const batch = writeBatch(firestore);
+    
+    reportIds.forEach(reportId => {
+      const reportRef = doc(firestore, "dailyJobReports", reportId);
+      batch.delete(reportRef);
+    });
+    
+    await batch.commit();
+    readCounter.recordRead('writeBatch', 'dailyJobReports', 'DailyReports', reportIds.length);
+    console.log(`[DailyReports] Successfully deleted ${reportIds.length} reports in batch`);
+    return { success: true, deletedCount: reportIds.length };
+  } catch (error) {
+    console.error("Error batch deleting daily job reports:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Subscribe to real-time daily job reports updates (ALL reports)
 export const subscribeToDailyJobReports = (organizationID, callback, errorCallback) => {
   const q = query(
     collection(firestore, "dailyJobReports"),
@@ -669,8 +831,12 @@ export const subscribeToDailyJobReports = (organizationID, callback, errorCallba
     orderBy("timestamp", "desc")
   );
 
+  const listenerTag = `full-${Date.now()}`;
+  console.log(`[DailyReports-${listenerTag}] Subscribing to ALL reports for organization ${organizationID}`);
+
   return onSnapshot(
     q,
+    { component: `DailyReports-${listenerTag}`, includeMetadataChanges: false }, // Only real changes
     (snapshot) => {
       const reports = [];
       snapshot.forEach((doc) => {
@@ -679,7 +845,16 @@ export const subscribeToDailyJobReports = (organizationID, callback, errorCallba
           ...doc.data(),
         });
       });
-      callback(reports);
+      
+      if (!snapshot.metadata.fromCache) {
+        // Note: Read count automatically tracked by firestoreWrapper
+        console.log(`[DailyReports] Loaded ${snapshot.size} reports`);
+      }
+      
+      // Pass both reports and metadata
+      callback(reports, { 
+        totalLoaded: snapshot.size
+      });
     },
     (error) => {
       console.error("Error in daily job reports listener:", error);
@@ -688,15 +863,132 @@ export const subscribeToDailyJobReports = (organizationID, callback, errorCallba
   );
 };
 
+// Subscribe to new daily job reports only (optimized for cache-first approach)
+export const subscribeToNewDailyJobReports = (organizationID, callback, errorCallback, latestCachedTimestamp = null) => {
+  // If no cached timestamp, use a very old timestamp to get minimal results
+  const effectiveTimestamp = latestCachedTimestamp || new Date('2020-01-01');
+  
+  if (!latestCachedTimestamp) {
+    console.log(`[DailyReports] ⚠️ No cached timestamp provided, using fallback timestamp: ${effectiveTimestamp.toISOString()}`);
+  }
+
+  // Listen only for reports newer than the effective timestamp
+  // Convert JavaScript Date to Firebase Timestamp for proper comparison
+  const timestampQuery = Timestamp.fromDate(effectiveTimestamp);
+  
+  const q = query(
+    collection(firestore, "dailyJobReports"),
+    where("organizationID", "==", organizationID),
+    where("timestamp", ">", timestampQuery),
+    orderBy("timestamp", "desc")
+  );
+
+  const listenerTag = `optimized-${Date.now()}`;
+  console.log(`[DailyReports-${listenerTag}] Subscribing to NEW reports after ${effectiveTimestamp.toISOString()} for organization ${organizationID}`);
+  console.log(`[DailyReports-${listenerTag}] Query timestamp value: ${effectiveTimestamp.getTime()}ms`);
+  console.log(`[DailyReports-${listenerTag}] Firebase Timestamp query: ${timestampQuery.toDate().toISOString()}`);
+  console.log(`[DailyReports-${listenerTag}] Query will look for reports where timestamp > ${effectiveTimestamp.toISOString()}`);
+
+  return onSnapshot(
+    q,
+    { component: `DailyReports-${listenerTag}`, includeMetadataChanges: false },
+    (snapshot) => {
+      console.log(`[DailyReports-${listenerTag}] Snapshot received - size: ${snapshot.size}, fromCache: ${snapshot.metadata.fromCache}`);
+      
+      const newReports = [];
+      snapshot.forEach((doc) => {
+        newReports.push({
+          id: doc.id,
+          ...doc.data(),
+        });
+      });
+      
+      console.log(`[DailyReports-${listenerTag}] Processed ${newReports.length} documents from snapshot`);
+      
+      if (!snapshot.metadata.fromCache) {
+        // Note: Read count automatically tracked by firestoreWrapper
+        console.log(`[DailyReports-${listenerTag}] Optimized listener: received ${snapshot.size} new reports (not from cache)`);
+        
+        // Log details about the new reports
+        if (newReports.length > 0) {
+          console.log(`[DailyReports-${listenerTag}] New reports details:`, newReports.map(r => ({
+            id: r.id,
+            date: r.date,
+            timestamp: r.timestamp,
+            timestampType: typeof r.timestamp,
+            timestampValue: r.timestamp?.toDate ? r.timestamp.toDate().toISOString() : 'N/A'
+          })));
+        }
+      }
+      
+      // Only call callback if there are actually new reports
+      if (newReports.length > 0) {
+        console.log(`[DailyReports-${listenerTag}] Calling callback with ${newReports.length} new reports`);
+        callback(newReports, { 
+          totalLoaded: snapshot.size,
+          isIncremental: true
+        });
+      } else {
+        console.log(`[DailyReports-${listenerTag}] No new reports to process (snapshot.size: ${snapshot.size})`);
+      }
+    },
+    (error) => {
+      console.error("Error in optimized daily job reports listener:", error);
+      if (errorCallback) errorCallback(error);
+    }
+  );
+};
+
+// Load older daily job reports (for "Load More" functionality)
+export const getDailyJobReportsOlder = async (organizationID, beforeDate, limit = 50) => {
+  try {
+    const q = query(
+      collection(firestore, "dailyJobReports"),
+      where("organizationID", "==", organizationID),
+      where("timestamp", "<", Timestamp.fromDate(beforeDate)),
+      orderBy("timestamp", "desc"),
+      limit(limit)
+    );
+
+    const querySnapshot = await getDocs(q);
+    readCounter.recordRead('getDocs', 'dailyJobReports', 'DailyReports', querySnapshot.size);
+    
+    const reports = [];
+    querySnapshot.forEach((doc) => {
+      reports.push({
+        id: doc.id,
+        ...doc.data(),
+      });
+    });
+
+    console.log(`[DailyReports] Loaded ${reports.length} older reports before ${beforeDate.toLocaleDateString()}`);
+    return reports;
+  } catch (error) {
+    console.error("Error loading older daily job reports:", error);
+    throw error;
+  }
+};
+
 // Get schools from schools collection
 export const getSchools = async (organizationID) => {
   try {
+    // Check cache first
+    const cachedSchools = organizationCacheService.getCachedSchools(organizationID);
+    if (cachedSchools) {
+      // Track cache hit
+      readCounter.recordCacheHit('schools', 'getSchools', cachedSchools.length);
+      return cachedSchools;
+    }
+    
+    // Track cache miss
+    readCounter.recordCacheMiss('schools', 'getSchools');
+    
     const q = query(
       collection(firestore, "schools"),
       where("organizationID", "==", organizationID)
     );
 
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await getDocs(q, 'getSchools');
     const schools = [];
 
     querySnapshot.forEach((doc) => {
@@ -705,6 +997,9 @@ export const getSchools = async (organizationID) => {
         ...doc.data(),
       });
     });
+
+    // Cache the results
+    organizationCacheService.setCachedSchools(organizationID, schools);
 
     return schools;
   } catch (error) {
@@ -741,12 +1036,43 @@ export const updateSchool = async (schoolId, schoolData) => {
 };
 
 // Sessions Functions - NEW COLLECTION
-export const getSessions = async (organizationID) => {
+export const getSessions = async (organizationID, startDate = null, endDate = null) => {
   try {
-    const q = query(
+    // Check cache first
+    const cachedSessions = sessionsCacheService.getCachedSessions(organizationID, startDate, endDate);
+    if (cachedSessions) {
+      readCounter.recordCacheHit('sessions', 'getSessions', cachedSessions.length);
+      return cachedSessions;
+    }
+    readCounter.recordCacheMiss('sessions', 'getSessions');
+    
+    // If no date range specified, default to -30 to +30 days
+    if (!startDate && !endDate) {
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+      const thirtyDaysAhead = new Date(today);
+      thirtyDaysAhead.setDate(today.getDate() + 30);
+      
+      startDate = thirtyDaysAgo.toISOString().split('T')[0];
+      endDate = thirtyDaysAhead.toISOString().split('T')[0];
+      
+      console.log(`[Sessions] Using default date range: ${startDate} to ${endDate}`);
+    }
+    
+    // Build query with date filtering
+    let q = query(
       collection(firestore, "sessions"),
       where("organizationID", "==", organizationID)
     );
+    
+    if (startDate && endDate) {
+      q = query(
+        q,
+        where("date", ">=", startDate),
+        where("date", "<=", endDate)
+      );
+    }
 
     const querySnapshot = await getDocs(q);
     const sessions = [];
@@ -757,12 +1083,23 @@ export const getSessions = async (organizationID) => {
         ...doc.data(),
       });
     });
+    
+    console.log(`[Sessions] Fetched ${sessions.length} sessions for organization ${organizationID}`);
+    
+    // Cache the results
+    sessionsCacheService.setCachedSessions(organizationID, sessions, startDate, endDate);
 
     return sessions;
   } catch (error) {
     console.error("Error fetching sessions:", error);
     throw error;
   }
+};
+
+// Backward compatibility wrapper for getSessions without date filtering
+export const getSessionsAll = async (organizationID) => {
+  // This will use the default -30 to +30 days range
+  return getSessions(organizationID);
 };
 
 // Get today's sessions only - optimized query
@@ -1204,9 +1541,20 @@ export const deleteSession = async (sessionId, organizationID = null) => {
 
 export const getSession = async (sessionId) => {
   try {
+    // Check cache first
+    const cached = sessionCacheService.getCachedSession(sessionId);
+    if (cached) {
+      readCounter.recordCacheHit('sessions', 'getSession', 1);
+      return cached;
+    }
+    
+    readCounter.recordCacheMiss('sessions', 'getSession');
     const sessionDoc = await getDoc(doc(firestore, "sessions", sessionId));
     if (sessionDoc.exists()) {
-      return { id: sessionDoc.id, ...sessionDoc.data() };
+      const session = { id: sessionDoc.id, ...sessionDoc.data() };
+      // Cache the session
+      sessionCacheService.setCachedSession(sessionId, session);
+      return session;
     }
     return null;
   } catch (error) {
@@ -1214,6 +1562,63 @@ export const getSession = async (sessionId) => {
     if (error.code !== 'permission-denied') {
       console.error("Error fetching session:", error);
     }
+    throw error;
+  }
+};
+
+// Batch get multiple sessions efficiently
+export const getSessionsBatch = async (sessionIds) => {
+  try {
+    if (!sessionIds || sessionIds.length === 0) {
+      return {};
+    }
+
+    // Check cache first
+    const { cachedSessions, missingIds } = sessionCacheService.getCachedSessions(sessionIds);
+    
+    if (cachedSessions && Object.keys(cachedSessions).length > 0) {
+      readCounter.recordCacheHit('sessions', 'getSessionsBatch', Object.keys(cachedSessions).length);
+    }
+    
+    if (missingIds.length === 0) {
+      return cachedSessions;
+    }
+    
+    readCounter.recordCacheMiss('sessions', 'getSessionsBatch-partial');
+    
+    // Batch fetch missing sessions (Firestore 'in' query limit is 10)
+    const sessions = { ...cachedSessions };
+    const chunks = [];
+    
+    for (let i = 0; i < missingIds.length; i += 10) {
+      chunks.push(missingIds.slice(i, i + 10));
+    }
+    
+    await Promise.all(chunks.map(async (chunk) => {
+      const q = query(
+        collection(firestore, "sessions"),
+        where(documentId(), "in", chunk)
+      );
+      
+      const snapshot = await getDocs(q, 'getSessionsBatch');
+      snapshot.forEach(doc => {
+        const session = { id: doc.id, ...doc.data() };
+        sessions[doc.id] = session;
+        // Cache each session
+        sessionCacheService.setCachedSession(doc.id, session);
+      });
+    }));
+    
+    // Handle sessions that don't exist or we don't have permission for
+    missingIds.forEach(id => {
+      if (!sessions[id]) {
+        sessions[id] = null;
+      }
+    });
+    
+    return sessions;
+  } catch (error) {
+    console.error("Error fetching sessions batch:", error);
     throw error;
   }
 };
@@ -2398,7 +2803,7 @@ export const getWorkflowsForOrganization = async (organizationID, status = null)
       where("organizationID", "==", organizationID)
     );
 
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await getDocs(q, 'getWorkflowsForOrganization');
     const workflows = [];
 
     querySnapshot.forEach((doc) => {

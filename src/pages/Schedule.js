@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
+import { useDataCache } from "../contexts/DataCacheContext";
 import secureLogger from "../utils/secureLogger";
 import {
   getTeamMembers,
@@ -10,8 +11,7 @@ import {
   getSchools,
   publishMultipleSessions,
 } from "../firebase/firestore";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
-import { firestore } from "../firebase/config";
+// Removed direct Firestore imports - now using cached data
 import CalendarView from "../components/calendar/CalendarView";
 import CreateSessionModal from "../components/sessions/CreateSessionModal";
 import EditSessionModal from "../components/sessions/EditSessionModal";
@@ -202,6 +202,13 @@ const loadEmployeeOrder = (organizationId) => {
 const Schedule = () => {
   const { userProfile, organization } = useAuth();
   const { showToast } = useToast();
+  const { 
+    sessions, 
+    teamMembers, 
+    timeOffRequests, 
+    loading: cacheLoading, 
+    pendingTimeOffCount 
+  } = useDataCache();
   const [currentDate, setCurrentDate] = useState(new Date());
   const dateRangeRef = React.useRef(null);
   const [viewMode, setViewMode] = useState("week");
@@ -217,8 +224,6 @@ const Schedule = () => {
   const [datePickerPosition, setDatePickerPosition] = useState({ top: 0, left: 0 });
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
-  const [teamMembers, setTeamMembers] = useState([]);
-  const [sessions, setSessions] = useState([]);
   const [schools, setSchools] = useState([]);
   const [visiblePhotographers, setVisiblePhotographers] = useState(new Set());
   const [visibleSchools, setVisibleSchools] = useState(new Set());
@@ -229,254 +234,48 @@ const Schedule = () => {
   const [showTimeOffApprovalModal, setShowTimeOffApprovalModal] = useState(false);
   const [showTimeOffDetailsModal, setShowTimeOffDetailsModal] = useState(false);
   const [selectedTimeOffEntry, setSelectedTimeOffEntry] = useState(null);
-  const [pendingTimeOffCount, setPendingTimeOffCount] = useState(0);
   const [showBlockedDatesModal, setShowBlockedDatesModal] = useState(false);
   const [blockedDates, setBlockedDates] = useState([]);
   const [showQuickBlockModal, setShowQuickBlockModal] = useState(false);
   const [selectedDateForBlock, setSelectedDateForBlock] = useState(null);
   const [createSessionInitialData, setCreateSessionInitialData] = useState(null);
 
-  // Real-time listener for sessions
+  // Use cached sessions data and update loading state
   useEffect(() => {
-    if (!organization?.id) return;
+    setLoading(cacheLoading.any);
+  }, [cacheLoading.any]);
 
-
-    const sessionsQuery = query(
-      collection(firestore, "sessions"),
-      where("organizationID", "==", organization.id)
-    );
-
-    const unsubscribe = onSnapshot(
-      sessionsQuery,
-      (snapshot) => {
-
-        const sessionsData = [];
-        snapshot.forEach((doc) => {
-          const sessionData = {
-            id: doc.id,
-            ...doc.data(),
-          };
-          
-          // Check if user can see unpublished sessions
-          const isAdminOrManager = userProfile?.role === 'admin' || userProfile?.role === 'manager';
-          
-          // Include session if:
-          // 1. It's published (or isPublished is not set for backward compatibility)
-          // 2. User is admin/manager (can see all sessions)
-          if (sessionData.isPublished !== false || isAdminOrManager) {
-            sessionsData.push(sessionData);
-          }
-        });
-
-        // Convert sessions to calendar format
-        console.log('Raw sessions data from Firestore:', sessionsData);
-        const unassignedSessions = sessionsData.filter(s => !s.photographers || s.photographers.length === 0);
-        console.log('Sessions without photographers:', unassignedSessions);
-        const sessionData = sessionsData
-          .map((session) => {
-            // Handle date properly to avoid timezone issues
-            let sessionDate = session.date;
-            if (typeof session.date === "string") {
-              sessionDate = session.date;
-            } else if (session.date && session.date.toDate) {
-              const date = session.date.toDate();
-              const year = date.getFullYear();
-              const month = String(date.getMonth() + 1).padStart(2, "0");
-              const day = String(date.getDate()).padStart(2, "0");
-              sessionDate = `${year}-${month}-${day}`;
-            } else if (session.date instanceof Date) {
-              const year = session.date.getFullYear();
-              const month = String(session.date.getMonth() + 1).padStart(
-                2,
-                "0"
-              );
-              const day = String(session.date.getDate()).padStart(2, "0");
-              sessionDate = `${year}-${month}-${day}`;
-            }
-
-            // For sessions with multiple photographers, create separate entries for each
-            if (session.photographers && Array.isArray(session.photographers) && session.photographers.length > 0) {
-              return session.photographers.map((photographer) => ({
-                id: `${session.id}-${photographer.id}`,
-                sessionId: session.id,
-                title:
-                  session.title || `${session.sessionType || 'Session'} at ${session.schoolName || 'School'}`,
-                date: sessionDate,
-                startTime: session.startTime,
-                endTime: session.endTime,
-                photographerId: photographer.id,
-                photographerName: photographer.name,
-                sessionType: session.sessionType || "session",
-                sessionTypes: session.sessionTypes || [session.sessionType || "session"],
-                customSessionType: session.customSessionType, // Include custom session type
-                status: session.status || "scheduled",
-                isPublished: session.isPublished !== false, // Default to true for backward compatibility
-                schoolId: session.schoolId,
-                schoolName: session.schoolName || session.location || "",
-                location: session.location || session.schoolName || "",
-                notes: session.notes,
-              }));
-            } else {
-              // Fallback for sessions with single photographer (legacy format)
-              return [
-                {
-                  id: session.id,
-                  sessionId: session.id,
-                  title:
-                    session.title || `${session.sessionType || 'Session'} at ${session.schoolName || 'School'}`,
-                  date: sessionDate,
-                  startTime: session.startTime,
-                  endTime: session.endTime,
-                  photographerId: session.photographer?.id || null,
-                  photographerName: session.photographer?.name || null,
-                  sessionType: session.sessionType || "session",
-                  sessionTypes: session.sessionTypes || [session.sessionType || "session"],
-                  customSessionType: session.customSessionType, // Include custom session type
-                  status: session.status || "scheduled",
-                  isPublished: session.isPublished !== false, // Default to true for backward compatibility
-                  schoolId: session.schoolId,
-                  schoolName: session.schoolName || session.location || "",
-                  location: session.location || session.schoolName || "",
-                  notes: session.notes,
-                },
-              ];
-            }
-          })
-          .flat();
-
-        console.log('Converted session data:', sessionData);
-        console.log('Sessions without photographers:', sessionData.filter(s => !s.photographerId));
-        setSessions(sessionData);
-        setLoading(false);
-      },
-      (error) => {
-        secureLogger.error("Error in sessions listener:", error);
-        setLoading(false);
-      }
-    );
-
-    // Cleanup listener on unmount
-    return () => {
-      unsubscribe();
-    };
-  }, [organization?.id]);
-
-  // Real-time listener for team members
+  // Initialize photographer preferences when team members cache updates
   useEffect(() => {
-    if (!organization?.id) return;
+    if (!organization?.id || !teamMembers.length) return;
 
+    // Load saved employee order
+    const savedOrder = loadEmployeeOrder(organization.id);
+    setEmployeeOrder(savedOrder);
 
-    const teamQuery = query(
-      collection(firestore, "users"),
-      where("organizationID", "==", organization.id)
-    );
+    // Load saved photographer preferences or initialize with all active members
+    const activeMembers = teamMembers.filter((member) => member.isActive);
+    const savedPreferences = loadPhotographerPreferences(organization.id);
 
-    const unsubscribe = onSnapshot(
-      teamQuery,
-      (snapshot) => {
+    if (savedPreferences && Array.isArray(savedPreferences) && savedPreferences.length > 0) {
+      // Use saved preferences, but only include photographers that still exist and are active
+      const validSavedIds = savedPreferences.filter((id) =>
+        activeMembers.some((member) => member.id === id)
+      );
+      setVisiblePhotographers(new Set(validSavedIds));
+    } else {
+      // No saved preferences, show all active members by default
+      setVisiblePhotographers(
+        new Set(activeMembers.map((member) => member.id))
+      );
+    }
+  }, [organization?.id, teamMembers]);
 
-        const members = [];
-        snapshot.forEach((doc) => {
-          members.push({
-            id: doc.id,
-            ...doc.data(),
-          });
-        });
-
-        // Sort by active status first, then by name
-        const sortedMembers = members.sort((a, b) => {
-          if (a.isActive !== b.isActive) {
-            return b.isActive ? 1 : -1; // Active users first
-          }
-          const nameA =
-            a.displayName || `${a.firstName} ${a.lastName}` || a.email;
-          const nameB =
-            b.displayName || `${b.firstName} ${b.lastName}` || b.email;
-          return nameA.localeCompare(nameB);
-        });
-
-        setTeamMembers(sortedMembers);
-
-        // Load saved employee order
-        const savedOrder = loadEmployeeOrder(organization.id);
-        setEmployeeOrder(savedOrder);
-
-        // Load saved photographer preferences or initialize with all active members
-        const activeMembers = sortedMembers.filter((member) => member.isActive);
-        const savedPreferences = loadPhotographerPreferences(organization.id);
-
-        if (savedPreferences && Array.isArray(savedPreferences) && savedPreferences.length > 0) {
-          // Use saved preferences, but only include photographers that still exist and are active
-          const validSavedIds = savedPreferences.filter((id) =>
-            activeMembers.some((member) => member.id === id)
-          );
-          setVisiblePhotographers(new Set(validSavedIds));
-        } else {
-          // No saved preferences, show all active members by default
-          setVisiblePhotographers(
-            new Set(activeMembers.map((member) => member.id))
-          );
-        }
-      },
-      (error) => {
-        secureLogger.error("Error in team members listener:", error);
-      }
-    );
-
-    // Cleanup listener on unmount
-    return () => {
-      unsubscribe();
-    };
-  }, [organization?.id]);
-
-  // Real-time listener for time off requests
-  const [allTimeOffRequests, setAllTimeOffRequests] = useState([]);
-  
-  useEffect(() => {
-    if (!organization?.id) return;
-
-    const timeOffQuery = query(
-      collection(firestore, "timeOffRequests"),
-      where("organizationID", "==", organization.id)
-    );
-
-    const unsubscribe = onSnapshot(
-      timeOffQuery,
-      (querySnapshot) => {
-        try {
-          const requests = [];
-          querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            requests.push({
-              id: doc.id,
-              ...data,
-            });
-          });
-
-          setAllTimeOffRequests(requests);
-          
-          // Update pending count for badge (includes both pending and under_review)
-          const pendingCount = requests.filter(r => r.status === 'pending' || r.status === 'under_review').length;
-          setPendingTimeOffCount(pendingCount);
-          
-          secureLogger.debug("Time off requests updated:", requests.length);
-        } catch (error) {
-          secureLogger.error("Error processing time off snapshot:", error);
-        }
-      },
-      (error) => {
-        secureLogger.error("Time off requests listener error:", error);
-      }
-    );
-
-    return () => {
-      unsubscribe();
-    };
-  }, [organization?.id]);
+  // Use cached time-off requests (no additional listener needed)
 
   // Filter time off requests for current date range and include both pending and approved
   const visibleTimeOffRequests = React.useMemo(() => {
-    if (!allTimeOffRequests.length) return [];
+    if (!timeOffRequests.length) return [];
 
     // Calculate date range inline
     let start, end;
@@ -496,7 +295,7 @@ const Schedule = () => {
       );
     }
 
-    return allTimeOffRequests.filter(request => {
+    return timeOffRequests.filter(request => {
       // Include pending, under_review, and approved requests (but not denied or cancelled)
       if (!['pending', 'under_review', 'approved'].includes(request.status)) return false;
 
@@ -506,7 +305,7 @@ const Schedule = () => {
       // Check if request overlaps with current date range
       return startDate <= end && endDate >= start;
     });
-  }, [allTimeOffRequests, currentDate, viewMode]);
+  }, [timeOffRequests, currentDate, viewMode]);
 
   const handleTimeOffStatusChange = () => {
     // Real-time listener will automatically update the data
