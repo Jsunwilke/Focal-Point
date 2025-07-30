@@ -25,7 +25,6 @@ import {
   getTodayTimeEntries,
   calculateTotalHours,
   formatDuration,
-  updateTimeEntry,
   deleteTimeEntry
 } from '../firebase/firestore';
 import { getSessions, getTeamMembers } from '../firebase/firestore';
@@ -33,6 +32,7 @@ import SessionStatistics from '../components/stats/SessionStatistics';
 import SchoolStatistics from '../components/stats/SchoolStatistics';
 import ManualTimeEntryModal from '../components/shared/ManualTimeEntryModal';
 import EditTimeEntryModal from '../components/shared/EditTimeEntryModal';
+import PayPeriodSelector from '../components/payroll/PayPeriodSelector';
 import './TimeTracking.css';
 
 const TimeTracking = () => {
@@ -54,7 +54,8 @@ const TimeTracking = () => {
   const [showManualEntryModal, setShowManualEntryModal] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [deletingEntry, setDeletingEntry] = useState(null);
+  const [selectedPayPeriod, setSelectedPayPeriod] = useState(null);
+  const [customDates, setCustomDates] = useState(null);
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager';
 
@@ -67,7 +68,7 @@ const TimeTracking = () => {
         loadTeamMembers();
       }
     }
-  }, [user, organization, dateRange, selectedUser, view]);
+  }, [user, organization, dateRange, selectedUser, view, selectedPayPeriod, customDates]);
 
   // Update elapsed time every second when clocked in
   useEffect(() => {
@@ -101,11 +102,33 @@ const TimeTracking = () => {
 
       // Get time entries based on view and filters
       let entries = [];
-      const startDate = getDateRangeStart();
-      const endDate = getDateRangeEnd();
+      let startDate, endDate;
+
+      // Handle special case for "today" selection
+      if (dateRange === 'today' && !selectedPayPeriod) {
+        const today = new Date();
+        startDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        endDate = startDate;
+      } else if (selectedPayPeriod) {
+        // Use pay period dates
+        if (selectedPayPeriod.value === 'custom') {
+          if (!customDates || !customDates.startDate || !customDates.endDate) {
+            return; // Don't load if custom dates are incomplete
+          }
+          startDate = customDates.startDate;
+          endDate = customDates.endDate;
+        } else {
+          startDate = selectedPayPeriod.startDate;
+          endDate = selectedPayPeriod.endDate;
+        }
+      } else {
+        // Fallback to old date range logic
+        startDate = getDateRangeStart();
+        endDate = getDateRangeEnd();
+      }
 
       if (view === 'personal') {
-        if (dateRange === 'today') {
+        if (dateRange === 'today' && !selectedPayPeriod) {
           entries = await getTodayTimeEntries(user.uid, organization.id);
         } else {
           entries = await getTimeEntries(user.uid, organization.id, startDate, endDate);
@@ -129,24 +152,8 @@ const TimeTracking = () => {
   const loadSessions = async () => {
     try {
       const sessionsData = await getSessions(organization.id);
-      // Filter sessions for today and where current user is assigned as photographer
-      const today = new Date().toISOString().split('T')[0];
-      const todaySessions = sessionsData.filter(session => {
-        // Must be today's session
-        if (session.date !== today) return false;
-        
-        // Check if user is assigned to this session
-        if (session.photographers && Array.isArray(session.photographers)) {
-          // Multiple photographers format
-          return session.photographers.some(photographer => photographer.id === user.uid);
-        } else if (session.photographer) {
-          // Legacy single photographer format
-          return session.photographer.id === user.uid;
-        }
-        
-        return false;
-      });
-      setSessions(todaySessions);
+      // Load all sessions to ensure we can display session info for any date
+      setSessions(sessionsData);
     } catch (error) {
       console.error('Error loading sessions:', error);
     }
@@ -278,7 +285,7 @@ const TimeTracking = () => {
       return;
     }
 
-    if (!confirm('Are you sure you want to delete this time entry?')) {
+    if (!window.confirm('Are you sure you want to delete this time entry?')) {
       return;
     }
 
@@ -316,8 +323,32 @@ const TimeTracking = () => {
   };
 
   const getSessionName = (sessionId) => {
+    if (!sessionId) return 'No session';
+    
     const session = sessions.find(s => s.id === sessionId);
-    return session ? `${session.schoolName} - ${session.sessionType}` : 'Unknown Session';
+    if (!session) {
+      return 'Session not found';
+    }
+    
+    // Include date if it's not today
+    const sessionDate = new Date(session.date);
+    const today = new Date();
+    const isToday = sessionDate.toDateString() === today.toDateString();
+    
+    // Build session display string
+    let sessionDisplay = session.schoolName || 'Unknown School';
+    
+    // Add session type if it exists
+    if (session.sessionType) {
+      sessionDisplay += ` - ${session.sessionType}`;
+    }
+    
+    // Add date if not today
+    if (!isToday) {
+      sessionDisplay += ` (${sessionDate.toLocaleDateString()})`;
+    }
+    
+    return sessionDisplay;
   };
 
   const getUserName = (userId) => {
@@ -362,6 +393,23 @@ const TimeTracking = () => {
     };
   };
 
+  const handlePayPeriodChange = (period) => {
+    setSelectedPayPeriod(period);
+    if (period && period.value !== 'today') {
+      setDateRange(''); // Clear simple date range when using pay periods
+    }
+  };
+
+  const handleCustomDateChange = (dates) => {
+    setCustomDates(dates);
+  };
+
+  const handleTodayClick = () => {
+    setDateRange('today');
+    setSelectedPayPeriod(null);
+    setCustomDates(null);
+  };
+
   const isOnBreak = currentEntry && currentEntry.status === 'clocked-in';
   const stats = getStatistics();
 
@@ -403,7 +451,7 @@ const TimeTracking = () => {
             </div>
             <div className="stat-content">
               <div className="stat-value">{formatDuration(getTotalHours())}</div>
-              <div className="stat-label">Total Hours ({dateRange})</div>
+              <div className="stat-label">Total Hours ({selectedPayPeriod ? selectedPayPeriod.label : dateRange === 'today' ? 'Today' : 'Period'})</div>
             </div>
           </div>
           
@@ -515,18 +563,32 @@ const TimeTracking = () => {
               Filters
             </h3>
             
-            <div className="filters-grid">
-              <div className="filter-group">
-                <label>Date Range</label>
-                <select value={dateRange} onChange={(e) => setDateRange(e.target.value)}>
-                  <option value="today">Today</option>
-                  <option value="week">This Week</option>
-                  <option value="month">This Month</option>
-                </select>
+            <div className="filters-content">
+              {/* Today Quick Filter */}
+              <div className="quick-filters">
+                <button 
+                  className={`quick-filter-btn ${dateRange === 'today' && !selectedPayPeriod ? 'active' : ''}`}
+                  onClick={handleTodayClick}
+                >
+                  <Calendar size={16} />
+                  Today
+                </button>
               </div>
               
+              {/* Pay Period Selector */}
+              <div className="pay-period-wrapper">
+                <PayPeriodSelector
+                  payPeriodSettings={organization?.payPeriodSettings}
+                  selectedPeriod={selectedPayPeriod}
+                  onPeriodChange={handlePayPeriodChange}
+                  onCustomDateChange={handleCustomDateChange}
+                  disabled={loading}
+                />
+              </div>
+              
+              {/* Team Member Filter for Team View */}
               {view === 'team' && isAdmin && (
-                <div className="filter-group">
+                <div className="filter-group team-member-filter">
                   <label>Team Member</label>
                   <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
                     <option value="">All Members</option>
@@ -592,7 +654,7 @@ const TimeTracking = () => {
                         <div className="time-range">
                           <span>{formatTime(entry.clockInTime)}</span>
                           {entry.clockOutTime && (
-                            <span>- {formatTime(entry.clockOutTime)}</span>
+                            <span> - {formatTime(entry.clockOutTime)}</span>
                           )}
                         </div>
                       </div>
@@ -604,7 +666,7 @@ const TimeTracking = () => {
                         )}
                       </div>
                       <div className="col-session">
-                        {entry.sessionId ? getSessionName(entry.sessionId) : '-'}
+                        {getSessionName(entry.sessionId)}
                       </div>
                       <div className="col-status">
                         <span className={`status-badge ${entry.status}`}>

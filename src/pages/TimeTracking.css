@@ -310,6 +310,326 @@
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+/* Updated Filters with Pay Period Selector */
+.filters-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.quick-filters {
+  display: flex;
+  gap: 12px;
+}
+
+.quick-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid var(--border-light, #e2e8f0);
+  background: white;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary, #718096);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.quick-filter-btn:hover {
+  border-color: var(--primary-color, #3b82f6);
+  color: var(--primary-color, #3b82f6);
+  background: var(--primary-light, #eff6ff);
+}
+
+.quick-filter-btn.active {
+  background: var(--primary-color, #3b82f6);
+  color: white;
+  border-color: var(--primary-color, #3b82f6);
+}
+
+.pay-period-wrapper {
+  flex: 1;
+}
+
+.team-member-filter {
+  max-width: 300px;
+}
+
+/* Pay Period Selector Styles (from PayrollTimesheets.css) */
+.pay-period-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.period-selector-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.period-selector-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary, #2d3748);
+}
+
+.period-selector-dropdown {
+  position: relative;
+}
+
+.period-selector-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: white;
+  border: 1px solid var(--border-light, #e2e8f0);
+  border-radius: 8px;
+  color: var(--text-primary, #2d3748);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.period-selector-button:hover {
+  border-color: var(--primary-color, #3b82f6);
+}
+
+.period-selector-button--open {
+  border-color: var(--primary-color, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.period-selector-text {
+  flex: 1;
+  text-align: left;
+}
+
+.period-selector-chevron {
+  transition: transform 0.2s ease;
+}
+
+.period-selector-chevron--open {
+  transform: rotate(180deg);
+}
+
+.period-selector-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+}
+
+.period-selector-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid var(--border-light, #e2e8f0);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 20;
+}
+
+.period-selector-option {
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-bottom: 1px solid var(--border-light, #e2e8f0);
+}
+
+.period-selector-option:hover {
+  background-color: var(--bg-secondary, #f7fafc);
+}
+
+.period-selector-option--selected {
+  background-color: var(--primary-light, #eff6ff);
+  color: var(--primary-color, #3b82f6);
+}
+
+.period-selector-option:last-child {
+  border-bottom: none;
+}
+
+.period-option-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.period-option-text {
+  flex: 1;
+}
+
+.period-option-label {
+  font-weight: 500;
+  color: var(--text-primary, #2d3748);
+  margin-bottom: 2px;
+}
+
+.period-option-dates {
+  font-size: 12px;
+  color: var(--text-secondary, #718096);
+  font-family: monospace;
+}
+
+.period-icon {
+  color: var(--text-secondary, #718096);
+}
+
+.period-icon--current {
+  color: var(--success-color, #10b981);
+}
+
+.period-icon--previous {
+  color: var(--warning-color, #f59e0b);
+}
+
+.period-selector-divider {
+  height: 1px;
+  background: var(--border-light, #e2e8f0);
+  margin: 4px 0;
+}
+
+.period-selector-no-config {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  color: var(--text-secondary, #718096);
+  font-size: 14px;
+}
+
+.no-config-title {
+  font-weight: 500;
+  color: var(--text-primary, #2d3748);
+}
+
+.no-config-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary, #718096);
+}
+
+/* Custom Date Inputs */
+.custom-date-inputs {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-secondary, #f7fafc);
+  border-radius: 8px;
+  border: 1px solid var(--border-light, #e2e8f0);
+}
+
+.custom-date-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.custom-date-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary, #2d3748);
+}
+
+.custom-date-input {
+  padding: 8px 10px;
+  border: 1px solid var(--border-light, #e2e8f0);
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.custom-date-input:focus {
+  outline: none;
+  border-color: var(--primary-color, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.custom-date-separator {
+  font-size: 14px;
+  color: var(--text-secondary, #718096);
+  padding-bottom: 8px;
+}
+
+/* Period Info */
+.period-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--bg-secondary, #f7fafc);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.period-info-dates {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary, #718096);
+}
+
+.period-info-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.period-info-badge--current {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success-color, #10b981);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.period-info-badge--previous {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--warning-color, #f59e0b);
+}
+
+/* Custom Date Validation */
+.custom-date-validation {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.validation-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--error-color, #ef4444);
+}
+
+.validation-success {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--success-color, #10b981);
+}
+
 /* Entries Section */
 .entries-section {
   margin-bottom: 8px;
@@ -403,7 +723,7 @@
 
 .table-header {
   display: grid;
-  grid-template-columns: 100px 1fr 120px 100px 1fr 80px 100px;
+  grid-template-columns: 100px 200px 120px 1fr 100px 100px;
   gap: 16px;
   padding: 16px 24px;
   background: var(--bg-secondary, #f7fafc);
@@ -416,7 +736,7 @@
 }
 
 .table-header.team-view {
-  grid-template-columns: 100px 120px 1fr 120px 100px 1fr 80px;
+  grid-template-columns: 100px 150px 200px 120px 1fr 100px;
 }
 
 .table-body {
@@ -426,7 +746,7 @@
 
 .table-row {
   display: grid;
-  grid-template-columns: 100px 1fr 120px 100px 1fr 80px 100px;
+  grid-template-columns: 100px 200px 120px 1fr 100px 100px;
   gap: 16px;
   padding: 16px 24px;
   border-bottom: 1px solid var(--border-light, #e2e8f0);
@@ -435,7 +755,7 @@
 }
 
 .table-row.team-view {
-  grid-template-columns: 100px 120px 1fr 120px 100px 1fr 80px;
+  grid-template-columns: 100px 150px 200px 120px 1fr 100px;
 }
 
 .table-row:hover {
@@ -457,12 +777,10 @@
 }
 
 .time-range {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
   font-family: 'Courier New', monospace;
   font-size: 13px;
   color: var(--text-secondary, #718096);
+  white-space: nowrap;
 }
 
 .col-duration {

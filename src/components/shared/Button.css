@@ -55,6 +55,17 @@
   background-color: var(--background-secondary);
 }
 
+.btn--danger {
+  background-color: var(--error-color);
+  color: white;
+  border-color: var(--error-color);
+}
+
+.btn--danger:hover:not(.btn--disabled) {
+  background-color: #dc2626;
+  border-color: #dc2626;
+}
+
 /* Sizes */
 .btn--small {
   padding: var(--spacing-xs) var(--spacing-sm);

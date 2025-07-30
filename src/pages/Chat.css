@@ -78,6 +78,8 @@
   height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: visible;
+  position: relative;
 }
 
 .chat-main__empty {

@@ -10,6 +10,7 @@ import {
   Check,
   X,
   Search,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
@@ -18,6 +19,7 @@ import {
   inviteUser,
   updateUserRole,
 } from "../firebase/firestore";
+import organizationCacheService from "../services/organizationCacheService";
 import Button from "../components/shared/Button";
 import InviteUserModal from "../components/team/InviteUserModal";
 import EditTeamMemberModal from "../components/team/EditTeamMemberModal";
@@ -93,6 +95,17 @@ const TeamManagement = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const refreshTeamMembers = async () => {
+    if (!organization?.id) return;
+    
+    // Clear cache first
+    organizationCacheService.clearTeamMembersCache(organization.id);
+    
+    // Reload team members
+    await loadTeamMembers();
+    showToast("Team members refreshed", "success");
   };
 
   const handleInviteUser = async (inviteData) => {
@@ -193,14 +206,25 @@ const TeamManagement = () => {
             Manage your studio team and invite new members
           </p>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => setShowInviteModal(true)}
-          className="team-invite-btn"
-        >
-          <Plus size={16} />
-          Invite Member
-        </Button>
+        <div className="team-header__actions">
+          <Button
+            variant="secondary"
+            onClick={refreshTeamMembers}
+            className="team-refresh-btn"
+            disabled={loading}
+          >
+            <RefreshCw size={16} />
+            Refresh
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => setShowInviteModal(true)}
+            className="team-invite-btn"
+          >
+            <Plus size={16} />
+            Invite Member
+          </Button>
+        </div>
       </div>
 
       {error && <div className="team-error">{error}</div>}

@@ -34,15 +34,15 @@ import {
 } from "../firebase/firestore";
 import { dailyJobReportsCacheService } from "../services/dailyJobReportsCacheService";
 import { readCounter } from "../services/readCounter";
+import Button from "../components/shared/Button";
+import CreateReportModal from "../components/reports/CreateReportModal";
+import ConfirmationModal from "../components/shared/ConfirmationModal";
+import "./DailyReports.css";
 
 // Global listener management to prevent duplicates across component instances
 let globalListener = null;
 let globalListenerOrgId = null;
 let globalComponentInstances = new Set();
-import Button from "../components/shared/Button";
-import CreateReportModal from "../components/reports/CreateReportModal";
-import ConfirmationModal from "../components/shared/ConfirmationModal";
-import "./DailyReports.css";
 
 // Utility function to parse various date formats
 const parseDateField = (dateField) => {

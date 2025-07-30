@@ -1,5 +1,21 @@
 // Helper function to format dates consistently
-const formatJobDate = (date) => {
+// src/components/sports/jobs/ViewJobModal.jsx
+import React, { useState, useEffect } from "react";
+import ReactDOM from "react-dom";
+import { Button, Tab, Tabs } from "react-bootstrap";
+import { Edit3, Upload } from "lucide-react";
+import { useJobs } from "../../../contexts/JobsContext";
+import { formatDate } from "../../../utils/dateHelpers";
+import {
+  countValidAthletes,
+  countPhotographedAthletes,
+} from "../../../utils/calculations";
+import RosterTable from "../roster/RosterTable";
+import GroupsList from "../groups/GroupsList";
+import JobStats from "../stats/JobStats";
+import ExportModal from "../common/ExportModal";
+import EditJobModal from "./EditJobModal";
+import LoadingSpinner from "../common/LoadingSpinner"; const formatJobDate = (date) => {
   try {
     let dateObj;
 
@@ -45,23 +61,7 @@ const formatJobDate = (date) => {
     console.error("Error formatting date:", error);
     return "Invalid date";
   }
-}; // src/components/sports/jobs/ViewJobModal.jsx
-import React, { useState, useEffect } from "react";
-import ReactDOM from "react-dom";
-import { Button, Tab, Tabs } from "react-bootstrap";
-import { Edit3, Upload } from "lucide-react";
-import { useJobs } from "../../../contexts/JobsContext";
-import { formatDate } from "../../../utils/dateHelpers";
-import {
-  countValidAthletes,
-  countPhotographedAthletes,
-} from "../../../utils/calculations";
-import RosterTable from "../roster/RosterTable";
-import GroupsList from "../groups/GroupsList";
-import JobStats from "../stats/JobStats";
-import ExportModal from "../common/ExportModal";
-import EditJobModal from "./EditJobModal";
-import LoadingSpinner from "../common/LoadingSpinner";
+};
 
 const ViewJobModal = ({ show, onHide, jobId, highlightPlayerId, onImportJob }) => {
   const {

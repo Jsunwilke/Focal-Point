@@ -13,7 +13,7 @@ import {
   Map,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
-import { updateUserProfile } from "../../firebase/firestore";
+import { updateUserProfile, deleteUser } from "../../firebase/firestore";
 import { useToast } from "../../contexts/ToastContext";
 import Button from "../shared/Button";
 import MapModal from "../shared/MapModal";
@@ -21,7 +21,7 @@ import "../shared/Modal.css";
 import "./EditTeamMemberModal.css";
 
 const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
-  const { userProfile } = useAuth();
+  const { userProfile, organization } = useAuth();
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
     firstName: "",
@@ -46,6 +46,7 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [showMapModal, setShowMapModal] = useState(false);
+  const [showDeletePrompt, setShowDeletePrompt] = useState(false);
 
   // Initialize form data when modal opens or team member changes
   useEffect(() => {
@@ -253,7 +254,49 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
 
   const handleCancel = () => {
     setErrors({});
+    setShowDeletePrompt(false);
     onClose();
+  };
+
+  const handleDeleteUser = async () => {
+    setLoading(true);
+    try {
+      // Debug logging
+      console.log("Current user:", userProfile);
+      console.log("Team member to delete:", teamMember);
+      console.log("Is current user admin?", userProfile?.role === "admin");
+      
+      // Use organization ID from auth context
+      const orgId = teamMember.organizationID || organization?.id;
+      if (!orgId) {
+        throw new Error("Organization ID not found");
+      }
+      
+      await deleteUser(teamMember.id, orgId);
+      
+      showToast("Team member deleted successfully", "success");
+      
+      // Update the team list
+      if (onUpdate) {
+        onUpdate();
+      }
+      
+      // Close the edit modal
+      onClose();
+    } catch (error) {
+      console.error("Error deleting team member:", error);
+      
+      // Provide more specific error messages
+      if (error.code === 'permission-denied') {
+        showToast("You don't have permission to delete users. Only admins can delete team members.", "error");
+      } else {
+        showToast("Failed to delete team member", "error");
+      }
+      
+      setShowDeletePrompt(false);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!isOpen || !teamMember) return null;
@@ -640,21 +683,62 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
             </div>
             </div>
 
-            <div className="modal__actions" style={{ flexShrink: 0 }}>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={handleCancel}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-              >
-                <Save size={16} />
-                Update
-              </Button>
+            <div className="modal__actions" style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                {/* Only show delete button if current user is not the same as team member */}
+                {userProfile?.id !== teamMember.id && !showDeletePrompt && (
+                  <Button
+                    type="button"
+                    variant="danger"
+                    onClick={() => setShowDeletePrompt(true)}
+                    disabled={loading}
+                  >
+                    Delete User
+                  </Button>
+                )}
+                
+                {/* Show confirmation prompt */}
+                {showDeletePrompt && (
+                  <>
+                    <span style={{ color: 'var(--error-color)', fontWeight: 'var(--font-weight-medium)' }}>
+                      Are you sure?
+                    </span>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      onClick={handleDeleteUser}
+                      disabled={loading}
+                    >
+                      Yes, Delete
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setShowDeletePrompt(false)}
+                      disabled={loading}
+                    >
+                      Cancel
+                    </Button>
+                  </>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCancel}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={loading}
+                >
+                  <Save size={16} />
+                  Update
+                </Button>
+              </div>
             </div>
           </form>
         </div>

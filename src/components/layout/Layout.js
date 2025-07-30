@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom";
 import { ToastProvider } from "../../contexts/ToastContext";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
+import FloatingChatWidget from "../chat/FloatingChatWidget";
 import "./Layout.css";
 
 const Layout = ({ children }) => {
@@ -71,6 +72,7 @@ const Layout = ({ children }) => {
           />
           <main className={`layout__content ${location.pathname === '/schedule' ? 'layout__content--schedule' : ''}`}>{children}</main>
         </div>
+        <FloatingChatWidget />
       </div>
     </ToastProvider>
   );

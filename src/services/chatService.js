@@ -250,21 +250,44 @@ class ChatService {
   }
 
   // Toggle pin status for a conversation
-  async togglePinConversation(conversationId, userId, isPinned) {
+  async togglePinConversation(conversationId, userId, isCurrentlyPinned) {
     try {
+      console.log('[chatService] togglePinConversation called with:', {
+        conversationId,
+        userId,
+        isCurrentlyPinned,
+        action: isCurrentlyPinned ? 'UNPIN' : 'PIN'
+      });
+      
       const conversationRef = doc(firestore, 'conversations', conversationId);
       
-      if (isPinned) {
-        // Add user to pinnedBy array
+      // First, check if the conversation has a pinnedBy field
+      const conversationDoc = await getDoc(conversationRef, 'chatService.togglePinConversation');
+      const conversationData = conversationDoc.data();
+      
+      if (!conversationData.pinnedBy) {
+        // Initialize pinnedBy array if it doesn't exist
+        console.log('[chatService] Initializing pinnedBy array');
         await updateDoc(conversationRef, {
-          pinnedBy: arrayUnion(userId)
+          pinnedBy: isCurrentlyPinned ? [] : [userId]
         });
       } else {
-        // Remove user from pinnedBy array
-        await updateDoc(conversationRef, {
-          pinnedBy: arrayRemove(userId)
-        });
+        if (isCurrentlyPinned) {
+          // Remove user from pinnedBy array (unpin)
+          console.log('[chatService] Removing user from pinnedBy array (unpinning)');
+          await updateDoc(conversationRef, {
+            pinnedBy: arrayRemove(userId)
+          });
+        } else {
+          // Add user to pinnedBy array (pin)
+          console.log('[chatService] Adding user to pinnedBy array (pinning)');
+          await updateDoc(conversationRef, {
+            pinnedBy: arrayUnion(userId)
+          });
+        }
       }
+      
+      console.log('[chatService] Pin toggle completed successfully');
     } catch (error) {
       console.error('Error toggling pin status:', error);
       throw error;

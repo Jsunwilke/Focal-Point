@@ -63,7 +63,8 @@
       "Bash(timeout 15 npm start)",
       "Bash(kill:*)",
       "Bash(true)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(timeout 20 npm start)"
     ],
     "deny": []
   }

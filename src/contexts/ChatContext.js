@@ -26,6 +26,8 @@ export const ChatProvider = ({ children }) => {
   const [organizationUsers, setOrganizationUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [unreadCounts, setUnreadCounts] = useState({});
+  const [isMainChatView, setIsMainChatView] = useState(false);
   
   // Pagination state for messages
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -90,6 +92,15 @@ export const ChatProvider = ({ children }) => {
       setConversations(cachedConversations);
       setLoading(false);
       
+      // Extract unread counts from cached conversations
+      const cachedUnreadCounts = {};
+      cachedConversations.forEach(conv => {
+        if (conv.unreadCounts && conv.unreadCounts[userProfile.id] !== undefined) {
+          cachedUnreadCounts[conv.id] = conv.unreadCounts[userProfile.id];
+        }
+      });
+      setUnreadCounts(cachedUnreadCounts);
+      
       // Track cache hit
       readCounter.recordCacheHit('conversations', 'ChatContext', cachedConversations.length);
     } else {
@@ -104,6 +115,16 @@ export const ChatProvider = ({ children }) => {
         console.log('[ChatContext] Received', updatedConversations.length, 'conversations from listener');
         setConversations(updatedConversations);
         setLoading(false);
+        
+        // Extract unread counts for current user
+        const newUnreadCounts = {};
+        updatedConversations.forEach(conv => {
+          if (conv.unreadCounts && conv.unreadCounts[userProfile.id] !== undefined) {
+            newUnreadCounts[conv.id] = conv.unreadCounts[userProfile.id];
+          }
+        });
+        console.log('[ChatContext] Unread counts updated:', newUnreadCounts);
+        setUnreadCounts(newUnreadCounts);
         
         // Cache the updated conversations
         chatCacheService.setCachedConversations(updatedConversations);
@@ -155,6 +176,26 @@ export const ChatProvider = ({ children }) => {
             // Append new messages to cached ones
             const updatedMessages = chatCacheService.appendNewMessages(activeConversation.id, newMessages);
             setMessages(updatedMessages);
+            
+            // Update conversation's lastMessage if we have new messages
+            if (newMessages.length > 0) {
+              const latestMessage = newMessages[newMessages.length - 1];
+              setConversations(prev => prev.map(conv => {
+                if (conv.id === activeConversation.id) {
+                  return {
+                    ...conv,
+                    lastMessage: {
+                      text: latestMessage.text || '',
+                      senderId: latestMessage.senderId,
+                      senderName: latestMessage.senderName,
+                      timestamp: latestMessage.timestamp
+                    },
+                    lastActivity: latestMessage.timestamp
+                  };
+                }
+                return conv;
+              }));
+            }
           } else {
             // Full message set (fallback)
             setMessages(newMessages);
@@ -162,8 +203,8 @@ export const ChatProvider = ({ children }) => {
           }
           setMessagesLoading(false);
           
-          // Mark messages as read when we receive them
-          if (userProfile?.id) {
+          // Mark messages as read when we receive them (only in main chat view)
+          if (userProfile?.id && isMainChatView) {
             chatService.markMessagesAsRead(activeConversation.id, userProfile.id);
           }
         },
@@ -180,8 +221,8 @@ export const ChatProvider = ({ children }) => {
           // Cache the messages
           chatCacheService.setCachedMessages(activeConversation.id, updatedMessages);
           
-          // Mark messages as read when we receive them
-          if (userProfile?.id) {
+          // Mark messages as read when we receive them (only in main chat view)
+          if (userProfile?.id && isMainChatView) {
             chatService.markMessagesAsRead(activeConversation.id, userProfile.id);
           }
         }
@@ -195,7 +236,46 @@ export const ChatProvider = ({ children }) => {
         unsubscribe();
       }
     };
-  }, [activeConversation?.id, userProfile?.id]);
+  }, [activeConversation?.id, userProfile?.id, isMainChatView]);
+
+  // Mark messages as read when opening a conversation in main chat view
+  useEffect(() => {
+    if (activeConversation?.id && userProfile?.id && isMainChatView) {
+      console.log('[ChatContext] Marking messages as read for conversation:', activeConversation.id);
+      
+      // Small delay to ensure UI has updated
+      const timer = setTimeout(() => {
+        chatService.markMessagesAsRead(activeConversation.id, userProfile.id)
+          .then(() => {
+            console.log('[ChatContext] Messages marked as read successfully');
+            // Update local unread count immediately
+            setUnreadCounts(prev => ({
+              ...prev,
+              [activeConversation.id]: 0
+            }));
+            
+            // Also update the conversations array for immediate UI update
+            setConversations(prev => prev.map(conv => {
+              if (conv.id === activeConversation.id) {
+                return {
+                  ...conv,
+                  unreadCounts: {
+                    ...conv.unreadCounts,
+                    [userProfile.id]: 0
+                  }
+                };
+              }
+              return conv;
+            }));
+          })
+          .catch(error => {
+            console.error('[ChatContext] Error marking messages as read:', error);
+          });
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [activeConversation?.id, userProfile?.id, isMainChatView]);
 
   // Create new conversation
   const createConversation = useCallback(async (participantIds, type = 'direct', customName = null) => {
@@ -283,6 +363,52 @@ export const ChatProvider = ({ children }) => {
       );
 
       console.log('[ChatContext] Message sent successfully');
+      
+      // Update local conversation state immediately for instant UI update
+      const messagePreview = {
+        text: text.trim(),
+        senderId: userProfile.id,
+        senderName: senderName,
+        timestamp: new Date()
+      };
+      
+      setConversations(prev => {
+        // Update the conversation
+        const updated = prev.map(conv => {
+          if (conv.id === activeConversation.id) {
+            return {
+              ...conv,
+              lastMessage: messagePreview,
+              lastActivity: new Date()
+            };
+          }
+          return conv;
+        });
+        
+        // Re-sort conversations by lastActivity (most recent first)
+        return updated.sort((a, b) => {
+          // Handle pinned conversations first
+          const aPinned = a.pinnedBy?.includes(userProfile?.id) || false;
+          const bPinned = b.pinnedBy?.includes(userProfile?.id) || false;
+          
+          if (aPinned && !bPinned) return -1;
+          if (!aPinned && bPinned) return 1;
+          
+          // Then sort by lastActivity - handle both Date objects and Firestore Timestamps
+          const getTime = (activity) => {
+            if (!activity) return 0;
+            if (activity.toDate) return activity.toDate().getTime();
+            if (activity instanceof Date) return activity.getTime();
+            if (typeof activity === 'number') return activity;
+            return 0;
+          };
+          
+          const aTime = getTime(a.lastActivity);
+          const bTime = getTime(b.lastActivity);
+          return bTime - aTime;
+        });
+      });
+      
       // Note: The real-time listener will handle updating the cache
       // when the new message comes through
     } catch (error) {
@@ -367,28 +493,21 @@ export const ChatProvider = ({ children }) => {
   }, [activeConversation?.id, showToast]);
 
   // Toggle pin conversation
-  const togglePinConversation = useCallback(async (conversationId, isPinned) => {
+  const togglePinConversation = useCallback(async (conversationId, isCurrentlyPinned) => {
     if (!userProfile?.id) return;
     
     try {
-      await chatService.togglePinConversation(conversationId, userProfile.id, isPinned);
+      console.log('[ChatContext] Toggling pin:', { conversationId, isCurrentlyPinned });
       
-      // Update local state
-      setConversations(prev => prev.map(conv => {
-        if (conv.id === conversationId) {
-          const pinnedBy = conv.pinnedBy || [];
-          if (isPinned) {
-            return { ...conv, pinnedBy: [...pinnedBy, userProfile.id] };
-          } else {
-            return { ...conv, pinnedBy: pinnedBy.filter(id => id !== userProfile.id) };
-          }
-        }
-        return conv;
-      }));
+      // Update Firebase - the real-time listener will update the local state
+      await chatService.togglePinConversation(conversationId, userProfile.id, isCurrentlyPinned);
       
-      showToast(isPinned ? 'Conversation pinned' : 'Conversation unpinned', 'success');
+      // Don't update local state here - let the real-time listener handle it
+      // This ensures consistency with the server state
+      
+      showToast(isCurrentlyPinned ? 'Conversation unpinned' : 'Conversation pinned', 'success');
     } catch (error) {
-      console.error('Error toggling pin:', error);
+      console.error('[ChatContext] Error toggling pin:', error);
       showToast('Failed to update pin status', 'error');
     }
   }, [userProfile?.id, showToast]);
@@ -475,6 +594,39 @@ export const ChatProvider = ({ children }) => {
     }
   }, [activeConversation?.id, organizationUsers, userProfile?.id, userProfile?.firstName, userProfile?.lastName, showToast]);
 
+  // Mark messages as read with optimistic updates
+  const markConversationAsRead = useCallback(async (conversationId) => {
+    if (!userProfile?.id || !conversationId) return;
+    
+    try {
+      // Optimistically update local state immediately
+      setUnreadCounts(prev => ({
+        ...prev,
+        [conversationId]: 0
+      }));
+      
+      setConversations(prev => prev.map(conv => {
+        if (conv.id === conversationId) {
+          return {
+            ...conv,
+            unreadCounts: {
+              ...conv.unreadCounts,
+              [userProfile.id]: 0
+            }
+          };
+        }
+        return conv;
+      }));
+      
+      // Then update Firebase
+      await chatService.markMessagesAsRead(conversationId, userProfile.id);
+      console.log('[ChatContext] Messages marked as read for conversation:', conversationId);
+    } catch (error) {
+      console.error('[ChatContext] Error marking messages as read:', error);
+      // Optionally revert optimistic update on error
+    }
+  }, [userProfile?.id]);
+
   // Leave a conversation
   const leaveConversation = useCallback(async (conversationId) => {
     try {
@@ -553,6 +705,8 @@ export const ChatProvider = ({ children }) => {
     sendingMessage,
     messagesLoading,
     hasMoreMessages,
+    unreadCounts,
+    isMainChatView,
 
     // Actions
     setActiveConversation,
@@ -566,6 +720,8 @@ export const ChatProvider = ({ children }) => {
     addParticipantsToConversation,
     removeParticipantFromConversation,
     leaveConversation,
+    setIsMainChatView,
+    markConversationAsRead,
   };
 
   return (

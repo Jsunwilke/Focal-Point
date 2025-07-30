@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useChat } from '../../contexts/ChatContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { formatDistanceToNow, format, isToday, isYesterday } from 'date-fns';
+import { format, isToday, isYesterday } from 'date-fns';
 import { Settings } from 'lucide-react';
 import ConversationSettingsModal from './ConversationSettingsModal';
+import UserAvatar from '../shared/UserAvatar';
 import './MessageThread.css';
 
 const MessageThread = () => {
@@ -127,6 +128,10 @@ const MessageThread = () => {
     return user ? `${user.firstName} ${user.lastName}` : 'Unknown User';
   };
 
+  const getUserData = (userId) => {
+    return organizationUsers.find(u => u.id === userId) || null;
+  };
+
   const renderSystemMessage = (message) => {
     let content = '';
     
@@ -231,19 +236,39 @@ const MessageThread = () => {
                 )}
                 
                 <div 
-                  className={`message-bubble ${
-                    isOwnMessage ? 'message-bubble--own' : 'message-bubble--other'
-                  } ${isConsecutive ? 'message-bubble--consecutive' : ''}`}
+                  className={`message-bubble-wrapper ${
+                    isOwnMessage ? 'message-bubble-wrapper--own' : 'message-bubble-wrapper--other'
+                  }`}
                 >
-                  {!isConsecutive && !isOwnMessage && (
-                    <div className="message-bubble__sender">
-                      {message.senderName || 'Unknown User'}
-                    </div>
+                  {!isOwnMessage && (
+                    <UserAvatar 
+                      user={getUserData(message.senderId)} 
+                      size="small" 
+                      className="message-bubble__avatar"
+                    />
                   )}
                   
-                  <div className="message-bubble__content">
+                  <div 
+                    className={`message-bubble ${
+                      isOwnMessage ? 'message-bubble--own' : 'message-bubble--other'
+                    } ${isConsecutive ? 'message-bubble--consecutive' : ''}`}
+                  >
+                    {!isConsecutive && !isOwnMessage && (
+                      <div className="message-bubble__sender">
+                        {message.senderName || 'Unknown User'}
+                      </div>
+                    )}
+                    
+                    <div className="message-bubble__content">
                     {(message.type === 'text' || !message.type) && (
-                      <p className="message-bubble__text">{message.text || ''}</p>
+                      <p className={`message-bubble__text ${
+                        message.text && (
+                          message.text.includes('Error') || 
+                          message.text.includes('error') ||
+                          message.text.includes('Exception') ||
+                          message.text.includes('[FloatingChatWidget]')
+                        ) ? 'message-bubble__text--error' : ''
+                      }`}>{message.text || ''}</p>
                     )}
                     
                     {message.type === 'file' && (
@@ -268,10 +293,11 @@ const MessageThread = () => {
                     )}
                   </div>
                   
-                  <div className="message-bubble__meta">
-                    <span className="message-bubble__time">
-                      {formatMessageTime(message.timestamp)}
-                    </span>
+                    <div className="message-bubble__meta">
+                      <span className="message-bubble__time">
+                        {formatMessageTime(message.timestamp)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

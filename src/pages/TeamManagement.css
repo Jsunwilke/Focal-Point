@@ -28,7 +28,14 @@
   color: var(--text-secondary);
 }
 
-.team-invite-btn {
+.team-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.team-invite-btn,
+.team-refresh-btn {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);

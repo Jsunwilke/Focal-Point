@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { useChat } from '../../contexts/ChatContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
-import { RefreshCw, Pin } from 'lucide-react';
+import { RefreshCw, Pin, Users } from 'lucide-react';
+import UserAvatar from '../shared/UserAvatar';
 import './ConversationList.css';
 
 const ConversationList = ({ onNewConversation }) => {
@@ -13,7 +14,9 @@ const ConversationList = ({ onNewConversation }) => {
     getConversationDisplayName,
     loading,
     forceRefreshConversations,
-    togglePinConversation
+    togglePinConversation,
+    organizationUsers,
+    markConversationAsRead
   } = useChat();
   const { userProfile } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
@@ -54,7 +57,24 @@ const ConversationList = ({ onNewConversation }) => {
   const handlePinToggle = async (e, conversation) => {
     e.stopPropagation(); // Prevent conversation selection
     const isPinned = conversation.pinnedBy?.includes(userProfile?.id);
-    await togglePinConversation(conversation.id, !isPinned);
+    await togglePinConversation(conversation.id, isPinned);
+  };
+
+  const getConversationAvatar = (conversation) => {
+    if (conversation.type === 'direct') {
+      // For direct conversations, show the other user's avatar
+      const otherUserId = conversation.participants.find(id => id !== userProfile?.id);
+      const otherUser = organizationUsers.find(u => u.id === otherUserId);
+      return otherUser ? <UserAvatar user={otherUser} size="medium" /> : null;
+    } else {
+      // For group conversations, show a group icon or multiple avatars
+      // For now, we'll show a group icon
+      return (
+        <div className="conversation-item__group-avatar">
+          <Users size={24} />
+        </div>
+      );
+    }
   };
 
   // Sort conversations: pinned first, then by last activity
@@ -141,14 +161,18 @@ const ConversationList = ({ onNewConversation }) => {
           
           return (
             <div
-              key={conversation.id}
+              key={`${conversation.id}-${unreadCount}`}
               className={`conversation-item ${isActive ? 'conversation-item--active' : ''} ${isPinned ? 'conversation-item--pinned' : ''}`}
-              onClick={() => setActiveConversation(conversation)}
+              onClick={() => {
+                setActiveConversation(conversation);
+                // Mark messages as read with optimistic updates
+                if (userProfile?.id && conversation?.id) {
+                  markConversationAsRead(conversation.id);
+                }
+              }}
             >
               <div className="conversation-item__avatar">
-                <div className="conversation-item__avatar-placeholder">
-                  {conversation.type === 'direct' ? '👤' : '👥'}
-                </div>
+                {getConversationAvatar(conversation)}
               </div>
               
               <div className="conversation-item__content">

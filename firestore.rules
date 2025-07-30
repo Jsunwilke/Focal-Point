@@ -156,6 +156,16 @@ service cloud.firestore {
                          (isAdmin(request.auth.uid) &&
                           belongsToSameOrg(request.auth.uid, resource.data.organizationID))
                        );
+      
+      // **ADMIN USER DELETION: Allow admins to delete users in their organization**
+      allow delete: if request.auth != null &&
+                       isAdmin(request.auth.uid) &&
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
+                       // Prevent self-deletion
+                       request.auth.uid != userId &&
+                       // Only delete real user accounts (not temporary invites)
+                       (!resource.data.keys().hasAny(['isTemporaryInvite']) || 
+                        resource.data.isTemporaryInvite != true);
     }
 
     // Sessions collection

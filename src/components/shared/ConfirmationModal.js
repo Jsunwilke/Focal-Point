@@ -56,7 +56,7 @@ const ConfirmationModal = ({
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 10001
+        zIndex: 20000
       }}
     >
       <div 

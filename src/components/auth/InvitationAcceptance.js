@@ -7,6 +7,7 @@ import {
   acceptInvitation,
   getInvitationByEmail,
 } from "../../firebase/firestore";
+import organizationCacheService from "../../services/organizationCacheService";
 import Button from "../shared/Button";
 import LoadingSpinner from "../shared/LoadingSpinner";
 import "./InvitationAcceptance.css";
@@ -23,6 +24,7 @@ const InvitationAcceptance = () => {
     password: "",
     confirmPassword: "",
   });
+  const [loadingMessage, setLoadingMessage] = useState("");
 
   const email = searchParams.get("email");
 
@@ -85,23 +87,42 @@ const InvitationAcceptance = () => {
 
     try {
       setLoading(true);
+      setLoadingMessage("Creating your account...");
 
       // Create Firebase auth account
       const user = await createUser(invitation.email, formData.password);
+      
+      setLoadingMessage("Setting up your profile...");
+      
+      // Small delay to show the message
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Activate the invitation (update the user record)
       await acceptInvitation(invitation.id, user.uid);
+      
+      setLoadingMessage("Finalizing setup...");
+      
+      // Clear the team members cache so Team Management page shows the new user
+      if (invitation.organizationID) {
+        organizationCacheService.clearTeamMembersCache(invitation.organizationID);
+      }
+      
+      // Another small delay
+      await new Promise(resolve => setTimeout(resolve, 500));
 
+      // Clear loading state before showing welcome screen
+      setLoading(false);
+      setLoadingMessage("");
       setStep("complete");
 
-      // Redirect to login after a moment
+      // Redirect to dashboard after showing welcome
+      // User is already signed in after createUser
       setTimeout(() => {
-        navigate(
-          "/login?message=Account created successfully. Please sign in."
-        );
-      }, 3000);
+        navigate("/");
+      }, 2500);
     } catch (err) {
       setError(err.message || "Failed to create account");
+      setLoadingMessage("");
     } finally {
       setLoading(false);
     }
@@ -159,9 +180,14 @@ const InvitationAcceptance = () => {
           <div className="success-icon">
             <Check size={48} />
           </div>
-          <h1>Welcome to the team!</h1>
-          <p>Your account has been created successfully.</p>
-          <p>You'll be redirected to sign in shortly...</p>
+          <h1>Welcome to {invitation?.organizationName}!</h1>
+          <h2>Great to have you on the team, {invitation?.firstName}!</h2>
+          <div className="success-details">
+            <p>✓ Account created successfully</p>
+            <p>✓ Profile set up as {invitation?.role}</p>
+            <p>✓ Access granted to studio features</p>
+          </div>
+          <p className="redirect-message">Taking you to your dashboard...</p>
         </div>
       </div>
     );
@@ -223,6 +249,15 @@ const InvitationAcceptance = () => {
               <h3 className="form-title">Create Your Account</h3>
 
               {error && <div className="form-error">{error}</div>}
+              
+              {loading && loadingMessage && (
+                <div className="loading-overlay">
+                  <div className="loading-content">
+                    <LoadingSpinner size="medium" />
+                    <p>{loadingMessage}</p>
+                  </div>
+                </div>
+              )}
 
               <div className="form-group">
                 <label htmlFor="password" className="form-label">
@@ -264,7 +299,7 @@ const InvitationAcceptance = () => {
                 className="invitation-submit"
                 loading={loading}
               >
-                Accept Invitation & Create Account
+                {loading ? loadingMessage : "Accept Invitation & Create Account"}
               </Button>
             </form>
           </div>

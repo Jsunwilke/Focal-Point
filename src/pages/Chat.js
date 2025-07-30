@@ -9,9 +9,15 @@ import { WifiOff } from "lucide-react";
 import "./Chat.css";
 
 const Chat = () => {
-  const { activeConversation } = useChat();
+  const { activeConversation, setIsMainChatView } = useChat();
   const { isConnected } = useFirebaseConnection();
   const [showNewConversationModal, setShowNewConversationModal] = useState(false);
+  
+  // Set main chat view flag
+  React.useEffect(() => {
+    setIsMainChatView(true);
+    return () => setIsMainChatView(false);
+  }, [setIsMainChatView]);
 
   const handleNewConversation = () => {
     setShowNewConversationModal(true);

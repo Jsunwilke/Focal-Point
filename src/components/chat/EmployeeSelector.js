@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { useChat } from '../../contexts/ChatContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { X, Search, Users, User } from 'lucide-react';
+import UserAvatar from '../shared/UserAvatar';
 import '../shared/Modal.css';
 import './EmployeeSelector.css';
 
@@ -12,9 +13,10 @@ const EmployeeSelector = ({
   onSelect, 
   multiSelect = false, 
   excludeUsers = [], 
-  title = "Select Employee" 
+  title = "Select Employee",
+  onConversationCreated 
 }) => {
-  const { organizationUsers, createConversation } = useChat();
+  const { organizationUsers, createConversation, conversations } = useChat();
   const { userProfile } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
@@ -74,7 +76,15 @@ const EmployeeSelector = ({
         ? groupName.trim() 
         : null;
 
-      await createConversation(participantIds, conversationType, customName);
+      const conversationId = await createConversation(participantIds, conversationType, customName);
+      
+      // Find the created conversation
+      if (onConversationCreated) {
+        const createdConversation = conversations.find(conv => conv.id === conversationId);
+        if (createdConversation) {
+          onConversationCreated(createdConversation);
+        }
+      }
       
       // Reset form and close modal
       setSelectedUsers([]);
@@ -225,9 +235,7 @@ const EmployeeSelector = ({
                       }`}
                       onClick={() => handleUserToggle(user)}
                     >
-                      <div className="employee-selector__user-avatar">
-                        {user.firstName?.[0]}{user.lastName?.[0]}
-                      </div>
+                      <UserAvatar user={user} size="medium" />
                       <div className="employee-selector__user-info">
                         <h5>{user.firstName} {user.lastName}</h5>
                         <p>{user.email}</p>

@@ -26,6 +26,7 @@ const UpcomingSessionsWidget = ({ onSessionClick }) => {
 
         // Filter cached sessions for upcoming user sessions
         const today = new Date();
+        today.setHours(0, 0, 0, 0); // Start of today
         const endDate = new Date(today);
         endDate.setDate(today.getDate() + 14); // Next 14 days
 
@@ -36,6 +37,7 @@ const UpcomingSessionsWidget = ({ onSessionClick }) => {
 
             // Check date range
             const sessionDate = new Date(session.date);
+            sessionDate.setHours(0, 0, 0, 0); // Normalize to start of day
             return sessionDate >= today && sessionDate <= endDate;
           })
           .sort((a, b) => new Date(a.date) - new Date(b.date)) // Sort by date

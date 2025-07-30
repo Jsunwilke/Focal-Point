@@ -434,6 +434,22 @@ export const updateUserRole = async (userId, newRole) => {
   }
 };
 
+// Delete a user from the organization (admin only)
+export const deleteUser = async (userId, organizationID) => {
+  try {
+    // Delete the user document
+    await deleteDoc(doc(firestore, "users", userId));
+    
+    // Clear the team members cache to refresh the UI
+    organizationCacheService.clearTeamMembersCache(organizationID);
+    
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    throw error;
+  }
+};
+
 // Utility function to clean up old temporary invite records (admin function)
 export const cleanupTemporaryInvites = async (organizationID, olderThanDays = 30) => {
   try {
