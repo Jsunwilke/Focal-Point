@@ -271,7 +271,7 @@ const HoursTrackingWidget = () => {
   const { week: weekTarget, period: periodTarget } = getTargetHours();
   
   // Calculate progress with proportional overtime handling
-  const calculateProgress = (hours, target) => {
+  const calculateProgress = (hours, target, isWeekly = false) => {
     // Handle zero hours case explicitly
     if (hours === 0) {
       return {
@@ -283,13 +283,19 @@ const HoursTrackingWidget = () => {
       };
     }
     
-    const overtimeHours = Math.max(hours - target, 0);
+    // For weekly calculation, use organization's overtime settings
+    let effectiveThreshold = target;
+    if (isWeekly && organization?.overtimeSettings?.calculationMethod === 'weekly') {
+      effectiveThreshold = organization.overtimeSettings.weeklyThreshold || 40;
+    }
+    
+    const overtimeHours = Math.max(hours - effectiveThreshold, 0);
     const hasOvertime = overtimeHours > 0;
-    const totalProgress = (hours / target) * 100;
+    const totalProgress = (hours / effectiveThreshold) * 100;
     
     // When over 100%, show proportional blue/orange within 100% bar width
     if (hasOvertime) {
-      const regularPortion = (target / hours) * 100;  // Blue portion as % of total bar
+      const regularPortion = (effectiveThreshold / hours) * 100;  // Blue portion as % of total bar
       const overtimePortion = (overtimeHours / hours) * 100;  // Orange portion as % of total bar
       
       return {
@@ -311,7 +317,7 @@ const HoursTrackingWidget = () => {
     }
   };
 
-  const weekStats = calculateProgress(weekHours, weekTarget);
+  const weekStats = calculateProgress(weekHours, weekTarget, true);
   const periodStats = calculateProgress(periodHours, periodTarget);
 
   return (
@@ -329,7 +335,11 @@ const HoursTrackingWidget = () => {
           <div className="hours-info">
             <span className="hours-label">This Week:</span>
             <span className="hours-value">
-              {formatDuration(weekHours)}/{Math.round(weekTarget)}h
+              {formatDuration(weekHours)}/{Math.round(
+                organization?.overtimeSettings?.calculationMethod === 'weekly' 
+                  ? (organization.overtimeSettings.weeklyThreshold || 40)
+                  : weekTarget
+              )}h
               {weekStats.hasOvertime && (
                 <span className="overtime-text"> ({formatDuration(weekStats.overtimeHours)} OT)</span>
               )}

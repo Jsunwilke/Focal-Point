@@ -73,6 +73,11 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
       travelRate: "",
       overtimeRate: "",
     },
+    overtimeSettings: {
+      calculationMethod: "daily",
+      dailyThreshold: 8,
+      weeklyThreshold: 40,
+    },
     policies: {
       cancellationPolicy: "",
       retakePolicy: "",
@@ -125,6 +130,7 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
   // Initialize form data when modal opens or organization changes
   useEffect(() => {
     if (isOpen && organization) {
+      console.log("Loading organization data, overtimeSettings:", organization.overtimeSettings);
       setFormData({
         name: organization.name || "",
         email: organization.email || "",
@@ -184,6 +190,11 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
           schoolRate: organization.pricing?.schoolRate || "",
           travelRate: organization.pricing?.travelRate || "",
           overtimeRate: organization.pricing?.overtimeRate || "",
+        },
+        overtimeSettings: {
+          calculationMethod: organization.overtimeSettings?.calculationMethod || "daily",
+          dailyThreshold: organization.overtimeSettings?.dailyThreshold || 8,
+          weeklyThreshold: organization.overtimeSettings?.weeklyThreshold || 40,
         },
         policies: {
           cancellationPolicy: organization.policies?.cancellationPolicy || "",
@@ -1137,6 +1148,83 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
                       step="0.01"
                       min="0"
                     />
+                  </div>
+                </div>
+
+                <div className="form-section">
+                  <h3 className="form-section__title">
+                    <Clock size={16} />
+                    Overtime Calculation Settings
+                  </h3>
+                  <p className="form-section__description">
+                    Configure how overtime hours are calculated for payroll
+                  </p>
+
+                  <div className="form-group">
+                    <label htmlFor="overtimeSettings.calculationMethod" className="form-label">
+                      Overtime Calculation Method
+                    </label>
+                    <select
+                      id="overtimeSettings.calculationMethod"
+                      name="overtimeSettings.calculationMethod"
+                      className="form-select"
+                      value={formData.overtimeSettings.calculationMethod}
+                      onChange={handleInputChange}
+                    >
+                      <option value="daily">Daily - Overtime after X hours per day</option>
+                      <option value="weekly">Weekly - Overtime after X hours per week</option>
+                    </select>
+                    <p className="form-help">
+                      {formData.overtimeSettings.calculationMethod === 'daily' 
+                        ? 'Overtime is calculated for hours worked over the daily threshold each day'
+                        : 'Overtime is calculated for total hours worked over the weekly threshold'}
+                    </p>
+                  </div>
+
+                  <div className="form-row">
+                    {formData.overtimeSettings.calculationMethod === 'daily' && (
+                      <div className="form-group">
+                        <label htmlFor="overtimeSettings.dailyThreshold" className="form-label">
+                          Daily Overtime Threshold (hours)
+                        </label>
+                        <input
+                          type="number"
+                          id="overtimeSettings.dailyThreshold"
+                          name="overtimeSettings.dailyThreshold"
+                          className="form-input"
+                          value={formData.overtimeSettings.dailyThreshold}
+                          onChange={handleInputChange}
+                          min="1"
+                          max="24"
+                          step="0.5"
+                        />
+                        <p className="form-help">
+                          Hours worked over {formData.overtimeSettings.dailyThreshold} per day count as overtime
+                        </p>
+                      </div>
+                    )}
+                    
+                    <div className="form-group">
+                      <label htmlFor="overtimeSettings.weeklyThreshold" className="form-label">
+                        Weekly Overtime Threshold (hours)
+                      </label>
+                      <input
+                        type="number"
+                        id="overtimeSettings.weeklyThreshold"
+                        name="overtimeSettings.weeklyThreshold"
+                        className="form-input"
+                        value={formData.overtimeSettings.weeklyThreshold}
+                        onChange={handleInputChange}
+                        min="1"
+                        max="168"
+                        step="1"
+                      />
+                      <p className="form-help">
+                        {formData.overtimeSettings.calculationMethod === 'weekly'
+                          ? `Hours worked over ${formData.overtimeSettings.weeklyThreshold} per week count as overtime`
+                          : `Used for weekly overtime display (informational only in daily mode)`}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -35,8 +35,18 @@ export const getPayrollData = async (organizationID, startDate, endDate, userIds
       ? timeEntries.filter(entry => userIds.includes(entry.userId))
       : timeEntries;
     
-    // Process the data
-    const payrollSummary = generatePayrollSummary(filteredEntries, teamMembers, startDate, endDate);
+    // Get organization for overtime settings
+    const { getOrganization } = await import('./firestore');
+    const organization = await getOrganization(organizationID);
+    
+    // Process the data with overtime settings
+    const payrollSummary = generatePayrollSummary(
+      filteredEntries, 
+      teamMembers, 
+      startDate, 
+      endDate,
+      organization?.overtimeSettings
+    );
     
     return {
       timeEntries: filteredEntries,
@@ -141,9 +151,10 @@ export const getPayrollDataForPeriod = async (
  * @param {Array} teamMembers - Array of team member objects
  * @param {string} startDate - Period start date
  * @param {string} endDate - Period end date
+ * @param {Object} overtimeSettings - Organization overtime settings (optional)
  * @returns {Object} Payroll summary with employee details and totals
  */
-export const generatePayrollSummary = (timeEntries, teamMembers, startDate, endDate) => {
+export const generatePayrollSummary = (timeEntries, teamMembers, startDate, endDate, overtimeSettings = null) => {
   const employeeSummaries = [];
   const organizationTotals = {
     totalHours: 0,
@@ -183,7 +194,7 @@ export const generatePayrollSummary = (timeEntries, teamMembers, startDate, endD
         total: totalHours,
         formatted: formatDuration(totalHours),
         byDay: calculateDailyHours(userEntries, startDate, endDate),
-        overtime: calculateOvertime(userEntries, startDate, endDate)
+        overtime: calculateOvertime(userEntries, startDate, endDate, overtimeSettings)
       },
       entries: {
         total: userEntries.length,
@@ -272,34 +283,75 @@ const calculateDailyHours = (userEntries, startDate, endDate) => {
 };
 
 /**
- * Calculate overtime hours for an employee (assuming 8 hours/day, 40 hours/week)
+ * Calculate overtime hours for an employee based on organization settings
  * @param {Array} userEntries - Time entries for a specific user
  * @param {string} startDate - Period start date
  * @param {string} endDate - Period end date
+ * @param {Object} overtimeSettings - Organization overtime settings
  * @returns {Object} Overtime calculation
  */
-const calculateOvertime = (userEntries, startDate, endDate) => {
+const calculateOvertime = (userEntries, startDate, endDate, overtimeSettings = null) => {
   const dailyHours = calculateDailyHours(userEntries, startDate, endDate);
+  
+  // Use default settings if not provided
+  const settings = overtimeSettings || {
+    calculationMethod: 'daily',
+    dailyThreshold: 8,
+    weeklyThreshold: 40
+  };
+  
   let dailyOvertime = 0;
   let weeklyOvertime = 0;
 
-  // Calculate daily overtime (over 8 hours per day)
+  // Calculate daily overtime (over configured threshold per day)
   Object.values(dailyHours).forEach(day => {
-    if (day.hours > 8) {
-      dailyOvertime += day.hours - 8;
+    if (day.hours > settings.dailyThreshold) {
+      dailyOvertime += day.hours - settings.dailyThreshold;
     }
   });
 
-  // Calculate weekly overtime (over 40 hours per week)
+  // Calculate weekly overtime
   const totalHours = Object.values(dailyHours).reduce((sum, day) => sum + day.hours, 0);
-  const periodDays = Object.keys(dailyHours).length;
-  const periodWeeks = periodDays / 7;
-  const regularHoursPerWeek = 40;
-  const regularHoursForPeriod = periodWeeks * regularHoursPerWeek;
+  
+  // Group entries by week for weekly overtime calculation
+  if (settings.calculationMethod === 'weekly') {
+    // Calculate weekly overtime based on calendar weeks
+    const weeklyTotals = {};
+    
+    Object.entries(dailyHours).forEach(([dateStr, dayData]) => {
+      const date = new Date(dateStr);
+      const weekStart = new Date(date);
+      const dayOfWeek = date.getDay();
+      const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      weekStart.setDate(date.getDate() + daysToMonday);
+      weekStart.setHours(0, 0, 0, 0);
+      const weekKey = weekStart.toISOString().split('T')[0];
+      
+      if (!weeklyTotals[weekKey]) {
+        weeklyTotals[weekKey] = 0;
+      }
+      weeklyTotals[weekKey] += dayData.hours;
+    });
+    
+    // Calculate overtime for each week
+    Object.values(weeklyTotals).forEach(weekHours => {
+      if (weekHours > settings.weeklyThreshold) {
+        weeklyOvertime += weekHours - settings.weeklyThreshold;
+      }
+    });
+  } else {
+    // For daily method, still calculate weekly for informational purposes
+    const periodDays = Object.keys(dailyHours).length;
+    const periodWeeks = periodDays / 7;
+    const regularHoursForPeriod = periodWeeks * settings.weeklyThreshold;
 
-  if (totalHours > regularHoursForPeriod) {
-    weeklyOvertime = totalHours - regularHoursForPeriod;
+    if (totalHours > regularHoursForPeriod) {
+      weeklyOvertime = totalHours - regularHoursForPeriod;
+    }
   }
+
+  // Determine which overtime to use based on calculation method
+  const overtimeHours = settings.calculationMethod === 'weekly' ? weeklyOvertime : dailyOvertime;
 
   return {
     daily: {
@@ -311,9 +363,10 @@ const calculateOvertime = (userEntries, startDate, endDate) => {
       formatted: formatDuration(weeklyOvertime)
     },
     total: {
-      hours: Math.max(dailyOvertime, weeklyOvertime), // Use higher of the two
-      formatted: formatDuration(Math.max(dailyOvertime, weeklyOvertime))
-    }
+      hours: overtimeHours,
+      formatted: formatDuration(overtimeHours)
+    },
+    calculationMethod: settings.calculationMethod
   };
 };
 
