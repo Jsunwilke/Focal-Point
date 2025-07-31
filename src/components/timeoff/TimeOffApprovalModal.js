@@ -11,13 +11,15 @@ import {
   XCircle,
   MessageSquare,
   Star,
-  Eye 
+  Eye,
+  RotateCcw 
 } from 'lucide-react';
 import { 
   getTimeOffRequests, 
   approveTimeOffRequest, 
   denyTimeOffRequest,
-  markTimeOffRequestUnderReview 
+  markTimeOffRequestUnderReview,
+  revertTimeOffRequestStatus 
 } from '../../firebase/timeOffRequests';
 import Button from '../shared/Button';
 import '../shared/Modal.css';
@@ -58,6 +60,7 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
   const [processingId, setProcessingId] = useState(null);
   const [denialReason, setDenialReason] = useState('');
   const [showDenialDialog, setShowDenialDialog] = useState(null);
+  const [showUndoConfirm, setShowUndoConfirm] = useState(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -158,6 +161,40 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
     } finally {
       setProcessingId(null);
     }
+  };
+
+  const handleUndoStatus = async () => {
+    if (!showUndoConfirm) return;
+
+    setProcessingId(showUndoConfirm.id);
+    try {
+      await revertTimeOffRequestStatus(
+        showUndoConfirm.id,
+        userProfile.id,
+        `${userProfile.firstName} ${userProfile.lastName}`
+      );
+      setShowUndoConfirm(null);
+      await loadRequests();
+      onStatusChange?.();
+    } catch (error) {
+      console.error('Error reverting time off request status:', error);
+      alert('Failed to undo status. Please try again.');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  // Check if request can be undone (within 24 hours of approval/denial)
+  const canUndoStatus = (request) => {
+    if (request.status !== 'approved' && request.status !== 'denied') return false;
+    
+    const statusTimestamp = request.status === 'approved' ? request.approvedAt : request.deniedAt;
+    if (!statusTimestamp) return false;
+    
+    const statusDate = statusTimestamp.toDate ? statusTimestamp.toDate() : new Date(statusTimestamp);
+    const hoursSinceStatus = (Date.now() - statusDate.getTime()) / (1000 * 60 * 60);
+    
+    return hoursSinceStatus <= 24; // Allow undo within 24 hours
   };
 
   const formatDate = (timestamp) => {
@@ -440,6 +477,19 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
                           )}
                         </>
                       )}
+                      {(userProfile?.role === 'admin' || userProfile?.role === 'manager' || userProfile?.role === 'owner') && canUndoStatus(request) && (
+                        <Button
+                          variant="secondary"
+                          size="small"
+                          onClick={() => setShowUndoConfirm(request)}
+                          disabled={processingId === request.id}
+                          style={{ marginTop: '8px' }}
+                          title="Undo this action and return to Under Review"
+                        >
+                          <RotateCcw size={14} style={{ marginRight: '4px' }} />
+                          Undo
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -478,6 +528,40 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
                 disabled={!denialReason.trim() || processingId === showDenialDialog.id}
               >
                 Confirm Denial
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Undo Confirmation Dialog */}
+      {showUndoConfirm && (
+        <div className="denial-dialog-overlay" onClick={() => setShowUndoConfirm(null)}>
+          <div className="denial-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3>Undo {showUndoConfirm.status === 'approved' ? 'Approval' : 'Denial'}</h3>
+            <p>
+              Are you sure you want to undo this {showUndoConfirm.status === 'approved' ? 'approval' : 'denial'}? 
+              The request will be moved back to "Under Review" status.
+            </p>
+            {showUndoConfirm.status === 'approved' && (
+              <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>
+                Note: This action will not automatically notify the photographer. You may need to inform them separately.
+              </p>
+            )}
+            <div className="dialog-actions">
+              <Button
+                variant="secondary"
+                onClick={() => setShowUndoConfirm(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="warning"
+                onClick={handleUndoStatus}
+                disabled={processingId === showUndoConfirm.id}
+              >
+                <RotateCcw size={16} style={{ marginRight: '4px' }} />
+                {processingId === showUndoConfirm.id ? 'Undoing...' : 'Undo Status'}
               </Button>
             </div>
           </div>

@@ -13,10 +13,10 @@ class OrganizationCacheService {
     return `${this.CACHE_PREFIX}schools_${organizationId}`;
   }
 
-  // Team members cache key
-  getTeamMembersKey(organizationId) {
-    return `${this.CACHE_PREFIX}team_${organizationId}`;
-  }
+  // Team members cache key - DEPRECATED (no longer caching user profiles)
+  // getTeamMembersKey(organizationId) {
+  //   return `${this.CACHE_PREFIX}team_${organizationId}`;
+  // }
 
   // Organization data cache key
   getOrganizationKey(organizationId) {
@@ -61,44 +61,25 @@ class OrganizationCacheService {
     }
   }
 
-  // Cache team members
-  setCachedTeamMembers(organizationId, members) {
-    try {
-      const cacheData = {
-        version: this.CACHE_VERSION,
-        timestamp: Date.now(),
-        organizationId,
-        data: members.map(member => this.serializeUser(member))
-      };
-      localStorage.setItem(this.getTeamMembersKey(organizationId), JSON.stringify(cacheData));
-    } catch (error) {
-      console.warn('Failed to cache team members:', error);
-    }
-  }
+  // Cache team members - DEPRECATED (no longer caching user profiles)
+  // setCachedTeamMembers(organizationId, members) {
+  //   try {
+  //     const cacheData = {
+  //       version: this.CACHE_VERSION,
+  //       timestamp: Date.now(),
+  //       organizationId,
+  //       data: members.map(member => this.serializeUser(member))
+  //     };
+  //     localStorage.setItem(this.getTeamMembersKey(organizationId), JSON.stringify(cacheData));
+  //   } catch (error) {
+  //     console.warn('Failed to cache team members:', error);
+  //   }
+  // }
 
-  // Get cached team members
+  // Get cached team members - DEPRECATED (no longer caching user profiles)
   getCachedTeamMembers(organizationId) {
-    try {
-      const key = this.getTeamMembersKey(organizationId);
-      const cached = localStorage.getItem(key);
-      if (!cached) return null;
-
-      const cacheData = JSON.parse(cached);
-      
-      // Check cache version and age (shorter for team members)
-      if (cacheData.version !== this.CACHE_VERSION || 
-          Date.now() - cacheData.timestamp > this.TEAM_CACHE_AGE) {
-        localStorage.removeItem(key);
-        return null;
-      }
-
-      // Deserialize members
-      const members = cacheData.data.map(member => this.deserializeUser(member));
-      return members;
-    } catch (error) {
-      console.warn('Failed to retrieve cached team members:', error);
-      return null;
-    }
+    // Always return null to force fresh fetches
+    return null;
   }
 
   // Cache organization data
@@ -177,8 +158,10 @@ class OrganizationCacheService {
   }
 
   clearTeamMembersCache(organizationId) {
+    // Clear any existing cache (for cleanup)
     try {
-      localStorage.removeItem(this.getTeamMembersKey(organizationId));
+      const key = `${this.CACHE_PREFIX}team_${organizationId}`;
+      localStorage.removeItem(key);
     } catch (error) {
       console.warn('Failed to clear team members cache:', error);
     }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
-import { X, Calendar, Clock, User, FileText, AlertTriangle } from 'lucide-react';
-import { cancelTimeOffRequest } from '../../firebase/timeOffRequests';
+import { X, Calendar, Clock, User, FileText, AlertTriangle, RotateCcw } from 'lucide-react';
+import { cancelTimeOffRequest, revertTimeOffRequestStatus } from '../../firebase/timeOffRequests';
 import Button from '../shared/Button';
 import '../shared/Modal.css';
 import './TimeOffDetailsModal.css';
@@ -16,6 +16,7 @@ const getDayOfWeek = (dateStr) => {
 const TimeOffDetailsModal = ({ isOpen, onClose, timeOffEntry, userProfile, onStatusChange }) => {
   const [loading, setLoading] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [showUndoConfirm, setShowUndoConfirm] = useState(false);
 
   if (!isOpen || !timeOffEntry) return null;
 
@@ -73,6 +74,22 @@ const TimeOffDetailsModal = ({ isOpen, onClose, timeOffEntry, userProfile, onSta
     return isOwnRequest || isAdmin;
   };
 
+  const canUndoStatus = () => {
+    // Only admins can undo, and only for approved/denied requests within 24 hours
+    const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager' || userProfile?.role === 'owner';
+    if (!isAdmin) return false;
+    
+    if (timeOffEntry.status !== 'approved' && timeOffEntry.status !== 'denied') return false;
+    
+    const statusTimestamp = timeOffEntry.status === 'approved' ? timeOffEntry.approvedAt : timeOffEntry.deniedAt;
+    if (!statusTimestamp) return false;
+    
+    const statusDate = statusTimestamp.toDate ? statusTimestamp.toDate() : new Date(statusTimestamp);
+    const hoursSinceStatus = (Date.now() - statusDate.getTime()) / (1000 * 60 * 60);
+    
+    return hoursSinceStatus <= 24; // Allow undo within 24 hours
+  };
+
   const handleCancel = async () => {
     if (!canModify()) return;
     
@@ -103,6 +120,27 @@ const TimeOffDetailsModal = ({ isOpen, onClose, timeOffEntry, userProfile, onSta
     } catch (error) {
       console.error('Error deleting time off request:', error);
       alert('Failed to delete time off request. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUndoStatus = async () => {
+    if (!canUndoStatus()) return;
+
+    setLoading(true);
+    try {
+      await revertTimeOffRequestStatus(
+        timeOffEntry.sessionId || timeOffEntry.id,
+        userProfile.id,
+        `${userProfile.firstName} ${userProfile.lastName}`
+      );
+      onStatusChange?.();
+      onClose();
+      setShowUndoConfirm(false);
+    } catch (error) {
+      console.error('Error reverting time off request status:', error);
+      alert('Failed to undo status. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -267,6 +305,44 @@ const TimeOffDetailsModal = ({ isOpen, onClose, timeOffEntry, userProfile, onSta
               </div>
             </div>
           )}
+
+          {/* Undo Confirmation Dialog */}
+          {showUndoConfirm && (
+            <div className="confirm-overlay">
+              <div className="confirm-dialog">
+                <div className="confirm-header">
+                  <RotateCcw size={24} color="#ffc107" />
+                  <h3>Undo {timeOffEntry.status === 'approved' ? 'Approval' : 'Denial'}</h3>
+                </div>
+                <p>
+                  Are you sure you want to undo this {timeOffEntry.status === 'approved' ? 'approval' : 'denial'}? 
+                  The request will be moved back to "Under Review" status.
+                </p>
+                {timeOffEntry.status === 'approved' && (
+                  <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>
+                    Note: This action will not automatically notify the photographer. You may need to inform them separately.
+                  </p>
+                )}
+                <div className="confirm-actions">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setShowUndoConfirm(false)}
+                    disabled={loading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="warning"
+                    onClick={handleUndoStatus}
+                    disabled={loading}
+                  >
+                    <RotateCcw size={16} style={{ marginRight: '4px' }} />
+                    {loading ? 'Undoing...' : 'Undo Status'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {canModify() && (
@@ -279,6 +355,18 @@ const TimeOffDetailsModal = ({ isOpen, onClose, timeOffEntry, userProfile, onSta
             >
               Close
             </Button>
+            {canUndoStatus() && (
+              <Button
+                type="button"
+                variant="warning"
+                onClick={() => setShowUndoConfirm(true)}
+                disabled={loading}
+                title="Undo this action and return to Under Review"
+              >
+                <RotateCcw size={16} style={{ marginRight: '4px' }} />
+                Undo {timeOffEntry.status === 'approved' ? 'Approval' : 'Denial'}
+              </Button>
+            )}
             {timeOffEntry.status === 'pending' ? (
               <Button
                 type="button"

@@ -260,16 +260,8 @@ export const updateOrganization = async (organizationID, data) => {
 // Get team members for an organization (including pending invitations)
 export const getTeamMembers = async (organizationID) => {
   try {
-    // Check cache first
-    const cachedMembers = organizationCacheService.getCachedTeamMembers(organizationID);
-    if (cachedMembers) {
-      // Track cache hit
-      readCounter.recordCacheHit('users', 'getTeamMembers', cachedMembers.length);
-      return cachedMembers;
-    }
-    
-    // Track cache miss
-    readCounter.recordCacheMiss('users', 'getTeamMembers');
+    // NO LONGER USING CACHE FOR USER PROFILES - Always fetch fresh data
+    // This ensures changes to user profiles are immediately visible
     
     const q = query(
       collection(firestore, "users"),
@@ -296,9 +288,6 @@ export const getTeamMembers = async (organizationID) => {
       const nameB = b.displayName || `${b.firstName} ${b.lastName}` || b.email;
       return nameA.localeCompare(nameB);
     });
-    
-    // Cache the results
-    organizationCacheService.setCachedTeamMembers(organizationID, sortedMembers);
     
     return sortedMembers;
   } catch (error) {

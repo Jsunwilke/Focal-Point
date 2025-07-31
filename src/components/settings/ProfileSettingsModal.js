@@ -25,11 +25,12 @@ import {
 } from "../../services/photoUpload";
 import Button from "../shared/Button";
 import ImageCropModal from "../shared/ImageCropModal";
+import SimpleAddressField from "../shared/SimpleAddressField";
 import "../shared/Modal.css";
 import "./ProfileSettingsModal.css";
 
 const ProfileSettingsModal = ({ isOpen, onClose }) => {
-  const { userProfile, user, loadUserProfile } = useAuth();
+  const { userProfile, user, loadUserProfile, organization } = useAuth();
   const fileInputRef = useRef(null);
   const [formData, setFormData] = useState({
     firstName: "",
@@ -40,13 +41,7 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
     position: "",
     bio: "",
     photoURL: "",
-    address: {
-      street: "",
-      city: "",
-      state: "",
-      zipCode: "",
-      country: "US",
-    },
+    address: "", // Single string address
     preferences: {
       emailNotifications: true,
       pushNotifications: true,
@@ -61,6 +56,7 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState("personal");
   const [showCropModal, setShowCropModal] = useState(false);
   const [selectedImageFile, setSelectedImageFile] = useState(null);
+  const [addressDisplay, setAddressDisplay] = useState("");
 
   // Initialize form data when modal opens or user profile changes
   useEffect(() => {
@@ -76,13 +72,7 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
         photoURL: userProfile.photoURL || "",
         originalPhotoURL: userProfile.originalPhotoURL || "",
         photoCropSettings: userProfile.photoCropSettings || null,
-        address: {
-          street: userProfile.address?.street || "",
-          city: userProfile.address?.city || "",
-          state: userProfile.address?.state || "",
-          zipCode: userProfile.address?.zipCode || "",
-          country: userProfile.address?.country || "US",
-        },
+        address: "", // Will be set below after checking format
         preferences: {
           emailNotifications:
             userProfile.preferences?.emailNotifications ?? true,
@@ -91,6 +81,25 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
           scheduleReminders: userProfile.preferences?.scheduleReminders ?? true,
         },
       });
+      
+      // Handle backward compatibility for address field
+      let userAddress = "";
+      if (typeof userProfile.address === 'string') {
+        userAddress = userProfile.address;
+      } else if (userProfile.address && typeof userProfile.address === 'object') {
+        // Convert old format to string
+        const { street, city, state, zipCode } = userProfile.address;
+        const parts = [street, city, state, zipCode].filter(Boolean);
+        userAddress = parts.join(", ");
+      }
+      
+      // Update formData with the address
+      setFormData(prev => ({
+        ...prev,
+        address: userAddress
+      }));
+      
+      setAddressDisplay(userAddress);
     }
   }, [isOpen, userProfile, user]);
 
@@ -228,7 +237,7 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
 
-    if (name.includes(".")) {
+    if (name.includes(".") && name.startsWith("preferences.")) {
       const [parent, child] = name.split(".");
       setFormData((prev) => ({
         ...prev,
@@ -319,6 +328,31 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
       setErrors({ submit: "Failed to update profile. Please try again." });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddressChange = (newAddress) => {
+    setFormData(prev => ({
+      ...prev,
+      address: newAddress
+    }));
+    setAddressDisplay(newAddress);
+  };
+  
+  const handleCoordinatesChange = (coordinates) => {
+    // Reverse geocode to get address from coordinates
+    if (window.google?.maps?.Geocoder) {
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ location: { lat: coordinates[0], lng: coordinates[1] } }, (results, status) => {
+        if (status === "OK" && results[0]) {
+          const address = results[0].formatted_address;
+          setFormData(prev => ({
+            ...prev,
+            address: address
+          }));
+          setAddressDisplay(address);
+        }
+      });
     }
   };
 
@@ -647,67 +681,15 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
                     Address
                   </h3>
 
-                  <div className="form-group">
-                    <label htmlFor="address.street" className="form-label">
-                      Street Address
-                    </label>
-                    <input
-                      type="text"
-                      id="address.street"
-                      name="address.street"
-                      className="form-input"
-                      value={formData.address.street}
-                      onChange={handleInputChange}
-                      placeholder="123 Main Street"
-                    />
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label htmlFor="address.city" className="form-label">
-                        City
-                      </label>
-                      <input
-                        type="text"
-                        id="address.city"
-                        name="address.city"
-                        className="form-input"
-                        value={formData.address.city}
-                        onChange={handleInputChange}
-                        placeholder="Springfield"
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label htmlFor="address.state" className="form-label">
-                        State
-                      </label>
-                      <input
-                        type="text"
-                        id="address.state"
-                        name="address.state"
-                        className="form-input"
-                        value={formData.address.state}
-                        onChange={handleInputChange}
-                        placeholder="IL"
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label htmlFor="address.zipCode" className="form-label">
-                        ZIP Code
-                      </label>
-                      <input
-                        type="text"
-                        id="address.zipCode"
-                        name="address.zipCode"
-                        className="form-input"
-                        value={formData.address.zipCode}
-                        onChange={handleInputChange}
-                        placeholder="62701"
-                      />
-                    </div>
-                  </div>
+                  <SimpleAddressField
+                    value={formData.address}
+                    onChange={handleAddressChange}
+                    onCoordinatesChange={handleCoordinatesChange}
+                    placeholder="No address set"
+                    label="Address"
+                    hint="Enter your address for company records"
+                    organizationAddress={organization?.address}
+                  />
                 </div>
               </div>
             )}

@@ -64,7 +64,8 @@
       "Bash(kill:*)",
       "Bash(true)",
       "Bash(touch:*)",
-      "Bash(timeout 20 npm start)"
+      "Bash(timeout 20 npm start)",
+      "WebFetch(domain:developers.google.com)"
     ],
     "deny": []
   }

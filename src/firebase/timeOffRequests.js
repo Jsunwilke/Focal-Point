@@ -289,6 +289,80 @@ export const cancelTimeOffRequest = async (requestId) => {
   }
 };
 
+// Revert time off request status (undo approve/deny)
+export const revertTimeOffRequestStatus = async (requestId, reverterId, reverterName) => {
+  try {
+    const docRef = doc(firestore, 'timeOffRequests', requestId);
+    
+    // First get the current request to store history
+    const requestDoc = await getDoc(docRef, 'revertTimeOffRequestStatus');
+    if (!requestDoc.exists()) {
+      throw new Error('Time off request not found');
+    }
+    
+    const currentData = requestDoc.data();
+    
+    // Only allow reverting approved or denied requests
+    if (currentData.status !== 'approved' && currentData.status !== 'denied') {
+      throw new Error('Can only revert approved or denied requests');
+    }
+    
+    // Prepare updates - set back to under_review and store previous status info
+    const updates = {
+      status: 'under_review',
+      reviewedBy: reverterId,
+      reviewerName: reverterName,
+      reviewedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      
+      // Store previous status information
+      previousStatus: currentData.status,
+      previousStatusData: {
+        status: currentData.status,
+        ...(currentData.status === 'approved' && {
+          approvedBy: currentData.approvedBy,
+          approverName: currentData.approverName,
+          approvedAt: currentData.approvedAt
+        }),
+        ...(currentData.status === 'denied' && {
+          deniedBy: currentData.deniedBy,
+          denierName: currentData.denierName,
+          deniedAt: currentData.deniedAt,
+          denialReason: currentData.denialReason
+        })
+      },
+      revertedAt: serverTimestamp(),
+      revertedBy: reverterId,
+      reverterName: reverterName
+    };
+    
+    // Clear approval/denial fields
+    if (currentData.status === 'approved') {
+      updates.approvedBy = null;
+      updates.approverName = null;
+      updates.approvedAt = null;
+    } else if (currentData.status === 'denied') {
+      updates.deniedBy = null;
+      updates.denierName = null;
+      updates.deniedAt = null;
+      updates.denialReason = null;
+    }
+    
+    await updateDoc(docRef, updates);
+    
+    // Clear relevant caches
+    timeOffCacheService.clearTimeOffRequestsCache(currentData.organizationID);
+    if (currentData.photographerId) {
+      timeOffCacheService.clearUserTimeOffRequestsCache(currentData.photographerId);
+    }
+    
+    return { id: requestId, ...updates };
+  } catch (error) {
+    console.error('Error reverting time off request status:', error);
+    throw error;
+  }
+};
+
 // Get approved time off for a date range (for calendar display)
 export const getApprovedTimeOffForDateRange = async (organizationId, startDate, endDate) => {
   try {

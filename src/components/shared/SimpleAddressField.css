@@ -1,0 +1,69 @@
+/* src/components/shared/SimpleAddressField.css */
+.simple-address-field {
+  width: 100%;
+}
+
+.address-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.address-input-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.address-input-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-secondary);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.address-input {
+  padding-left: 40px !important;
+  width: 100%;
+}
+
+.address-update-btn {
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.address-map-preview {
+  margin-top: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.address-field-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--error-bg);
+  color: var(--error-color);
+  border: 1px solid var(--error-color);
+  font-size: 14px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .address-input-group {
+    flex-direction: column;
+  }
+  
+  .address-update-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

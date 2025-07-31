@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import ReactDOM from "react-dom";
 import { X, School, MapPin, User, Mail, Phone, Save, Map } from "lucide-react";
 import Button from "../shared/Button";
-import MapModal from "../shared/MapModal";
+import GoogleMapModal from "../shared/GoogleMapModal";
 import "../shared/Modal.css";
 import "./AddSchoolModal.css";
 
@@ -450,7 +450,7 @@ const AddSchoolModal = ({
       </div>
 
       {/* Map Modal */}
-      <MapModal
+      <GoogleMapModal
         isOpen={showMapModal}
         onClose={() => setShowMapModal(false)}
         initialCoordinates={parseInitialCoordinates()}
