@@ -197,7 +197,7 @@ export const DataCacheProvider = ({ children }) => {
     });
   }, []);
 
-  // Process time-off data
+  // Process time-off data into calendar format
   const processTimeOffData = useCallback((snapshotOrArray) => {
     const requests = [];
     
@@ -215,7 +215,51 @@ export const DataCacheProvider = ({ children }) => {
       });
     }
     
-    return requests;
+    // Convert to calendar entries immediately (like sessions)
+    const calendarEntries = [];
+    requests.forEach(request => {
+      // Only include approved, pending, and under_review requests
+      if (!['pending', 'under_review', 'approved'].includes(request.status)) return;
+      
+      const startDate = request.startDate?.toDate ? request.startDate.toDate() : new Date(request.startDate);
+      const endDate = request.endDate?.toDate ? request.endDate.toDate() : new Date(request.endDate);
+      
+      // Create entries for each day of time off
+      const currentDate = new Date(startDate);
+      while (currentDate <= endDate) {
+        const dateStr = formatLocalDate(currentDate);
+        
+        // Use actual times for partial day, default times for full day
+        const displayStartTime = request.isPartialDay && request.startTime ? request.startTime : '09:00';
+        const displayEndTime = request.isPartialDay && request.endTime ? request.endTime : '17:00';
+        
+        calendarEntries.push({
+          id: `timeoff-${request.id}-${dateStr}`,
+          sessionId: request.id,
+          title: request.isPartialDay 
+            ? `Time Off: ${request.reason} (${displayStartTime} - ${displayEndTime})`
+            : `Time Off: ${request.reason}`,
+          date: dateStr,
+          startTime: displayStartTime,
+          endTime: displayEndTime,
+          photographerId: request.photographerId,
+          photographerName: request.photographerName,
+          sessionType: 'timeoff',
+          sessionTypes: ['timeoff'],
+          status: request.status,
+          isTimeOff: true,
+          isPartialDay: request.isPartialDay || false,
+          reason: request.reason,
+          notes: request.notes,
+          // Keep original request data for filtering
+          originalRequest: request
+        });
+        
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    });
+    
+    return calendarEntries;
   }, []);
 
   // Set up real-time listener for sessions
@@ -422,16 +466,16 @@ export const DataCacheProvider = ({ children }) => {
   const setupTimeOffListener = useCallback(() => {
     if (!organization?.id) return;
 
-    // Only get recent time-off requests (last 90 days)
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    // Get recent and upcoming time off requests
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
     const timeOffQuery = query(
       collection(firestore, "timeOffRequests"),
       where("organizationID", "==", organization.id),
-      where("createdAt", ">=", Timestamp.fromDate(ninetyDaysAgo)),
-      orderBy("createdAt", "desc"),
-      limit(200) // Reduced from 500
+      where("endDate", ">=", Timestamp.fromDate(threeMonthsAgo)),
+      orderBy("endDate", "asc"),
+      limit(200)
     );
 
     const unsubscribe = onSnapshot(
@@ -480,7 +524,6 @@ export const DataCacheProvider = ({ children }) => {
     if (!organization?.id) return;
 
     let unsubscribe = null;
-    let syncTimeout = null;
 
     // Load from cache first for instant display
     const cachedTimeOff = dataCacheService.getCachedTimeOffRequests(organization.id);
@@ -494,10 +537,9 @@ export const DataCacheProvider = ({ children }) => {
       });
       readCounter.recordCacheHit('timeOffRequests', 'DataCacheContext', cachedTimeOff.length);
       
-      // Delay real-time sync - time off requests are less critical
-      syncTimeout = setTimeout(() => {
-        unsubscribe = setupTimeOffListener();
-      }, 15000); // 15 second delay for time off
+      // Start real-time sync immediately for better UX
+      // The cache already reduces Firebase reads significantly
+      unsubscribe = setupTimeOffListener();
     } else {
       // No cache - need immediate sync
       setTimeOffCache(prev => ({ ...prev, loading: true, error: null }));
@@ -509,13 +551,11 @@ export const DataCacheProvider = ({ children }) => {
     setListeners(prev => ({ 
       ...prev, 
       timeOff: () => {
-        if (syncTimeout) clearTimeout(syncTimeout);
         if (unsubscribe) unsubscribe();
       }
     }));
 
     return () => {
-      if (syncTimeout) clearTimeout(syncTimeout);
       if (unsubscribe) unsubscribe();
     };
   }, [organization?.id, processTimeOffData, setupTimeOffListener]);
@@ -561,7 +601,7 @@ export const DataCacheProvider = ({ children }) => {
     sessions: sessionsCache.data,
     users: usersCache.data,
     teamMembers: usersCache.data, // Alias for backwards compatibility
-    timeOffRequests: timeOffCache.data,
+    timeOffRequests: timeOffCache.data || [],
     
     // Status
     loading: {
@@ -616,9 +656,16 @@ export const DataCacheProvider = ({ children }) => {
     },
     
     // Computed data
-    pendingTimeOffCount: timeOffCache.data.filter(r => 
-      r.status === 'pending' || r.status === 'under_review'
-    ).length,
+    pendingTimeOffCount: (() => {
+      // Get unique request IDs since we have multiple entries per request
+      const uniqueRequestIds = new Set();
+      timeOffCache.data.forEach(entry => {
+        if (entry.status === 'pending' || entry.status === 'under_review') {
+          uniqueRequestIds.add(entry.sessionId); // sessionId is the original request ID
+        }
+      });
+      return uniqueRequestIds.size;
+    })(),
   };
 
   return (

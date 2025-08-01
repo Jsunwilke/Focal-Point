@@ -36,16 +36,20 @@ export const getPayrollData = async (organizationID, startDate, endDate, userIds
       : timeEntries;
     
     // Get organization for overtime settings
-    const { getOrganization } = await import('./firestore');
+    const { getOrganization, getSessions } = await import('./firestore');
     const organization = await getOrganization(organizationID);
     
-    // Process the data with overtime settings
+    // Get sessions for the period to calculate attendance
+    const sessions = await getSessions(organizationID, startDate, endDate);
+    
+    // Process the data with overtime settings and sessions
     const payrollSummary = generatePayrollSummary(
       filteredEntries, 
       teamMembers, 
       startDate, 
       endDate,
-      organization?.overtimeSettings
+      organization?.overtimeSettings,
+      sessions
     );
     
     return {
@@ -152,9 +156,10 @@ export const getPayrollDataForPeriod = async (
  * @param {string} startDate - Period start date
  * @param {string} endDate - Period end date
  * @param {Object} overtimeSettings - Organization overtime settings (optional)
+ * @param {Array} sessions - Array of session objects for attendance calculation (optional)
  * @returns {Object} Payroll summary with employee details and totals
  */
-export const generatePayrollSummary = (timeEntries, teamMembers, startDate, endDate, overtimeSettings = null) => {
+export const generatePayrollSummary = (timeEntries, teamMembers, startDate, endDate, overtimeSettings = null, sessions = []) => {
   const employeeSummaries = [];
   const organizationTotals = {
     totalHours: 0,
@@ -179,6 +184,24 @@ export const generatePayrollSummary = (timeEntries, teamMembers, startDate, endD
     const totalHours = calculateTotalHours(userEntries);
     const completedEntries = userEntries.filter(entry => entry.status === 'clocked-out');
     const uniqueSessions = new Set(userEntries.map(entry => entry.sessionId).filter(Boolean));
+
+    // Calculate attendance based on assigned sessions
+    const assignedSessions = sessions.filter(session => {
+      // Check if user is assigned to this session
+      // Check both the photographerId field AND the composite ID pattern
+      return session.photographerId === member.id || 
+             (session.id && session.id.endsWith(`-${member.id}`));
+    });
+    
+    // Get worked sessions (sessions with time entries)
+    const workedSessionIds = new Set(userEntries.map(entry => entry.sessionId).filter(Boolean));
+    const workedSessions = assignedSessions.filter(session => workedSessionIds.has(session.id));
+    
+    const attendance = {
+      assigned: assignedSessions.length,
+      worked: workedSessions.length,
+      percentage: assignedSessions.length > 0 ? (workedSessions.length / assignedSessions.length) * 100 : 100
+    };
 
     const employeeSummary = {
       employee: {
@@ -207,7 +230,8 @@ export const generatePayrollSummary = (timeEntries, teamMembers, startDate, endD
         startDate,
         endDate,
         workDays: getWorkDaysInPeriod(userEntries)
-      }
+      },
+      attendance: attendance
     };
 
     employeeSummaries.push(employeeSummary);
@@ -315,30 +339,11 @@ const calculateOvertime = (userEntries, startDate, endDate, overtimeSettings = n
   
   // Group entries by week for weekly overtime calculation
   if (settings.calculationMethod === 'weekly') {
-    // Calculate weekly overtime based on calendar weeks
-    const weeklyTotals = {};
-    
-    Object.entries(dailyHours).forEach(([dateStr, dayData]) => {
-      const date = new Date(dateStr);
-      const weekStart = new Date(date);
-      const dayOfWeek = date.getDay();
-      const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      weekStart.setDate(date.getDate() + daysToMonday);
-      weekStart.setHours(0, 0, 0, 0);
-      const weekKey = weekStart.toISOString().split('T')[0];
-      
-      if (!weeklyTotals[weekKey]) {
-        weeklyTotals[weekKey] = 0;
-      }
-      weeklyTotals[weekKey] += dayData.hours;
-    });
-    
-    // Calculate overtime for each week
-    Object.values(weeklyTotals).forEach(weekHours => {
-      if (weekHours > settings.weeklyThreshold) {
-        weeklyOvertime += weekHours - settings.weeklyThreshold;
-      }
-    });
+    // For weekly calculation method, calculate overtime for the entire pay period
+    // Most studios that use weekly overtime calculate it as total hours over 40 for the pay period
+    if (totalHours > settings.weeklyThreshold) {
+      weeklyOvertime = totalHours - settings.weeklyThreshold;
+    }
   } else {
     // For daily method, still calculate weekly for informational purposes
     const periodDays = Object.keys(dailyHours).length;
@@ -421,11 +426,10 @@ const generatePayrollInsights = (employeeSummaries, organizationTotals) => {
 
   // Calculate insights
   employeeSummaries.forEach(emp => {
-    // Attendance insights
-    const workDaysCount = emp.period.workDays.length;
-    if (workDaysCount >= 5) {
+    // Attendance insights based on assigned sessions
+    if (emp.attendance.percentage === 100) {
       insights.attendance.perfect++;
-    } else if (workDaysCount >= 3) {
+    } else if (emp.attendance.percentage >= 80) {
       insights.attendance.good++;
     } else {
       insights.attendance.needs_attention++;

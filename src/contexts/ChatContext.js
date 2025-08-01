@@ -57,7 +57,6 @@ export const ChatProvider = ({ children }) => {
 
   // Force refresh conversations (bypasses cache)
   const forceRefreshConversations = useCallback(async () => {
-    console.log('[ChatContext] Force refreshing conversations...');
     if (!userProfile?.id) return;
     
     try {
@@ -69,7 +68,6 @@ export const ChatProvider = ({ children }) => {
       setConversations(conversations);
       chatCacheService.setCachedConversations(conversations);
       
-      console.log('[ChatContext] Force refresh complete, found', conversations.length, 'conversations');
     } catch (error) {
       console.error('[ChatContext] Error force refreshing conversations:', error);
       showToast('Failed to refresh conversations', 'error');
@@ -79,16 +77,13 @@ export const ChatProvider = ({ children }) => {
   // Set up conversations listener with cache-first loading
   useEffect(() => {
     if (!userProfile?.id) {
-      console.log('[ChatContext] No user profile, skipping conversation setup');
       return;
     }
 
-    console.log('[ChatContext] Setting up conversations for user:', userProfile.id);
 
     // Load conversations from cache first for instant display
     const cachedConversations = chatCacheService.getCachedConversations();
     if (cachedConversations) {
-      console.log('[ChatContext] Loading', cachedConversations.length, 'conversations from cache');
       setConversations(cachedConversations);
       setLoading(false);
       
@@ -104,7 +99,6 @@ export const ChatProvider = ({ children }) => {
       // Track cache hit
       readCounter.recordCacheHit('conversations', 'ChatContext', cachedConversations.length);
     } else {
-      console.log('[ChatContext] No cached conversations found');
       // Track cache miss
       readCounter.recordCacheMiss('conversations', 'ChatContext');
     }
@@ -112,7 +106,6 @@ export const ChatProvider = ({ children }) => {
     const unsubscribe = chatService.subscribeToUserConversations(
       userProfile.id,
       (updatedConversations) => {
-        console.log('[ChatContext] Received', updatedConversations.length, 'conversations from listener');
         setConversations(updatedConversations);
         setLoading(false);
         
@@ -123,7 +116,6 @@ export const ChatProvider = ({ children }) => {
             newUnreadCounts[conv.id] = conv.unreadCounts[userProfile.id];
           }
         });
-        console.log('[ChatContext] Unread counts updated:', newUnreadCounts);
         setUnreadCounts(newUnreadCounts);
         
         // Cache the updated conversations
@@ -135,7 +127,6 @@ export const ChatProvider = ({ children }) => {
 
     return () => {
       if (unsubscribe) {
-        console.log('[ChatContext] Cleaning up conversations listener');
         unsubscribe();
       }
     };
@@ -241,13 +232,11 @@ export const ChatProvider = ({ children }) => {
   // Mark messages as read when opening a conversation in main chat view
   useEffect(() => {
     if (activeConversation?.id && userProfile?.id && isMainChatView) {
-      console.log('[ChatContext] Marking messages as read for conversation:', activeConversation.id);
       
       // Small delay to ensure UI has updated
       const timer = setTimeout(() => {
         chatService.markMessagesAsRead(activeConversation.id, userProfile.id)
           .then(() => {
-            console.log('[ChatContext] Messages marked as read successfully');
             // Update local unread count immediately
             setUnreadCounts(prev => ({
               ...prev,
@@ -320,14 +309,6 @@ export const ChatProvider = ({ children }) => {
 
   // Send message
   const sendMessage = useCallback(async (text, type = 'text', fileUrl = null) => {
-    console.log('[ChatContext] sendMessage called:', {
-      hasActiveConversation: !!activeConversation?.id,
-      activeConversationId: activeConversation?.id,
-      hasUserProfile: !!userProfile?.id,
-      userProfileId: userProfile?.id,
-      textLength: text?.trim()?.length,
-      textContent: text?.substring(0, 50) + '...'
-    });
 
     if (!activeConversation?.id || !userProfile?.id || !text.trim()) {
       console.error('[ChatContext] Cannot send message - missing required data:', {
@@ -346,12 +327,6 @@ export const ChatProvider = ({ children }) => {
                         userProfile.email || 
                         'Unknown User';
 
-      console.log('[ChatContext] Calling chatService.sendMessage with:', {
-        conversationId: activeConversation.id,
-        userId: userProfile.id,
-        senderName,
-        type
-      });
 
       await chatService.sendMessage(
         activeConversation.id,
@@ -362,7 +337,6 @@ export const ChatProvider = ({ children }) => {
         senderName
       );
 
-      console.log('[ChatContext] Message sent successfully');
       
       // Update local conversation state immediately for instant UI update
       const messagePreview = {
@@ -497,7 +471,6 @@ export const ChatProvider = ({ children }) => {
     if (!userProfile?.id) return;
     
     try {
-      console.log('[ChatContext] Toggling pin:', { conversationId, isCurrentlyPinned });
       
       // Update Firebase - the real-time listener will update the local state
       await chatService.togglePinConversation(conversationId, userProfile.id, isCurrentlyPinned);
@@ -620,7 +593,6 @@ export const ChatProvider = ({ children }) => {
       
       // Then update Firebase
       await chatService.markMessagesAsRead(conversationId, userProfile.id);
-      console.log('[ChatContext] Messages marked as read for conversation:', conversationId);
     } catch (error) {
       console.error('[ChatContext] Error marking messages as read:', error);
       // Optionally revert optimistic update on error

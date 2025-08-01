@@ -212,7 +212,6 @@ const EditTimeEntryModal = ({ isOpen, onClose, onSuccess, timeEntry }) => {
       if (addToast && typeof addToast === 'function') {
         addToast('Time entry updated successfully!', 'success');
       } else {
-        console.log('Time entry updated successfully!');
       }
       
       onSuccess?.();
@@ -259,7 +258,6 @@ const EditTimeEntryModal = ({ isOpen, onClose, onSuccess, timeEntry }) => {
       if (addToast && typeof addToast === 'function') {
         addToast('Time entry updated successfully!', 'success');
       } else {
-        console.log('Time entry updated successfully!');
       }
       
       onSuccess?.();

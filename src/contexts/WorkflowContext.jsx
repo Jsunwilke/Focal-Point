@@ -438,7 +438,6 @@ export const WorkflowProvider = ({ children }) => {
 
     // Set up periodic refresh every 60 seconds
     refreshIntervalRef.current = setInterval(() => {
-      console.log('Periodic workflow refresh');
       loadUserWorkflows();
     }, 60000); // 60 seconds
 
@@ -474,7 +473,6 @@ export const WorkflowProvider = ({ children }) => {
     // Check if we have cached data first
     const cachedWorkflows = workflowCacheService.getCachedWorkflows(userProfile.id, organization.id, 'active');
     if (cachedWorkflows && cachedWorkflows.length > 0) {
-      console.log('Using cached workflows for initial display');
       setUserWorkflows(cachedWorkflows);
     }
 
@@ -485,14 +483,12 @@ export const WorkflowProvider = ({ children }) => {
       async (snapshot) => {
         // Skip if this is from cache
         if (snapshot.metadata.fromCache) {
-          console.log('Skipping cached snapshot');
           return;
         }
 
         // Rate limit updates
         const now = Date.now();
         if (now - lastListenerUpdateRef.current < LISTENER_UPDATE_COOLDOWN) {
-          console.log('Skipping workflow update due to rate limit');
           return;
         }
         lastListenerUpdateRef.current = now;
@@ -500,11 +496,9 @@ export const WorkflowProvider = ({ children }) => {
         // Only process if there are actual changes
         const changes = snapshot.docChanges();
         if (changes.length === 0) {
-          console.log('No changes detected, skipping update');
           return;
         }
 
-        console.log(`Processing ${changes.length} workflow changes`);
 
         // Process workflow changes
         const workflows = [];
@@ -545,7 +539,6 @@ export const WorkflowProvider = ({ children }) => {
         
         // Only fetch templates if there are new ones to load
         if (templatesToLoad.length > 0) {
-          console.log(`Loading ${templatesToLoad.length} templates`);
           
           // Batch load templates in groups of 10 (Firestore 'in' query limit)
           const templateGroups = [];

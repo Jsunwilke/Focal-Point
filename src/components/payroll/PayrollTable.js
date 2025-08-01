@@ -104,11 +104,18 @@ const PayrollTable = ({ payrollData, loading, onEmployeeSelect }) => {
     if (employee.hours.total === 0) {
       return <AlertCircle size={16} className="status-icon status-icon--warning" title="No hours recorded" />;
     }
+    // Perfect attendance takes priority
+    if (employee.attendance && employee.attendance.percentage === 100 && employee.attendance.assigned > 0) {
+      return <CheckCircle size={16} className="status-icon status-icon--perfect" title="Perfect attendance" />;
+    }
     if (employee.hours.total >= totals.avgHoursPerEmployee * 1.2) {
       return <Award size={16} className="status-icon status-icon--high" title="High performer" />;
     }
     if (employee.hours.overtime.total.hours > 0) {
       return <TrendingUp size={16} className="status-icon status-icon--overtime" title="Overtime hours" />;
+    }
+    if (employee.attendance && employee.attendance.percentage < 80) {
+      return <AlertCircle size={16} className="status-icon status-icon--warning" title="Low attendance" />;
     }
     return <CheckCircle size={16} className="status-icon status-icon--normal" title="Normal hours" />;
   };
@@ -128,8 +135,12 @@ const PayrollTable = ({ payrollData, loading, onEmployeeSelect }) => {
       ? ((new Date(entry.clockOutTime.seconds * 1000) - new Date(entry.clockInTime.seconds * 1000)) / (1000 * 60 * 60)).toFixed(2)
       : 'Active';
 
+    // Parse date string to avoid timezone issues
+    const [year, month, day] = entry.date.split('-').map(Number);
+    const entryDate = new Date(year, month - 1, day); // month is 0-indexed
+    
     return {
-      date: new Date(entry.date).toLocaleDateString('en-US', { 
+      date: entryDate.toLocaleDateString('en-US', { 
         weekday: 'short',
         month: 'short', 
         day: 'numeric' 
@@ -317,7 +328,7 @@ const PayrollTable = ({ payrollData, loading, onEmployeeSelect }) => {
                   <div className="hours-main">{employee.hours.formatted}</div>
                   {employee.hours.overtime.total.hours > 0 && (
                     <div className="hours-overtime">
-                      +{employee.hours.overtime.total.formatted} OT
+                      {employee.hours.overtime.total.formatted} OT
                     </div>
                   )}
                 </div>

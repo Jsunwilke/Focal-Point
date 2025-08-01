@@ -1,10 +1,10 @@
 // Centralized cache service for DataCacheContext data
 class DataCacheService {
   constructor() {
-    this.CACHE_VERSION = '1.1'; // Increment version to invalidate old caches
+    this.CACHE_VERSION = '1.0'; // Version for cache compatibility
     this.SESSIONS_CACHE_DURATION = 4 * 60 * 60 * 1000; // 4 hours - employees come and go frequently
     this.USERS_CACHE_DURATION = 2 * 60 * 60 * 1000; // 2 hours - user data changes less often
-    this.TIMEOFF_CACHE_DURATION = 60 * 60 * 1000; // 1 hour - time off requests moderate change rate
+    this.TIMEOFF_CACHE_DURATION = 4 * 60 * 60 * 1000; // 4 hours - match sessions for consistent loading
   }
 
   // Helper to serialize timestamps and dates

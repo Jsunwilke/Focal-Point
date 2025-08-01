@@ -8,6 +8,24 @@
   max-width: 1400px;
   margin: 0 auto;
   padding: var(--spacing-lg);
+  overflow: visible;
+}
+
+/* Standalone layout for payroll page */
+.payroll-standalone-layout {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.payroll-main-content {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  height: auto;
+  min-height: 100vh;
 }
 
 /* Header Section */
@@ -315,7 +333,7 @@
   background: var(--background-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .payroll-tab {
@@ -366,7 +384,9 @@
   background: var(--background-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+  flex: none;
 }
 
 /* ==============================================
@@ -879,8 +899,19 @@
 .employee-table {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  overflow-x: auto;
+  overflow: visible !important;
   min-width: 100%;
+  position: relative;
+  background: var(--background-secondary);
+  height: auto !important;
+  max-height: none !important;
+}
+
+/* Force table body to expand */
+.employee-table .table-body {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
 }
 
 .table-header {
@@ -961,6 +992,7 @@
 .table-cell--sortable:hover {
   color: var(--primary-color);
 }
+
 
 .table-cell--center {
   justify-content: center;
@@ -1481,10 +1513,9 @@
     justify-content: center;
   }
 
-  /* Mobile table handling */
+  /* Mobile table handling - removed overflow to allow auto-expansion */
   .employee-table {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow: visible;
   }
 
   .table-row,

@@ -23,6 +23,9 @@ import MileageTable from '../components/mileage/MileageTable';
 import PayrollMileageTable from '../components/mileage/PayrollMileageTable';
 import PayrollExportModal from '../components/payroll/PayrollExportModal';
 import Button from '../components/shared/Button';
+import Header from '../components/layout/Header';
+import Sidebar from '../components/layout/Sidebar';
+import { ToastProvider } from '../contexts/ToastContext';
 import './PayrollTimesheets.css';
 
 const PayrollTimesheets = () => {
@@ -188,7 +191,12 @@ const PayrollTimesheets = () => {
   }
 
   return (
-    <div className="payroll-timesheets">
+    <ToastProvider>
+      <div className="payroll-standalone-layout">
+        <Sidebar />
+        <div className="payroll-main-content">
+          <Header />
+          <div className="payroll-timesheets payroll-page">
       {/* Header */}
       <div className="payroll-header">
         <div className="payroll-header-content">
@@ -461,7 +469,10 @@ const PayrollTimesheets = () => {
         payrollData={payrollData}
         period={selectedPeriod}
       />
-    </div>
+          </div>
+        </div>
+      </div>
+    </ToastProvider>
   );
 };
 

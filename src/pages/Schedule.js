@@ -273,37 +273,32 @@ const Schedule = () => {
 
   // Use cached time-off requests (no additional listener needed)
 
-  // Filter time off requests for current date range and include both pending and approved
-  const visibleTimeOffRequests = React.useMemo(() => {
-    if (!timeOffRequests.length) return [];
+  // Time off requests are now pre-processed as calendar entries in DataCacheContext
+  // Just filter them by current date range
+  const visibleTimeOffEntries = React.useMemo(() => {
+    if (!timeOffRequests || !timeOffRequests.length) return [];
 
     // Calculate date range inline
     let start, end;
     if (viewMode === "week") {
-      start = startOfWeek(currentDate, 0);
-      end = endOfWeek(currentDate, 0);
+      start = formatLocalDate(startOfWeek(currentDate, 0));
+      end = formatLocalDate(endOfWeek(currentDate, 0));
     } else {
-      start = new Date(
+      start = formatLocalDate(new Date(
         currentDate.getFullYear(),
         currentDate.getMonth(),
         1
-      );
-      end = new Date(
+      ));
+      end = formatLocalDate(new Date(
         currentDate.getFullYear(),
         currentDate.getMonth() + 1,
         0
-      );
+      ));
     }
 
-    return timeOffRequests.filter(request => {
-      // Include pending, under_review, and approved requests (but not denied or cancelled)
-      if (!['pending', 'under_review', 'approved'].includes(request.status)) return false;
-
-      const startDate = request.startDate.toDate ? request.startDate.toDate() : new Date(request.startDate);
-      const endDate = request.endDate.toDate ? request.endDate.toDate() : new Date(request.endDate);
-      
-      // Check if request overlaps with current date range
-      return startDate <= end && endDate >= start;
+    // timeOffRequests are already calendar entries, just filter by date
+    return timeOffRequests.filter(entry => {
+      return entry.date >= start && entry.date <= end;
     });
   }, [timeOffRequests, currentDate, viewMode]);
 
@@ -822,51 +817,6 @@ const Schedule = () => {
     return `${hour12}:${minutes} ${ampm}`;
   };
 
-  // Convert time off requests to calendar format
-  const timeOffCalendarEntries = visibleTimeOffRequests.map(request => {
-    const startDate = request.startDate.toDate ? request.startDate.toDate() : new Date(request.startDate + 'T12:00:00');
-    const endDate = request.endDate.toDate ? request.endDate.toDate() : new Date(request.endDate + 'T12:00:00');
-    
-    // Create entries for each day of time off
-    const entries = [];
-    const currentDate = new Date(startDate);
-    
-    while (currentDate <= endDate) {
-      const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
-      
-      // Use actual times for partial day, default times for full day
-      const displayStartTime = request.isPartialDay && request.startTime ? request.startTime : '09:00';
-      const displayEndTime = request.isPartialDay && request.endTime ? request.endTime : '17:00';
-      
-      // Create appropriate title based on partial day or full day
-      const title = request.isPartialDay 
-        ? `Time Off: ${request.reason} (${formatTime(displayStartTime)} - ${formatTime(displayEndTime)})`
-        : `Time Off: ${request.reason}`;
-      
-      entries.push({
-        id: `timeoff-${request.id}-${dateStr}`,
-        sessionId: request.id,
-        title: title,
-        date: dateStr,
-        startTime: displayStartTime,
-        endTime: displayEndTime,
-        photographerId: request.photographerId,
-        photographerName: request.photographerName,
-        sessionType: 'timeoff',
-        sessionTypes: ['timeoff'],
-        status: request.status,
-        isTimeOff: true,
-        isPartialDay: request.isPartialDay || false,
-        reason: request.reason,
-        notes: request.notes
-      });
-      
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-    
-    return entries;
-  }).flat();
-
   // Filter sessions based on schedule type, visible photographers, and visible schools
   const filteredSessions = sessions.filter((session) => {
     // First filter by schedule type (my vs full)
@@ -895,7 +845,7 @@ const Schedule = () => {
   });
 
   // Filter time off entries based on schedule type only (time off should always be visible for scheduling context)
-  const filteredTimeOff = timeOffCalendarEntries.filter((entry) => {
+  const filteredTimeOff = visibleTimeOffEntries.filter((entry) => {
     const passesScheduleFilter =
       scheduleType === "my" ? entry.photographerId === userProfile?.id : true;
     

@@ -14,6 +14,7 @@ import {
   firestore
 } from '../services/firestoreWrapper';
 import timeOffCacheService from '../services/timeOffCacheService';
+import dataCacheService from '../services/dataCacheService';
 import { readCounter } from '../services/readCounter';
 
 // Create a new time off request
@@ -154,6 +155,8 @@ export const updateTimeOffRequest = async (requestId, updates) => {
     // Clear relevant caches
     if (updates.organizationID) {
       timeOffCacheService.clearTimeOffRequestsCache(updates.organizationID);
+      // Clear the dataCacheService cache used by DataCacheContext
+      localStorage.removeItem(`datacache_timeoff_${updates.organizationID}`);
     }
     if (updates.photographerId || updates.userId) {
       timeOffCacheService.clearUserTimeOffRequestsCache(updates.photographerId || updates.userId);
@@ -185,6 +188,9 @@ export const approveTimeOffRequest = async (requestId, approverId, approverName)
     if (requestDoc.exists()) {
       const requestData = requestDoc.data();
       timeOffCacheService.clearTimeOffRequestsCache(requestData.organizationID);
+      // Clear the dataCacheService cache used by DataCacheContext
+      localStorage.removeItem(`datacache_timeoff_${requestData.organizationID}`);
+      
       if (requestData.photographerId) {
         timeOffCacheService.clearUserTimeOffRequestsCache(requestData.photographerId);
       }
@@ -217,6 +223,9 @@ export const denyTimeOffRequest = async (requestId, denierId, denierName, denial
     if (requestDoc.exists()) {
       const requestData = requestDoc.data();
       timeOffCacheService.clearTimeOffRequestsCache(requestData.organizationID);
+      // Clear the dataCacheService cache used by DataCacheContext
+      localStorage.removeItem(`datacache_timeoff_${requestData.organizationID}`);
+      
       if (requestData.photographerId) {
         timeOffCacheService.clearUserTimeOffRequestsCache(requestData.photographerId);
       }
@@ -248,6 +257,9 @@ export const markTimeOffRequestUnderReview = async (requestId, reviewerId, revie
     if (requestDoc.exists()) {
       const requestData = requestDoc.data();
       timeOffCacheService.clearTimeOffRequestsCache(requestData.organizationID);
+      // Clear the dataCacheService cache used by DataCacheContext
+      localStorage.removeItem(`datacache_timeoff_${requestData.organizationID}`);
+      
       if (requestData.photographerId) {
         timeOffCacheService.clearUserTimeOffRequestsCache(requestData.photographerId);
       }
@@ -277,6 +289,9 @@ export const cancelTimeOffRequest = async (requestId) => {
     if (requestDoc.exists()) {
       const requestData = requestDoc.data();
       timeOffCacheService.clearTimeOffRequestsCache(requestData.organizationID);
+      // Clear the dataCacheService cache used by DataCacheContext
+      localStorage.removeItem(`datacache_timeoff_${requestData.organizationID}`);
+      
       if (requestData.photographerId) {
         timeOffCacheService.clearUserTimeOffRequestsCache(requestData.photographerId);
       }

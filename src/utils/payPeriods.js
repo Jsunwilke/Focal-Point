@@ -342,15 +342,11 @@ export const getCurrentPayPeriod = (payPeriodSettings) => {
   // Validate periods don't overlap
   const validation = validatePayPeriodBoundaries(periods);
   if (!validation.isValid) {
-    console.warn('[PayPeriods] Warning: Overlapping pay periods detected:', validation.overlaps);
   }
 
   // Find the period that includes today
   const currentPeriod = periods.find(period => period.start <= todayStr && period.end >= todayStr) || null;
   
-  if (currentPeriod) {
-    console.log(`[PayPeriods DEBUG] Current period: ${currentPeriod.start} to ${currentPeriod.end}`);
-  }
   
   return currentPeriod;
 };
@@ -388,17 +384,11 @@ export const getPreviousPayPeriod = (payPeriodSettings) => {
   const previousPeriod = periods.find(period => period.end === previousEndDateStr);
   
   if (previousPeriod) {
-    console.log(`[PayPeriods DEBUG] Previous period: ${previousPeriod.start} to ${previousPeriod.end}`);
-    console.log(`[PayPeriods DEBUG] Current period: ${currentPeriod.start} to ${currentPeriod.end}`);
-    console.log(`[PayPeriods DEBUG] No overlap: Previous ends ${previousPeriod.end}, Current starts ${currentPeriod.start}`);
     return previousPeriod;
   }
 
   // Fallback: Return the last period in the list (most recent before current)
   const fallbackPeriod = periods.length > 0 ? periods[periods.length - 1] : null;
-  if (fallbackPeriod) {
-    console.warn(`[PayPeriods DEBUG] Using fallback period: ${fallbackPeriod.start} to ${fallbackPeriod.end}`);
-  }
   return fallbackPeriod;
 };
 

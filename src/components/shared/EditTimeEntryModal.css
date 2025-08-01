@@ -96,12 +96,28 @@
 .date-input-group input,
 .select-input-group select {
   width: 100%;
-  padding: 10px 40px 10px 40px; /* Added right padding for browser's date picker icon */
+  padding: 10px 12px 10px 40px; /* Left padding for icon, normal right padding */
   border: 1px solid var(--border-light, #e2e8f0);
   border-radius: 8px;
   font-size: 14px;
   transition: border-color 0.2s ease;
   background: white;
+}
+
+/* Fix for date input calendar icon overlap */
+.date-input-group input[type="date"] {
+  padding-right: 40px;
+}
+
+.date-input-group input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  right: 10px;
+  cursor: pointer;
+  opacity: 0.5;
+}
+
+.date-input-group input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 .date-input-group input:focus,
@@ -136,7 +152,7 @@ textarea.error {
 
 .time-inputs-grid input {
   width: 100%;
-  padding: 10px 60px 10px 12px; /* Increased right padding for browser's time picker icon */
+  padding: 10px 12px;
   border: 1px solid var(--border-light, #e2e8f0);
   border-radius: 8px;
   font-size: 14px;
@@ -149,45 +165,22 @@ textarea.error {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-/* Webkit-specific styles for time inputs */
-.edit-time-entry-modal .time-inputs-grid input[type="time"] {
+/* Fix for time input clock icon overlap */
+.time-inputs-grid input[type="time"] {
   position: relative;
-  -webkit-appearance: none;
-  appearance: none;
-  background-color: white;
-}
-
-/* Style the time picker indicator (clock icon) */
-.edit-time-entry-modal .time-inputs-grid input[type="time"]::-webkit-calendar-picker-indicator {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  padding: 0;
-  cursor: pointer;
-  width: 16px;
-  height: 16px;
-  opacity: 0.7;
-}
-
-/* Ensure text doesn't overlap with the icon */
-.edit-time-entry-modal .time-inputs-grid input[type="time"]::-webkit-datetime-edit-fields-wrapper {
-  padding: 0;
-}
-
-.edit-time-entry-modal .time-inputs-grid input[type="time"]::-webkit-datetime-edit {
-  padding-left: 12px;
   padding-right: 40px;
 }
 
-.edit-time-entry-modal .time-inputs-grid input[type="time"]::-webkit-datetime-edit-text {
-  padding: 0 2px;
+/* Move the clock icon to the right */
+.time-inputs-grid input[type="time"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  right: 10px;
+  cursor: pointer;
+  opacity: 0.5;
 }
 
-.edit-time-entry-modal .time-inputs-grid input[type="time"]::-webkit-datetime-edit-hour-field,
-.edit-time-entry-modal .time-inputs-grid input[type="time"]::-webkit-datetime-edit-minute-field,
-.edit-time-entry-modal .time-inputs-grid input[type="time"]::-webkit-datetime-edit-ampm-field {
-  padding: 0;
+.time-inputs-grid input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 /* Duration Display */

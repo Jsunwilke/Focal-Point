@@ -95,6 +95,16 @@ const AppContent = () => {
               }
             />
             
+            {/* Payroll route without Layout constraints */}
+            <Route
+              path="/payroll-timesheets"
+              element={
+                <ProtectedRoute>
+                  <PayrollTimesheets />
+                </ProtectedRoute>
+              }
+            />
+            
             {/* Regular app routes with standard layout */}
             <Route
               path="/*"
@@ -108,7 +118,6 @@ const AppContent = () => {
                       <Route path="/mileage" element={<MileageTracking />} />
                       <Route path="/workflows" element={<WorkflowDashboard />} />
                       <Route path="/workflows/settings" element={<WorkflowSettings />} />
-                      <Route path="/payroll-timesheets" element={<PayrollTimesheets />} />
                       <Route path="/team" element={<TeamManagement />} />
                       <Route path="/schools" element={<SchoolManagement />} />
                       <Route path="/sports" element={<Sports />} />

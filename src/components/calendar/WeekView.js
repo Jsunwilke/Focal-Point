@@ -247,11 +247,6 @@ const WeekView = ({
       return !session.photographerId && (!session.photographers || session.photographers.length === 0);
     });
     
-    // Only log when sessions actually change
-    if (unassigned.length > 0) {
-      console.log('WeekView - Unassigned sessions found:', unassigned.length);
-    }
-    
     return unassigned;
   }, [sessions]);
 
