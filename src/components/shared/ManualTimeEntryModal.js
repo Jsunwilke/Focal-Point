@@ -12,14 +12,15 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import {
-  createManualTimeEntry,
-  getSessions
+  createManualTimeEntry
 } from '../../firebase/firestore';
+import { useDataCache } from '../../contexts/DataCacheContext';
 import './ManualTimeEntryModal.css';
 
 const ManualTimeEntryModal = ({ isOpen, onClose, onSuccess }) => {
   const { user, organization } = useAuth();
   const { addToast } = useToast();
+  const { sessions: cachedSessions } = useDataCache();
   
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -53,33 +54,23 @@ const ManualTimeEntryModal = ({ isOpen, onClose, onSuccess }) => {
 
   // Load sessions when date changes
   useEffect(() => {
-    const loadSessions = async () => {
-      if (!user || !organization || !formData.date) return;
+    if (!user || !organization || !formData.date || !cachedSessions) {
+      setSessions([]);
+      return;
+    }
 
-      try {
-        const sessionsData = await getSessions(organization.id);
-        // Filter sessions for selected date and where user is assigned
-        const dateSessions = sessionsData.filter(session => {
-          if (session.date !== formData.date) return false;
-          
-          // Check if user is assigned to this session
-          if (session.photographers && Array.isArray(session.photographers)) {
-            return session.photographers.some(photographer => photographer.id === user.uid);
-          } else if (session.photographer) {
-            return session.photographer.id === user.uid;
-          }
-          
-          return false;
-        });
-        
-        setSessions(dateSessions);
-      } catch (error) {
-        console.error('Error loading sessions:', error);
-      }
-    };
-
-    loadSessions();
-  }, [user, organization, formData.date]);
+    // Use cached sessions data instead of fetching from Firestore
+    // Filter sessions for selected date and where user is assigned
+    const dateSessions = cachedSessions.filter(session => {
+      if (session.date !== formData.date) return false;
+      
+      // Check if user is assigned to this session
+      // The cached sessions data already has photographerId field
+      return session.photographerId === user.uid;
+    });
+    
+    setSessions(dateSessions);
+  }, [user, organization, formData.date, cachedSessions]);
 
   const validateForm = () => {
     const newErrors = {};

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
+import { useDataCache } from "../contexts/DataCacheContext";
 import {
   subscribeToDailyJobReports,
   subscribeToNewDailyJobReports,
@@ -82,6 +83,7 @@ const parseDateField = (dateField) => {
 const DailyReports = () => {
   const { userProfile, organization } = useAuth();
   const { showToast } = useToast();
+  const { dailyJobReports: cachedReports, loading: { dailyJobReports: cacheLoading } } = useDataCache();
   
   // Component instance tracking
   const componentId = useMemo(() => `DailyReports-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, []);
@@ -136,12 +138,12 @@ const DailyReports = () => {
   const [showImageModal, setShowImageModal] = useState(false);
   const [currentImage, setCurrentImage] = useState("");
   const [editingReport, setEditingReport] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Local loading for component-specific operations
   const [error, setError] = useState("");
   const [pagination, setPagination] = useState(null);
   
-  // All reports data (cached)
-  const [allReports, setAllReports] = useState([]);
+  // Use reports from DataCacheContext instead of managing our own
+  const allReports = cachedReports || [];
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   
   // Date filtering state
@@ -178,8 +180,7 @@ const DailyReports = () => {
     deleteCount: 0
   });
   
-  // Real-time listener state
-  const [realtimeUnsubscribe, setRealtimeUnsubscribe] = useState(null);
+  // Real-time listener is now managed by DataCacheContext
 
   // Job description options (from your original app)
   const JOB_DESCRIPTION_OPTIONS = [
@@ -292,149 +293,20 @@ const DailyReports = () => {
     loadInitialData();
   }, [organization?.id]);
 
-  // Function to load all reports (cache-first)
+  // Function to load all reports (now just sets loading state since data comes from context)
   const loadAllReports = useCallback(async () => {
     if (!organization?.id) return;
     
-    const loadId = Date.now();
-    console.log(`[LoadAllReports-${loadId}] Starting load for organization ${organization.id}`);
+    // Data is now managed by DataCacheContext, so we just need to handle loading state
+    setLoading(false);
+    setIsInitialLoad(false);
     
-    try {
-      setLoading(true);
-      
-      // 1. Load from cache immediately
-      const cachedData = dailyJobReportsCacheService.getCachedFullDataset(organization.id);
-      
-      if (cachedData) {
-        setAllReports(cachedData.reports);
-        readCounter.recordCacheHit('dailyReports', 'DailyReports', cachedData.reports.length);
-        console.log(`[LoadAllReports-${loadId}] Cache hit: loaded ${cachedData.reports.length} reports from cache`);
-        setIsInitialLoad(false);
-      } else {
-        readCounter.recordCacheMiss('dailyReports', 'DailyReports');
-        console.log(`[LoadAllReports-${loadId}] Cache miss: will load from Firebase`);
-      }
-      
-      // 2. Set up smart real-time listener (simplified approach)
-      // Prevent multiple instances from setting up listeners simultaneously
-      if (globalListener && globalListenerOrgId === organization.id) {
-        console.log(`[LoadAllReports-${loadId}] ⚠️  Global listener already exists, skipping setup to prevent duplicates`);
-        return;
-      }
-      
-      // Clean up existing listener for different organization
-      if (globalListener && globalListenerOrgId !== organization.id) {
-        console.log(`[LoadAllReports-${loadId}] Cleaning up existing global listener for different organization`);
-        globalListener();
-        globalListener = null;
-        globalListenerOrgId = null;
-      }
-      
-      let unsubscribe;
-      const listenerId = `listener-${loadId}`;
-      
-      // Always show decision logic to debug race conditions
-      console.log(`[LoadAllReports-${loadId}] 🔍 LISTENER DECISION:`);
-      console.log(`[LoadAllReports-${loadId}]   Cache available: ${!!cachedData}`);
-      console.log(`[LoadAllReports-${loadId}]   Cache reports: ${cachedData?.reports?.length || 0}`);
-      console.log(`[LoadAllReports-${loadId}]   Will use: ${cachedData ? 'OPTIMIZED' : 'FULL'} listener`);
-      
-      if (cachedData) {
-        // Cache exists - use optimized listener for new reports only
-        const latestTimestamp = dailyJobReportsCacheService.getLatestTimestamp(organization.id);
-        console.log(`[LoadAllReports-${loadId}] ✅ CACHE EXISTS - Using optimized listener with cached data`);
-        console.log(`[LoadAllReports-${loadId}] Latest cached timestamp: ${latestTimestamp ? latestTimestamp.toISOString() : 'NULL/UNDEFINED'}`);
-        console.log(`[LoadAllReports-${loadId}] Timestamp type: ${typeof latestTimestamp}`);
-        console.log(`[LoadAllReports-${loadId}] Timestamp milliseconds: ${latestTimestamp ? latestTimestamp.getTime() : 'N/A'}`);
-        
-        // Log the most recent report for debugging
-        const cachedData = dailyJobReportsCacheService.getCachedFullDataset(organization.id);
-        if (cachedData && cachedData.reports && cachedData.reports.length > 0) {
-          const latestReport = cachedData.reports[0];
-          console.log(`[LoadAllReports-${loadId}] Most recent cached report:`, {
-            id: latestReport.id,
-            date: latestReport.date,
-            timestamp: latestReport.timestamp,
-            timestampType: typeof latestReport.timestamp,
-            timestampValue: latestReport.timestamp?.seconds ? `${latestReport.timestamp.seconds} seconds` : 'N/A'
-          });
-        }
-        
-        unsubscribe = subscribeToNewDailyJobReports(
-          organization.id,
-          (newReports, metadata) => {
-            console.log(`[${listenerId}] Callback received - isIncremental: ${metadata.isIncremental}, newReports.length: ${newReports.length}`);
-            
-            if (metadata.isIncremental && newReports.length > 0) {
-              console.log(`[${listenerId}] Optimized listener: received ${newReports.length} new reports`);
-              console.log(`[${listenerId}] Attempting to merge new reports into cache...`);
-              
-              // Merge new reports into existing cache and state
-              const success = dailyJobReportsCacheService.mergeNewReportsIntoCache(organization.id, newReports);
-              console.log(`[${listenerId}] Merge result: ${success ? 'SUCCESS' : 'FAILED'}`);
-              
-              if (success) {
-                // Get updated cached data and update ALL component instances
-                const updatedCachedData = dailyJobReportsCacheService.getCachedFullDataset(organization.id);
-                console.log(`[${listenerId}] Updated cache data: ${updatedCachedData ? `${updatedCachedData.reports.length} reports` : 'NULL'}`);
-                
-                if (updatedCachedData) {
-                  // Update current component
-                  console.log(`[${listenerId}] Updating component state with ${updatedCachedData.reports.length} reports`);
-                  setAllReports(updatedCachedData.reports);
-                  // Note: Other component instances will get updates from cache-first loading
-                }
-              } else {
-                console.error(`[${listenerId}] Failed to merge new reports into cache`);
-              }
-            } else {
-              console.log(`[${listenerId}] Skipping merge - conditions not met`);
-            }
-            
-            setError("");
-          },
-          (err) => {
-            console.error("Error in optimized real-time listener:", err);
-            setError("Failed to load new reports: " + err.message);
-          },
-          latestTimestamp
-        );
-      } else {
-        // No cache - use full listener to load all data
-        console.log(`[LoadAllReports-${loadId}] ❌ NO CACHE - Using full listener to load all reports`);
-        
-        unsubscribe = subscribeToDailyJobReports(
-          organization.id,
-          (reportsData, metadata) => {
-            console.log(`[${listenerId}] Full listener: received ${reportsData.length} reports`);
-            
-            // Update all reports and cache the full dataset
-            setAllReports(reportsData);
-            setIsInitialLoad(false);
-            dailyJobReportsCacheService.setCachedFullDataset(organization.id, reportsData);
-            
-            // Note: Read count already recorded in firestore.js subscribeToDailyJobReports
-            setError("");
-          },
-          (err) => {
-            console.error("Error in full real-time listener:", err);
-            setError("Failed to load reports: " + err.message);
-          }
-        );
-      }
-      
-      // Set global listener to prevent duplicates
-      globalListener = unsubscribe;
-      globalListenerOrgId = organization.id;
-      console.log(`[LoadAllReports-${loadId}] ✅ Global listener set for organization ${organization.id} (${cachedData ? 'OPTIMIZED' : 'FULL'})`);
-      
-      setRealtimeUnsubscribe(() => unsubscribe);
-      
-    } catch (err) {
-      console.error("Error loading all reports:", err);
-      setError("Failed to load reports: " + err.message);
-    } finally {
-      setLoading(false);
+    // Clean up any existing global listeners since DataCacheContext handles this now
+    if (globalListener) {
+      console.log(`[DailyReports] Cleaning up legacy global listener`);
+      globalListener();
+      globalListener = null;
+      globalListenerOrgId = null;
     }
   }, [organization?.id]);
 
@@ -683,14 +555,7 @@ const DailyReports = () => {
     setCurrentPage(1);
   }, [searchTerm, dateFilter, selectedPhotographer, selectedSchool, selectedJobType, customDateRange, reportTypeFilter]);
   
-  // Cleanup real-time listener on unmount
-  useEffect(() => {
-    return () => {
-      if (realtimeUnsubscribe) {
-        realtimeUnsubscribe();
-      }
-    };
-  }, [realtimeUnsubscribe]);
+  // Real-time listener is now managed by DataCacheContext, no cleanup needed here
 
   // Setup column resizing after table renders - simplified
   useEffect(() => {
@@ -1523,7 +1388,7 @@ const DailyReports = () => {
     );
   };
 
-  if (loading) {
+  if (cacheLoading || loading) {
     return (
       <div className="reports-loading">
         <p>Loading daily reports...</p>
@@ -2863,16 +2728,12 @@ const ReportDetailModal = ({
     document.body
   );
   
-  // Cleanup tracking - ensure listener cleanup on unmount
+  // Component cleanup tracking
   useEffect(() => {
     return () => {
-      console.log(`[${componentId}] Component unmounting - cleaning up listener`);
-      if (realtimeUnsubscribe) {
-        realtimeUnsubscribe();
-        setRealtimeUnsubscribe(null);
-      }
+      console.log(`[${componentId}] Component unmounting`);
     };
-  }, [componentId, realtimeUnsubscribe]);
+  }, [componentId]);
 };
 
 export default DailyReports;

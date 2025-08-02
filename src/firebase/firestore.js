@@ -829,15 +829,34 @@ export const deleteDailyJobReportsBatch = async (reportIds) => {
 };
 
 // Subscribe to real-time daily job reports updates (ALL reports)
-export const subscribeToDailyJobReports = (organizationID, callback, errorCallback) => {
-  const q = query(
-    collection(firestore, "dailyJobReports"),
-    where("organizationID", "==", organizationID),
-    orderBy("timestamp", "desc")
-  );
+export const subscribeToDailyJobReports = (organizationID, callback, errorCallback, startDate = null) => {
+  // Default to 3 months ago if no start date provided
+  const effectiveStartDate = startDate || (() => {
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    return threeMonthsAgo;
+  })();
+
+  let q;
+  if (effectiveStartDate) {
+    // Query with date filter to limit results
+    q = query(
+      collection(firestore, "dailyJobReports"),
+      where("organizationID", "==", organizationID),
+      where("timestamp", ">=", Timestamp.fromDate(effectiveStartDate)),
+      orderBy("timestamp", "desc")
+    );
+  } else {
+    // Fallback to original query (not recommended)
+    q = query(
+      collection(firestore, "dailyJobReports"),
+      where("organizationID", "==", organizationID),
+      orderBy("timestamp", "desc")
+    );
+  }
 
   const listenerTag = `full-${Date.now()}`;
-  console.log(`[DailyReports-${listenerTag}] Subscribing to ALL reports for organization ${organizationID}`);
+  console.log(`[DailyReports-${listenerTag}] Subscribing to reports for organization ${organizationID}${effectiveStartDate ? ` from ${effectiveStartDate.toISOString()}` : ' (ALL)'}`);
 
   return onSnapshot(
     q,
@@ -1405,6 +1424,9 @@ export const updateSession = async (sessionId, updateData) => {
 
     await updateDoc(sessionRef, dataWithTimestamp);
 
+    // Clear the session from cache to ensure fresh data on next read
+    sessionCacheService.clearCachedSession(sessionId);
+
     // Recalculate colors if session ordering might have changed
     if (affectsOrdering && currentSession?.organizationID) {
       try {
@@ -1570,6 +1592,7 @@ export const getSession = async (sessionId) => {
     throw error;
   }
 };
+
 
 // Batch get multiple sessions efficiently
 export const getSessionsBatch = async (sessionIds) => {

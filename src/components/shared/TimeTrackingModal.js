@@ -25,12 +25,14 @@ import {
   calculateTotalHours,
   formatDuration
 } from '../../firebase/firestore';
-import { getSessions } from '../../firebase/firestore';
+// Removed getSessions - using cached data from DataCacheContext instead
+import { useDataCache } from '../../contexts/DataCacheContext';
 import './TimeTrackingModal.css';
 
 const TimeTrackingModal = ({ isOpen, onClose }) => {
   const { user, organization } = useAuth();
   const { addToast } = useToast();
+  const { sessions: cachedSessions } = useDataCache();
   
   const [currentEntry, setCurrentEntry] = useState(null);
   const [timeEntries, setTimeEntries] = useState([]);
@@ -101,9 +103,14 @@ const TimeTrackingModal = ({ isOpen, onClose }) => {
 
   const loadSessions = async () => {
     try {
-      const sessionsData = await getSessions(organization.id);
+      // Use cached sessions data instead of fetching from Firestore
+      if (!cachedSessions) {
+        setSessions([]);
+        return;
+      }
+      
       // Filter sessions for today or current date and where current user is assigned as photographer
-      const todaySessions = sessionsData.filter(session => {
+      const todaySessions = cachedSessions.filter(session => {
         const sessionDate = session.date;
         const targetDate = dateRange === 'today' ? new Date().toISOString().split('T')[0] : currentDate;
         
@@ -111,15 +118,8 @@ const TimeTrackingModal = ({ isOpen, onClose }) => {
         if (sessionDate !== targetDate) return false;
         
         // Check if user is assigned to this session
-        if (session.photographers && Array.isArray(session.photographers)) {
-          // Multiple photographers format
-          return session.photographers.some(photographer => photographer.id === user.uid);
-        } else if (session.photographer) {
-          // Legacy single photographer format
-          return session.photographer.id === user.uid;
-        }
-        
-        return false;
+        // The cached sessions data already has photographerId field
+        return session.photographerId === user.uid;
       });
       setSessions(todaySessions);
     } catch (error) {

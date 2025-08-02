@@ -15,6 +15,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { getPayrollDataForPeriod } from '../firebase/payrollQueries';
 import { getMileageDataForPeriod, getUserMileageDataForPeriod, exportMileageToCSV } from '../firebase/mileageQueries';
 import PayPeriodSelector from '../components/payroll/PayPeriodSelector';
@@ -30,6 +31,7 @@ import './PayrollTimesheets.css';
 
 const PayrollTimesheets = () => {
   const { userProfile, organization, user } = useAuth();
+  const { dailyJobReports, loading: dataCacheLoading } = useDataCache();
   const [payrollData, setPayrollData] = useState(null);
   const [mileageData, setMileageData] = useState(null);
   const [selectedPeriod, setSelectedPeriod] = useState(null);
@@ -48,6 +50,14 @@ const PayrollTimesheets = () => {
       loadMileageData();
     }
   }, [selectedPeriod, customDates, organization]);
+
+  // Re-load mileage data when daily job reports are updated
+  useEffect(() => {
+    if (selectedPeriod && organization?.id && dailyJobReports && dailyJobReports.length > 0) {
+      // Only reload mileage data if we have daily job reports
+      loadMileageData();
+    }
+  }, [dailyJobReports]);
 
   const loadPayrollData = async () => {
     if (!selectedPeriod || !organization?.id) return;

@@ -11,6 +11,7 @@ import { updateSession, deleteSession, getSchools } from "../../firebase/firesto
 import { getOrganizationSessionTypes, getSessionTypeColor } from "../../utils/sessionTypes";
 import "./CreateSessionModal.css";
 import secureLogger from "../../utils/secureLogger";
+import { useDataCache } from "../../contexts/DataCacheContext";
 
 const EditSessionModal = ({ 
   isOpen, 
@@ -22,6 +23,7 @@ const EditSessionModal = ({
   onSessionUpdated,
   onSessionDeleted 
 }) => {
+  const { sessions: cachedSessions, updateSessionOptimistically } = useDataCache();
   const [loading, setLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -63,40 +65,61 @@ const EditSessionModal = ({
 
   // Load session data when modal opens
   useEffect(() => {
-    if (isOpen && session) {
+    if (isOpen && session && cachedSessions) {
       console.log("Loading session data in EditSessionModal:", session);
+
+      // Get the latest session data from cache
+      const sessionId = session.sessionId || session.id || session;
+      const relatedEntries = cachedSessions.filter(s => s.sessionId === sessionId);
+      
+      let sessionData = session;
+      if (relatedEntries.length > 0) {
+        // Use cached data to ensure we have the latest
+        const firstEntry = relatedEntries[0];
+        sessionData = {
+          ...session,
+          ...firstEntry,
+          photographers: relatedEntries
+            .filter(entry => entry.photographerId)
+            .map(entry => ({
+              id: entry.photographerId,
+              name: entry.photographerName,
+              notes: session.photographers?.find(p => p.id === entry.photographerId)?.notes || ''
+            }))
+        };
+      }
 
       // Extract photographer IDs from the session
       let photographerIds = [];
       let photographerNotes = {};
 
-      if (session.photographers && Array.isArray(session.photographers)) {
-        photographerIds = session.photographers.map((p) => p.id);
-        session.photographers.forEach((photographer) => {
+      if (sessionData.photographers && Array.isArray(sessionData.photographers)) {
+        photographerIds = sessionData.photographers.map((p) => p.id);
+        sessionData.photographers.forEach((photographer) => {
           if (photographer.notes) {
             photographerNotes[photographer.id] = photographer.notes;
           }
         });
-      } else if (session.photographer?.id) {
-        photographerIds = [session.photographer.id];
-      } else if (session.photographerId) {
-        photographerIds = [session.photographerId];
+      } else if (sessionData.photographer?.id) {
+        photographerIds = [sessionData.photographer.id];
+      } else if (sessionData.photographerId) {
+        photographerIds = [sessionData.photographerId];
       }
 
       setFormData({
-        schoolId: session.schoolId || "",
-        date: session.date || "",
-        startTime: session.startTime || "09:00",
-        endTime: session.endTime || "15:00",
-        sessionTypes: Array.isArray(session.sessionTypes) ? session.sessionTypes : (session.sessionType ? [session.sessionType] : []),
-        customSessionType: session.customSessionType || "",
+        schoolId: sessionData.schoolId || "",
+        date: sessionData.date || "",
+        startTime: sessionData.startTime || "09:00",
+        endTime: sessionData.endTime || "15:00",
+        sessionTypes: Array.isArray(sessionData.sessionTypes) ? sessionData.sessionTypes : (sessionData.sessionType ? [sessionData.sessionType] : []),
+        customSessionType: sessionData.customSessionType || "",
         photographerIds: photographerIds,
         photographerNotes: photographerNotes,
-        notes: session.notes || "",
-        status: session.status || "scheduled",
+        notes: sessionData.notes || "",
+        status: sessionData.status || "scheduled",
       });
     }
-  }, [isOpen, session]);
+  }, [isOpen, session, cachedSessions]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -312,14 +335,26 @@ const EditSessionModal = ({
         status: formData.status,
       };
 
-      await updateSession(session.sessionId || session.id, updateData);
+      // Optimistically update the UI immediately
+      const sessionId = session.sessionId || session.id;
+      updateSessionOptimistically(sessionId, updateData);
+
+      // Close modal immediately for better UX
+      handleClose();
+
+      // Then update in Firestore (this will trigger the real-time listener)
+      try {
+        await updateSession(sessionId, updateData);
+      } catch (error) {
+        // If the update fails, the real-time listener will revert the optimistic update
+        secureLogger.error("Error updating session in Firestore:", error);
+        // Optionally show an error toast here
+      }
 
       // Notify parent component
       if (onSessionUpdated) {
         onSessionUpdated();
       }
-
-      handleClose();
     } catch (error) {
       secureLogger.error("Error updating session:", error);
       setErrors({ general: "Failed to update session. Please try again." });

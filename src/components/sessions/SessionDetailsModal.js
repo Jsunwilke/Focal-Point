@@ -13,13 +13,14 @@ import {
   CalendarDays,
   Check,
 } from "lucide-react";
-import { getSession, getSchools, publishSession } from "../../firebase/firestore";
+import { getSchools, publishSession } from "../../firebase/firestore";
 import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
 import { getJobBoxByShiftUid } from "../../services/trackingService";
 import { collection, query, where, orderBy, limit, onSnapshot } from "firebase/firestore";
 import { firestore } from "../../firebase/config";
 import JobBoxStatusTracker from "./JobBoxStatusTracker";
 import secureLogger from "../../utils/secureLogger";
+import { useDataCache } from "../../contexts/DataCacheContext";
 
 const SessionDetailsModal = ({
   isOpen,
@@ -33,6 +34,7 @@ const SessionDetailsModal = ({
   showRescheduleOption = false, // Whether to show reschedule option
   hideEditButton = false, // Whether to hide the edit button (for dashboard context)
 }) => {
+  const { sessions: cachedSessions } = useDataCache();
   const [fullSessionData, setFullSessionData] = useState(null);
   const [schoolDetails, setSchoolDetails] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -129,15 +131,57 @@ const SessionDetailsModal = ({
   // Load full session data when modal opens
   useEffect(() => {
     const loadSessionData = async () => {
-      if (isOpen && session) {
+      if (isOpen && session && cachedSessions) {
         setLoading(true);
         try {
           const sessionId = session.sessionId || session.id;
-          const fullData = await getSession(sessionId);
-          setFullSessionData(fullData || session);
+          
+          // Find all calendar entries for this session
+          const relatedEntries = cachedSessions.filter(s => s.sessionId === sessionId);
+          
+          if (relatedEntries.length > 0) {
+            // Reconstruct the full session data from cached entries
+            const firstEntry = relatedEntries[0];
+            
+            // Build photographers array from all entries
+            const photographers = relatedEntries
+              .filter(entry => entry.photographerId)
+              .map(entry => {
+                const photographer = teamMembers.find(m => m.id === entry.photographerId);
+                return {
+                  id: entry.photographerId,
+                  name: entry.photographerName || (photographer ? `${photographer.firstName} ${photographer.lastName}` : 'Unknown'),
+                  email: photographer?.email || '',
+                  notes: '' // Individual notes would need to be stored in the cache
+                };
+              });
+            
+            const fullData = {
+              id: sessionId,
+              sessionId: sessionId,
+              date: firstEntry.date,
+              startTime: firstEntry.startTime,
+              endTime: firstEntry.endTime,
+              schoolId: firstEntry.schoolId,
+              schoolName: firstEntry.schoolName,
+              location: firstEntry.location,
+              sessionType: firstEntry.sessionType,
+              sessionTypes: firstEntry.sessionTypes,
+              customSessionType: firstEntry.customSessionType,
+              notes: firstEntry.notes,
+              status: firstEntry.status,
+              isPublished: firstEntry.isPublished,
+              photographers: photographers
+            };
+            
+            setFullSessionData(fullData);
+          } else {
+            // Fallback to passed session data
+            setFullSessionData(session);
+          }
 
           // Load school details if we have a school ID
-          const schoolId = (fullData || session)?.schoolId;
+          const schoolId = session?.schoolId;
           if (schoolId && organization?.id) {
             const schools = await getSchools(organization.id);
             const school = schools.find(s => s.id === schoolId);
@@ -153,7 +197,7 @@ const SessionDetailsModal = ({
     };
 
     loadSessionData();
-  }, [isOpen, session]);
+  }, [isOpen, session, cachedSessions, teamMembers, organization?.id]);
 
   // Set up real-time listener for job box data
   useEffect(() => {
@@ -710,8 +754,7 @@ const SessionDetailsModal = ({
                 type="button"
                 className="btn btn-primary"
                 onClick={() => {
-                  onClose(); // Close this modal first
-                  onEditSession(); // Then open the edit modal
+                  onEditSession(); // Parent will handle closing this modal and opening edit modal
                 }}
                 style={{
                   display: "flex",

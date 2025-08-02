@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { X, Loader } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useDataCache } from '../../contexts/DataCacheContext';
 import { addBatchRecords } from '../../services/trackingService';
 import { getDocs, collection, query, where, orderBy, Timestamp, firestore } from '../../services/firestoreWrapper';
 import NotificationModal from '../shared/NotificationModal';
@@ -13,6 +14,7 @@ import '../shared/NotificationModal.css';
 import './BatchEntryModal.css';
 
 const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
+  const { sessions: cachedSessions } = useDataCache();
   const [formData, setFormData] = useState({
     shiftId: '',
     schoolId: '',
@@ -33,7 +35,7 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
   useEffect(() => {
     loadAvailableShifts();
     loadSchools();
-  }, [organizationID]);
+  }, [organizationID, cachedSessions]);
 
   const loadAvailableShifts = async () => {
     setShiftsLoading(true);
@@ -50,16 +52,22 @@ const BatchEntryModal = ({ organizationID, onClose, onSave }) => {
       twoWeeksFromNow.setDate(now.getDate() + 14);
       
 
-      // Use single query now that sessions have hasJobBoxAssigned field
-      const { getSessions } = await import('../../firebase/firestore');
-      const allSessions = await getSessions(organizationID);
-      
-
-      if (!allSessions || allSessions.length === 0) {
+      // Use cached sessions data instead of fetching from Firestore
+      if (!cachedSessions || cachedSessions.length === 0) {
         setShifts([]);
-        secureLogger.warn('No sessions found in database for organization');
+        secureLogger.warn('No sessions found in cache for organization');
         return;
       }
+
+      // Get unique sessions by sessionId (since cache has multiple entries per session)
+      const uniqueSessions = {};
+      cachedSessions.forEach(entry => {
+        const sessionId = entry.sessionId;
+        if (!uniqueSessions[sessionId]) {
+          uniqueSessions[sessionId] = entry;
+        }
+      });
+      const allSessions = Object.values(uniqueSessions);
 
       // Filter sessions for the next 2 weeks and exclude assigned ones
       const availableShifts = allSessions.filter(session => {

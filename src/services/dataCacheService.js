@@ -5,6 +5,7 @@ class DataCacheService {
     this.SESSIONS_CACHE_DURATION = 4 * 60 * 60 * 1000; // 4 hours - employees come and go frequently
     this.USERS_CACHE_DURATION = 2 * 60 * 60 * 1000; // 2 hours - user data changes less often
     this.TIMEOFF_CACHE_DURATION = 4 * 60 * 60 * 1000; // 4 hours - match sessions for consistent loading
+    this.DAILYJOB_CACHE_DURATION = 4 * 60 * 60 * 1000; // 4 hours - match sessions for consistent loading
   }
 
   // Helper to serialize timestamps and dates
@@ -162,15 +163,53 @@ class DataCacheService {
     }
   }
 
+  // Daily job reports cache methods
+  getCachedDailyJobReports(organizationId) {
+    try {
+      const key = `datacache_dailyjob_${organizationId}`;
+      const cached = localStorage.getItem(key);
+      if (!cached) return null;
+
+      const cacheData = this.deserializeData(cached);
+      
+      if (cacheData.version !== this.CACHE_VERSION || 
+          Date.now() - cacheData.timestamp > this.DAILYJOB_CACHE_DURATION) {
+        localStorage.removeItem(key);
+        return null;
+      }
+
+      return cacheData.data;
+    } catch (error) {
+      console.warn('Failed to retrieve cached daily job reports:', error);
+      return null;
+    }
+  }
+
+  setCachedDailyJobReports(organizationId, reports) {
+    try {
+      const key = `datacache_dailyjob_${organizationId}`;
+      const cacheData = {
+        version: this.CACHE_VERSION,
+        timestamp: Date.now(),
+        data: reports
+      };
+      localStorage.setItem(key, this.serializeData(cacheData));
+    } catch (error) {
+      console.warn('Failed to cache daily job reports:', error);
+    }
+  }
+
   // Clear all caches for an organization
   clearCache(organizationId) {
     try {
       localStorage.removeItem(`datacache_sessions_${organizationId}`);
       localStorage.removeItem(`datacache_users_${organizationId}`);
       localStorage.removeItem(`datacache_timeoff_${organizationId}`);
+      localStorage.removeItem(`datacache_dailyjob_${organizationId}`);
       localStorage.removeItem(`datacache_lastsync_sessions_${organizationId}`);
       localStorage.removeItem(`datacache_lastsync_users_${organizationId}`);
       localStorage.removeItem(`datacache_lastsync_timeoff_${organizationId}`);
+      localStorage.removeItem(`datacache_lastsync_dailyjob_${organizationId}`);
     } catch (error) {
       console.warn('Failed to clear data cache:', error);
     }

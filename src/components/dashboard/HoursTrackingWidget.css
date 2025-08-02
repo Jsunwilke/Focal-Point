@@ -102,6 +102,8 @@
   height: 20px;
   border-radius: 10px;
   background: var(--background-muted, #f3f4f6) !important;
+  display: flex;
+  align-items: stretch;
 }
 
 /* Empty progress bar state */
@@ -109,25 +111,44 @@
   background: var(--background-muted, #e5e7eb) !important;
 }
 
+.progress-wrapper {
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  transition: width var(--transition-normal, 200ms ease-in-out);
+}
+
 .progress-fill {
   height: 100%;
-  border-radius: var(--radius-sm, 2px);
   transition: width var(--transition-normal, 200ms ease-in-out);
-  position: absolute;
-  top: 0;
 }
 
 .progress-fill--regular {
   background: linear-gradient(90deg, var(--primary-color, #2563eb) 0%, #1d4ed8 100%);
-  border-radius: 10px;
 }
 
 .progress-fill--overtime {
   background: linear-gradient(90deg, var(--warning-color, #f59e0b) 0%, #d97706 100%);
-  border-radius: 0 10px 10px 0;
-  position: absolute;
-  top: 0;
-  height: 100%;
+}
+
+/* Border radius handling for the wrapper */
+.progress-bar.enhanced .progress-wrapper {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Border radius handling for overtime scenarios */
+.progress-bar.enhanced.has-overtime .progress-fill--regular {
+  border-radius: 0;
+}
+
+.progress-bar.enhanced.has-overtime .progress-fill--overtime {
+  border-radius: 0;
+}
+
+/* When no overtime, regular bar fills the wrapper completely */
+.progress-bar.enhanced:not(.has-overtime) .progress-fill--regular {
+  border-radius: 0;
 }
 
 /* Legacy support for old progress bars */

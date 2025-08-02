@@ -347,24 +347,26 @@ const HoursTrackingWidget = () => {
           </div>
           <div className="progress-container">
             <div 
-              className={`progress-bar enhanced ${weekHours === 0 ? 'progress-bar--empty' : ''}`}
+              className={`progress-bar enhanced ${weekHours === 0 ? 'progress-bar--empty' : ''} ${weekStats.hasOvertime ? 'has-overtime' : ''}`}
               style={weekHours === 0 ? { background: '#e5e7eb' } : {}}
             >
-              {weekStats.regular > 0 && (
-                <div 
-                  className="progress-fill progress-fill--regular"
-                  style={{ width: `${weekStats.regular}%` }}
-                />
-              )}
-              {weekStats.hasOvertime && (
-                <div 
-                  className="progress-fill progress-fill--overtime"
-                  style={{ 
-                    width: `${weekStats.overtime}%`,
-                    left: `${weekStats.regular}%`
-                  }}
-                />
-              )}
+              <div 
+                className="progress-wrapper"
+                style={{ width: weekStats.hasOvertime ? '100%' : `${weekStats.total}%` }}
+              >
+                {weekStats.regular > 0 && (
+                  <div 
+                    className="progress-fill progress-fill--regular"
+                    style={{ width: weekStats.hasOvertime ? `${weekStats.regular}%` : '100%' }}
+                  />
+                )}
+                {weekStats.hasOvertime && (
+                  <div 
+                    className="progress-fill progress-fill--overtime"
+                    style={{ width: `${weekStats.overtime}%` }}
+                  />
+                )}
+              </div>
             </div>
             <span className="progress-text">
               {Math.round(weekStats.total)}%
@@ -386,24 +388,26 @@ const HoursTrackingWidget = () => {
           </div>
           <div className="progress-container">
             <div 
-              className={`progress-bar enhanced ${periodHours === 0 ? 'progress-bar--empty' : ''}`}
+              className={`progress-bar enhanced ${periodHours === 0 ? 'progress-bar--empty' : ''} ${periodStats.hasOvertime ? 'has-overtime' : ''}`}
               style={periodHours === 0 ? { background: '#e5e7eb' } : {}}
             >
-              {periodStats.regular > 0 && (
-                <div 
-                  className="progress-fill progress-fill--regular"
-                  style={{ width: `${periodStats.regular}%` }}
-                />
-              )}
-              {periodStats.hasOvertime && (
-                <div 
-                  className="progress-fill progress-fill--overtime"
-                  style={{ 
-                    width: `${periodStats.overtime}%`,
-                    left: `${periodStats.regular}%`
-                  }}
-                />
-              )}
+              <div 
+                className="progress-wrapper"
+                style={{ width: periodStats.hasOvertime ? '100%' : `${periodStats.total}%` }}
+              >
+                {periodStats.regular > 0 && (
+                  <div 
+                    className="progress-fill progress-fill--regular"
+                    style={{ width: periodStats.hasOvertime ? `${periodStats.regular}%` : '100%' }}
+                  />
+                )}
+                {periodStats.hasOvertime && (
+                  <div 
+                    className="progress-fill progress-fill--overtime"
+                    style={{ width: `${periodStats.overtime}%` }}
+                  />
+                )}
+              </div>
             </div>
             <span className="progress-text">
               {Math.round(periodStats.total)}%

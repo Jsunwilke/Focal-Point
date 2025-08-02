@@ -604,26 +604,14 @@ const Schedule = () => {
   };
 
   // Handle edit session button click from details modal
-  const handleEditSessionFromDetails = async () => {
-    try {
-      // Get the full session data for editing
-      const sessionId = selectedSession.sessionId || selectedSession.id;
-
-      const fullSessionData = await getSession(sessionId);
-
-      if (fullSessionData) {
-        setSelectedSession(fullSessionData); // Set full session data for editing
-        setShowEditModal(true);
-      } else {
-        secureLogger.error("Could not fetch full session data for editing");
-        setSelectedSession(selectedSession); // Fallback
-        setShowEditModal(true);
-      }
-    } catch (error) {
-      secureLogger.error("Error loading session data for editing:", error);
-      setSelectedSession(selectedSession); // Fallback
+  const handleEditSessionFromDetails = () => {
+    // First close the details modal
+    setShowDetailsModal(false);
+    
+    // Use setTimeout to ensure the details modal has closed before opening edit modal
+    setTimeout(() => {
       setShowEditModal(true);
-    }
+    }, 100); // Small delay to allow modal close animation
   };
 
   // Handle session updated from edit modal

@@ -94,6 +94,16 @@ class SessionCacheService {
     });
   }
 
+  // Clear a specific session from cache
+  clearCachedSession(sessionId) {
+    try {
+      const key = `${this.SESSION_KEY_PREFIX}${sessionId}`;
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.warn('Failed to clear cached session:', error);
+    }
+  }
+
   // Clear session cache
   clearCache() {
     try {

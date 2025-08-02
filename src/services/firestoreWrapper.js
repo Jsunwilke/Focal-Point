@@ -3,6 +3,7 @@ import {
   doc as firestoreDoc,
   getDocs as firestoreGetDocs,
   getDoc as firestoreGetDoc,
+  getDocFromServer as firestoreGetDocFromServer,
   setDoc as firestoreSetDoc,
   addDoc as firestoreAddDoc,
   updateDoc as firestoreUpdateDoc,
@@ -84,6 +85,24 @@ export const getDoc = async (docRef, component = 'unknown') => {
   } catch (error) {
     // Still track attempted read even on error
     readCounter.recordRead('getDoc-error', collectionName, component, 0);
+    throw error;
+  }
+};
+
+// Wrapped getDocFromServer with automatic read tracking - bypasses cache
+export const getDocFromServer = async (docRef, component = 'unknown') => {
+  const collectionName = getCollectionName(docRef);
+  
+  try {
+    const docSnap = await firestoreGetDocFromServer(docRef);
+    
+    // Track the read (1 document)
+    readCounter.recordRead('getDocFromServer', collectionName, component, 1);
+    
+    return docSnap;
+  } catch (error) {
+    // Still track attempted read even on error
+    readCounter.recordRead('getDocFromServer-error', collectionName, component, 0);
     throw error;
   }
 };
