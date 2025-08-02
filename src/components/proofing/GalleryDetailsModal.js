@@ -169,76 +169,90 @@ const GalleryDetailsModal = ({ isOpen, onClose, gallery, organization, userEmail
         className="gallery-details-modal"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal-header">
-          <div>
-            <h2>{gallery.name}</h2>
-            <p className="subtitle">{gallery.schoolName}</p>
-          </div>
-          <button
-            className="close-btn"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="gallery-link-section">
-          <label>Gallery Link</label>
-          <div className="link-container">
-            <input 
-              type="text" 
-              value={galleryLink} 
-              readOnly 
-              onClick={(e) => e.target.select()}
-            />
-            <div className="link-actions">
+        <div className="compact-header">
+          <div className="header-row">
+            <div className="title-section">
+              <h2>{gallery.name}</h2>
+              <span className="subtitle">{gallery.schoolName}</span>
+            </div>
+            
+            <div className="link-section">
+              <input 
+                type="text" 
+                value={galleryLink} 
+                readOnly 
+                onClick={(e) => e.target.select()}
+                className="compact-link-input"
+              />
               <button
-                className="btn-icon"
+                className="icon-btn"
                 onClick={copyLink}
                 title="Copy link"
               >
-                <Copy size={16} />
+                <Copy size={14} />
               </button>
               <button
-                className="btn-icon"
+                className="icon-btn"
                 onClick={openInNewTab}
                 title="Open in new tab"
               >
-                <ExternalLink size={16} />
+                <ExternalLink size={14} />
+              </button>
+            </div>
+
+            <div className="header-actions">
+              <div className="tab-buttons">
+                <button
+                  className={`tab-btn ${activeTab === 'images' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('images')}
+                  title={`Images (${proofs.length})`}
+                >
+                  Images
+                </button>
+                <button
+                  className={`tab-btn ${activeTab === 'activity' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('activity')}
+                  title={`Activity (${activity.length})`}
+                >
+                  Activity
+                </button>
+              </div>
+              
+              <button
+                className="icon-btn danger"
+                onClick={() => setShowDeleteConfirm(true)}
+                title="Delete Gallery"
+              >
+                <Trash2 size={14} />
+              </button>
+              
+              <button
+                className="icon-btn"
+                onClick={onClose}
+                aria-label="Close"
+              >
+                <X size={16} />
               </button>
             </div>
           </div>
-          {gallery.password && (
-            <p className="password-note">
-              <AlertCircle size={14} />
-              This gallery is password protected
-            </p>
-          )}
-        </div>
-
-        <div className="tabs-container">
-          <div className="tabs">
-            <button
-              className={`tab ${activeTab === 'images' ? 'active' : ''}`}
-              onClick={() => setActiveTab('images')}
-            >
-              Images ({proofs.length})
-            </button>
-            <button
-              className={`tab ${activeTab === 'activity' ? 'active' : ''}`}
-              onClick={() => setActiveTab('activity')}
-            >
-              Activity ({activity.length})
-            </button>
-          </div>
-          {hasDeniedImages && activeTab === 'images' && (
-            <button
-              className="btn btn-replace"
-              onClick={() => setShowReplaceModal(true)}
-            >
-              Upload New Versions ({deniedImages.length})
-            </button>
+          
+          {((hasDeniedImages && activeTab === 'images') || gallery.password) && (
+            <div className="header-row secondary">
+              {hasDeniedImages && activeTab === 'images' && (
+                <button
+                  className="btn-replace-compact"
+                  onClick={() => setShowReplaceModal(true)}
+                >
+                  Upload New Versions ({deniedImages.length})
+                </button>
+              )}
+              {gallery.password && (
+                <span className="password-note-compact">
+                  <AlertCircle size={12} />
+                  Password protected
+                </span>
+              )}
+            </div>
           )}
         </div>
 
@@ -320,24 +334,14 @@ const GalleryDetailsModal = ({ isOpen, onClose, gallery, organization, userEmail
             </div>
           )}
         </div>
-
-        <div className="modal-footer">
-          <button
-            className="btn btn-danger"
-            onClick={() => setShowDeleteConfirm(true)}
-          >
-            <Trash2 size={16} />
-            Delete Gallery
-          </button>
-          <button
-            className="btn btn-secondary"
-            onClick={onClose}
-          >
-            Close
-          </button>
-        </div>
       </div>
+    </div>
+  );
 
+  return (
+    <>
+      {ReactDOM.createPortal(modalContent, document.body)}
+      
       {showDeleteConfirm && (
         <ConfirmationModal
           isOpen={showDeleteConfirm}
@@ -346,7 +350,7 @@ const GalleryDetailsModal = ({ isOpen, onClose, gallery, organization, userEmail
           title="Delete Gallery"
           message={`Are you sure you want to delete "${gallery.name}"? This will permanently delete all images and cannot be undone.`}
           confirmText="Delete"
-          confirmVariant="danger"
+          type="danger"
         />
       )}
 
@@ -387,10 +391,8 @@ const GalleryDetailsModal = ({ isOpen, onClose, gallery, organization, userEmail
           }}
         />
       )}
-    </div>
+    </>
   );
-
-  return ReactDOM.createPortal(modalContent, document.body);
 };
 
 export default GalleryDetailsModal;

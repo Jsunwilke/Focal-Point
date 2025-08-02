@@ -138,9 +138,19 @@ const CreateGalleryModal = ({ isOpen, onClose, organization, userProfile }) => {
       
       // Compress images before upload
       const compressedFiles = await compressImages(files, {
-        maxWidth: 2048,
-        maxHeight: 2048,
-        quality: 0.85
+        maxWidth: 3000,
+        maxHeight: 3000,
+        quality: 0.92,
+        concurrency: 3,
+        onOverallProgress: (progress) => {
+          setUploadProgress(prev => ({ 
+            ...prev, 
+            percentage: progress.percentage * 0.3, // Compression is 30% of overall progress
+            status: 'compressing',
+            completed: progress.completed,
+            total: progress.total
+          }));
+        }
       });
       
       // Calculate size reduction
@@ -155,7 +165,11 @@ const CreateGalleryModal = ({ isOpen, onClose, organization, userProfile }) => {
       // Upload compressed images with abort signal
       setUploadProgress(prev => ({ ...prev, status: 'uploading' }));
       const result = await uploadProofImages(galleryId, compressedFiles, (progress) => {
-        setUploadProgress(progress);
+        // Adjust progress to account for compression phase (30% compression + 70% upload)
+        setUploadProgress({
+          ...progress,
+          percentage: 30 + (progress.percentage * 0.7)
+        });
       }, controller.signal);
 
       if (result.failed && result.failed.length > 0) {
@@ -402,8 +416,8 @@ const CreateGalleryModal = ({ isOpen, onClose, organization, userProfile }) => {
                 <div className="progress-header">
                   <span>
                     {uploadProgress.status === 'compressing' 
-                      ? 'Compressing images...' 
-                      : `Uploading ${uploadProgress.completed} of {uploadProgress.total} images...`
+                      ? `Compressing image ${uploadProgress.completed || 1} of ${uploadProgress.total}...` 
+                      : `Uploading ${uploadProgress.completed} of ${uploadProgress.total} images...`
                     }
                   </span>
                   {uploadProgress.status === 'uploading' && (

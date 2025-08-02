@@ -192,6 +192,15 @@
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
+  border: 3px solid transparent;
+}
+
+.proof-item.approved {
+  border-color: #28a745;
+}
+
+.proof-item.denied {
+  border-color: #dc3545;
 }
 
 .proof-item:hover {
@@ -224,16 +233,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(0, 0, 0, 0.5);
   color: white;
+  font-size: 2rem;
+  font-weight: bold;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .status-overlay.approved {
-  background-color: rgba(40, 167, 69, 0.8);
+  background-color: rgba(40, 167, 69, 0.2);
 }
 
 .status-overlay.denied {
-  background-color: rgba(220, 53, 69, 0.8);
+  background-color: rgba(220, 53, 69, 0.2);
 }
 
 .proof-info {

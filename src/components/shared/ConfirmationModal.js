@@ -1,6 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { AlertTriangle, X } from 'lucide-react';
+import './Modal.css';
+import './ConfirmationModal.css';
 
 const ConfirmationModal = ({ 
   isOpen, 
@@ -44,7 +46,6 @@ const ConfirmationModal = ({
 
   const modalContent = (
     <div 
-      className="modal-overlay"
       onClick={handleOverlayClick}
       style={{
         position: 'fixed',
@@ -56,7 +57,8 @@ const ConfirmationModal = ({
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 20000
+        zIndex: 20000,
+        padding: '20px'
       }}
     >
       <div 

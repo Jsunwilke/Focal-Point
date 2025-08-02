@@ -478,8 +478,41 @@ export const batchReplaceProofImages = async (galleryId, replacements, userEmail
         const versionedPath = `proof-images/${galleryId}/versions/${proofId}/v${newVersion}_${timestamp}_${filename}`;
         const storageRef = ref(storage, versionedPath);
         
-        const uploadTask = await uploadBytes(storageRef, newFile);
-        const newImageUrl = await getDownloadURL(uploadTask.ref);
+        // Use uploadBytesResumable for progress tracking
+        const uploadTask = uploadBytesResumable(storageRef, newFile);
+        
+        // Track upload progress
+        const uploadPromise = new Promise((resolve, reject) => {
+          uploadTask.on('state_changed', 
+            (snapshot) => {
+              const fileProgress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              
+              // Calculate overall progress
+              const baseProgress = (completedCount / replacements.length) * 100;
+              const fileWeight = 100 / replacements.length;
+              const overallProgress = baseProgress + (fileProgress * fileWeight / 100);
+              
+              reportProgress({
+                percentage: overallProgress,
+                completed: completedCount,
+                total: replacements.length,
+                status: 'uploading',
+                currentFile: completedCount + 1,
+                fileProgress
+              });
+            },
+            (error) => {
+              console.error(`Error uploading version for ${proofId}:`, error);
+              reject(error);
+            },
+            async () => {
+              const newImageUrl = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve(newImageUrl);
+            }
+          );
+        });
+        
+        const newImageUrl = await uploadPromise;
         
         // Create revision record for audit trail
         const revisionRef = doc(collection(firestore, "proofRevisions"));
@@ -640,6 +673,30 @@ export const deleteGallery = async (galleryId) => {
     readCounter.recordRead("delete", "multiple", "deleteGallery", proofs.length + activityDocs.size + 1);
   } catch (error) {
     console.error("Error deleting gallery:", error);
+    throw error;
+  }
+};
+
+// Get version history for a proof
+export const getProofRevisions = async (proofId) => {
+  try {
+    const q = query(
+      collection(firestore, "proofRevisions"),
+      where("proofId", "==", proofId),
+      orderBy("versionNumber", "desc")
+    );
+    
+    const snapshot = await getDocs(q);
+    const revisions = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    readCounter.recordRead("get", "proofRevisions", "getProofRevisions", snapshot.docs.length);
+    
+    return revisions;
+  } catch (error) {
+    console.error("Error getting proof revisions:", error);
     throw error;
   }
 };

@@ -13,7 +13,7 @@
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  z-index: 9999 !important;
+  z-index: 9999;
   padding: var(--spacing-md);
   /* Ensure modal appears above sidebar and other elements */
   backdrop-filter: blur(2px);

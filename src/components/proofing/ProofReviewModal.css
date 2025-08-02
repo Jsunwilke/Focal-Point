@@ -29,6 +29,13 @@
   font-weight: 400;
 }
 
+.top-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.version-history-btn,
 .close-btn {
   width: 36px;
   height: 36px;
@@ -43,6 +50,7 @@
   transition: all 0.2s;
 }
 
+.version-history-btn:hover,
 .close-btn:hover {
   border-color: rgba(255, 255, 255, 0.4);
   color: white;
@@ -110,8 +118,8 @@
   display: block;
 }
 
-/* Status badge */
-.status-badge {
+/* Status badge - scoped to proof review modal only */
+.proof-review-modal-overlay .status-badge {
   position: absolute;
   top: 20px;
   right: 20px;
@@ -126,7 +134,7 @@
   gap: 6px;
 }
 
-.status-badge.denied {
+.proof-review-modal-overlay .status-badge.denied {
   background: rgba(239, 68, 68, 0.9);
 }
 

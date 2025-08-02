@@ -1054,41 +1054,41 @@ service cloud.firestore {
                        (!request.resource.data.keys().hasAny(['denialNotes']) || 
                         request.resource.data.denialNotes == null);
       
-      // Organization members can update proofs (for versioning)
-      allow update: if request.auth != null &&
-                       exists(/databases/$(database)/documents/proofGalleries/$(resource.data.galleryId)) &&
-                       belongsToSameOrg(request.auth.uid, 
-                         get(/databases/$(database)/documents/proofGalleries/$(resource.data.galleryId)).data.organizationId) &&
-                       // Prevent changing core fields
-                       request.resource.data.galleryId == resource.data.galleryId &&
-                       request.resource.data.filename == resource.data.filename &&
-                       // Allow updating versioning fields
-                       request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['imageUrl', 'thumbnailUrl', 'status', 'denialNotes', 
-                                  'currentVersion', 'versionCount', 'hasVersions', 
-                                  'lastRevisionId', 'updatedAt']) &&
-                       // Validate version fields
-                       (!request.resource.data.keys().hasAny(['currentVersion']) || 
-                        request.resource.data.currentVersion is int) &&
-                       (!request.resource.data.keys().hasAny(['versionCount']) || 
-                        request.resource.data.versionCount is int) &&
-                       (!request.resource.data.keys().hasAny(['hasVersions']) || 
-                        request.resource.data.hasVersions is bool);
-      
-      // PUBLIC ACCESS: Allow public users to update proof status only
-      allow update: if true &&
-                       // Only allow updating specific fields
-                       request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['status', 'denialNotes', 'reviewedAt', 'reviewedBy', 'updatedAt']) &&
-                       // Validate status
-                       request.resource.data.status in ['pending', 'approved', 'denied'] &&
-                       // If denied, must have notes
-                       (request.resource.data.status != 'denied' || 
-                        (request.resource.data.denialNotes is string && 
-                         request.resource.data.denialNotes.size() > 0)) &&
-                       // Validate reviewer email if provided
-                       (!request.resource.data.keys().hasAny(['reviewedBy']) || 
-                        request.resource.data.reviewedBy is string);
+      // Combined update rule: Organization members for versioning OR public users for review
+      allow update: if 
+        // Case 1: Organization members updating versioning fields
+        (request.auth != null &&
+         exists(/databases/$(database)/documents/proofGalleries/$(resource.data.galleryId)) &&
+         belongsToSameOrg(request.auth.uid, 
+           get(/databases/$(database)/documents/proofGalleries/$(resource.data.galleryId)).data.organizationId) &&
+         // Prevent changing core fields
+         request.resource.data.galleryId == resource.data.galleryId &&
+         request.resource.data.filename == resource.data.filename &&
+         // Allow updating versioning fields
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['imageUrl', 'thumbnailUrl', 'status', 'denialNotes', 
+                    'currentVersion', 'versionCount', 'hasVersions', 
+                    'lastRevisionId', 'updatedAt']) &&
+         // Validate version fields
+         (!request.resource.data.keys().hasAny(['currentVersion']) || 
+          request.resource.data.currentVersion is int) &&
+         (!request.resource.data.keys().hasAny(['versionCount']) || 
+          request.resource.data.versionCount is int) &&
+         (!request.resource.data.keys().hasAny(['hasVersions']) || 
+          request.resource.data.hasVersions is bool)) ||
+        // Case 2: Public users updating status only
+        (// Only allow updating specific fields
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['status', 'denialNotes', 'reviewedAt', 'reviewedBy', 'updatedAt']) &&
+         // Validate status
+         request.resource.data.status in ['pending', 'approved', 'denied'] &&
+         // If denied, must have notes
+         (request.resource.data.status != 'denied' || 
+          (request.resource.data.denialNotes is string && 
+           request.resource.data.denialNotes.size() > 0)) &&
+         // Validate reviewer email if provided
+         (!request.resource.data.keys().hasAny(['reviewedBy']) || 
+          request.resource.data.reviewedBy is string));
       
       // Only admins from the organization can delete proofs
       allow delete: if request.auth != null && 
@@ -1152,7 +1152,7 @@ service cloud.firestore {
                        request.resource.data.galleryId is string &&
                        request.resource.data.originalImageUrl is string &&
                        request.resource.data.newImageUrl is string &&
-                       request.resource.data.versionNumber is number &&
+                       request.resource.data.versionNumber is int &&
                        request.resource.data.versionNumber > 0 &&
                        // Validate optional fields
                        (!request.resource.data.keys().hasAny(['denialNotes']) || 
@@ -1160,10 +1160,23 @@ service cloud.firestore {
                        (!request.resource.data.keys().hasAny(['studioNotes']) || 
                         request.resource.data.studioNotes is string || request.resource.data.studioNotes == null) &&
                        (!request.resource.data.keys().hasAny(['replacedBy']) || 
-                        request.resource.data.replacedBy is string);
+                        request.resource.data.replacedBy is string) &&
+                       (!request.resource.data.keys().hasAny(['previousVersion']) || 
+                        request.resource.data.previousVersion is int) &&
+                       (!request.resource.data.keys().hasAny(['isLatest']) || 
+                        request.resource.data.isLatest is bool) &&
+                       // Allow timestamp fields
+                       (!request.resource.data.keys().hasAny(['replacedAt']) || 
+                        request.resource.data.replacedAt is timestamp);
       
-      // No updates allowed (revision history is immutable)
-      allow update: if false;
+      // Only allow updating isLatest flag by organization members
+      allow update: if request.auth != null && 
+                       exists(/databases/$(database)/documents/proofGalleries/$(resource.data.galleryId)) &&
+                       belongsToSameOrg(request.auth.uid, 
+                         get(/databases/$(database)/documents/proofGalleries/$(resource.data.galleryId)).data.organizationId) &&
+                       // Only allow updating isLatest field
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isLatest']) &&
+                       request.resource.data.isLatest is bool;
       
       // Only admins can delete revisions
       allow delete: if request.auth != null && 

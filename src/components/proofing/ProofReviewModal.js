@@ -1,7 +1,8 @@
 // src/components/proofing/ProofReviewModal.js
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
-import { X, ChevronLeft, ChevronRight, Check, AlertCircle } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, Check, AlertCircle, History } from "lucide-react";
+import VersionHistoryModal from "./VersionHistoryModal";
 import "./ProofReviewModal.css";
 
 const ProofReviewModal = ({ 
@@ -16,6 +17,7 @@ const ProofReviewModal = ({
   const [denialNotes, setDenialNotes] = useState("");
   const [showDenyForm, setShowDenyForm] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
 
   // Reset state when proof changes
   useEffect(() => {
@@ -88,13 +90,24 @@ const ProofReviewModal = ({
         <div className="image-counter">
           {proofIndex + 1} of {totalProofs}
         </div>
-        <button
-          className="close-btn"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          <X size={20} />
-        </button>
+        <div className="top-bar-actions">
+          {proof.currentVersion > 1 && (
+            <button
+              className="version-history-btn"
+              onClick={() => setShowVersionHistory(true)}
+              title="View version history"
+            >
+              <History size={20} />
+            </button>
+          )}
+          <button
+            className="close-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={20} />
+          </button>
+        </div>
       </div>
 
       {/* Main viewing area */}
@@ -238,7 +251,18 @@ const ProofReviewModal = ({
     </div>
   );
 
-  return ReactDOM.createPortal(modalContent, document.body);
+  return (
+    <>
+      {ReactDOM.createPortal(modalContent, document.body)}
+      {showVersionHistory && (
+        <VersionHistoryModal
+          isOpen={showVersionHistory}
+          onClose={() => setShowVersionHistory(false)}
+          proof={proof}
+        />
+      )}
+    </>
+  );
 };
 
 export default ProofReviewModal;

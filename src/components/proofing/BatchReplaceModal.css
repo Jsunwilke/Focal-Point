@@ -27,6 +27,26 @@
   color: #1a202c;
 }
 
+.batch-replace-modal .close-button {
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  cursor: pointer;
+  color: #718096;
+  border-radius: 0.375rem;
+  transition: all 0.2s;
+}
+
+.batch-replace-modal .close-button:hover:not(:disabled) {
+  background-color: #f7fafc;
+  color: #2d3748;
+}
+
+.batch-replace-modal .close-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .batch-upload-controls {
   padding: 1rem 1.5rem;
   background-color: #f7fafc;
@@ -91,12 +111,22 @@
 }
 
 .original-image img,
-.replacement-preview img {
+.replacement-preview > img {
   width: 100%;
-  max-height: 200px;
+  height: 200px;
   object-fit: contain;
-  background-color: #e2e8f0;
+  background-color: #f7fafc;
   border-radius: 0.375rem;
+  border: 1px solid #e2e8f0;
+}
+
+.replacement-preview > .filename {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #2d3748;
+  text-align: center;
+  word-break: break-all;
 }
 
 .image-info {
@@ -189,6 +219,72 @@
 
 .replacement-preview {
   position: relative;
+  min-height: 200px;
+}
+
+.thumbnail-loading,
+.thumbnail-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.thumbnail-placeholder {
+  width: 100%;
+  height: 200px;
+  background-color: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.thumbnail-placeholder.error {
+  background-color: #fff5f5;
+  border-color: #feb2b2;
+}
+
+.placeholder-icon {
+  color: #cbd5e0;
+  opacity: 0.3;
+}
+
+.loading-spinner {
+  color: #4299e1;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.file-info {
+  width: 100%;
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
+.file-info .filename {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #2d3748;
+  word-break: break-all;
+}
+
+.file-info .filesize {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.75rem;
+  color: #718096;
 }
 
 .remove-btn {
@@ -243,10 +339,45 @@
   box-shadow: 0 0 0 1px #4299e1;
 }
 
+.compression-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  color: #4a5568;
+  cursor: pointer;
+}
+
+.compression-toggle input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.compression-toggle small {
+  color: #718096;
+  margin-left: 0.25rem;
+}
+
+.compression-progress,
 .upload-progress {
   padding: 1rem 1.5rem;
   background-color: #f7fafc;
   border-top: 1px solid #e2e8f0;
+}
+
+.progress-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #2d3748;
+}
+
+.progress-header svg {
+  flex-shrink: 0;
 }
 
 .progress-bar {
@@ -260,14 +391,21 @@
 
 .progress-fill {
   height: 100%;
-  background-color: #4299e1;
   transition: width 0.3s ease;
 }
 
-.upload-progress p {
+.progress-fill.compression {
+  background-color: #9f7aea;
+}
+
+.progress-fill.upload {
+  background-color: #4299e1;
+}
+
+.progress-detail {
   margin: 0;
-  font-size: 0.875rem;
-  color: #4a5568;
+  font-size: 0.75rem;
+  color: #718096;
   text-align: center;
 }
 

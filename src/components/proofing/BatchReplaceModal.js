@@ -1,37 +1,123 @@
 // src/components/proofing/BatchReplaceModal.js
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import ReactDOM from "react-dom";
-import { X, Upload, AlertCircle, Check, FileText } from "lucide-react";
+import { X, Upload, AlertCircle, Check, FileText, Image as ImageIcon, Zap, Loader } from "lucide-react";
 import { batchReplaceProofImages } from "../../services/proofingService";
 import { useToast } from "../../contexts/ToastContext";
+import { compressImages } from "../../utils/imageCompression";
+import { generateThumbnail, cleanupThumbnails } from "../../utils/thumbnailGenerator";
 import "./BatchReplaceModal.css";
 
 const BatchReplaceModal = ({ isOpen, onClose, gallery, deniedImages, onSuccess, userEmail }) => {
   const { showToast } = useToast();
   const fileInputRef = useRef(null);
+  const objectUrlsRef = useRef(new Map()); // Track object URLs for cleanup
   
   const [replacements, setReplacements] = useState({});
   const [studioNotes, setStudioNotes] = useState({});
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(null);
+  const [skipCompression, setSkipCompression] = useState(false);
+  const [compressionProgress, setCompressionProgress] = useState(null);
+  const [thumbnailProgress, setThumbnailProgress] = useState({});
+  const thumbnailQueue = useRef(new Set());
+
+  // Cleanup object URLs when modal closes
+  useEffect(() => {
+    return () => {
+      // Revoke all object URLs on unmount
+      objectUrlsRef.current.forEach((url) => {
+        URL.revokeObjectURL(url);
+      });
+      objectUrlsRef.current.clear();
+      
+      // Clear any pending thumbnail operations
+      thumbnailQueue.current.clear();
+    };
+  }, []);
+
+  // Also cleanup when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      // Clear replacements and revoke URLs when modal closes
+      objectUrlsRef.current.forEach((url) => {
+        URL.revokeObjectURL(url);
+      });
+      objectUrlsRef.current.clear();
+      setReplacements({});
+      setStudioNotes({});
+      setProgress(null);
+      setCompressionProgress(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   // Handle file selection for a specific proof
-  const handleFileSelect = (proofId, file) => {
+  const handleFileSelect = async (proofId, file) => {
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setReplacements({
-          ...replacements,
+      // Revoke previous URL if exists
+      const oldUrl = objectUrlsRef.current.get(proofId);
+      if (oldUrl) {
+        URL.revokeObjectURL(oldUrl);
+      }
+      
+      // Stage 1: Immediate placeholder with file info
+      setReplacements(prev => ({
+        ...prev,
+        [proofId]: {
+          file,
+          preview: null, // No preview yet
+          filename: file.name,
+          size: (file.size / 1024 / 1024).toFixed(1) + 'MB',
+          loading: true
+        }
+      }));
+      
+      // Mark as processing
+      thumbnailQueue.current.add(proofId);
+      setThumbnailProgress(prev => ({
+        ...prev,
+        [proofId]: { status: 'processing' }
+      }));
+      
+      // Stage 2: Generate thumbnail in background (non-blocking)
+      try {
+        const thumbnail = await generateThumbnail(file, { maxSize: 300 });
+        objectUrlsRef.current.set(proofId, thumbnail);
+        
+        setReplacements(prev => ({
+          ...prev,
           [proofId]: {
-            file,
-            preview: e.target.result,
-            filename: file.name
+            ...prev[proofId],
+            preview: thumbnail,
+            loading: false
           }
-        });
-      };
-      reader.readAsDataURL(file);
+        }));
+        
+        setThumbnailProgress(prev => ({
+          ...prev,
+          [proofId]: { status: 'complete' }
+        }));
+      } catch (error) {
+        console.error('Thumbnail generation failed:', error);
+        // Still allow upload even if thumbnail fails
+        setReplacements(prev => ({
+          ...prev,
+          [proofId]: {
+            ...prev[proofId],
+            loading: false,
+            error: true
+          }
+        }));
+        
+        setThumbnailProgress(prev => ({
+          ...prev,
+          [proofId]: { status: 'error' }
+        }));
+      } finally {
+        thumbnailQueue.current.delete(proofId);
+      }
     }
   };
 
@@ -45,7 +131,7 @@ const BatchReplaceModal = ({ isOpen, onClose, gallery, deniedImages, onSuccess, 
   };
 
   // Handle batch file selection (match by filename)
-  const handleBatchFileSelect = (files) => {
+  const handleBatchFileSelect = async (files) => {
     const fileMap = {};
     
     // Create a map of filenames to files
@@ -55,30 +141,40 @@ const BatchReplaceModal = ({ isOpen, onClose, gallery, deniedImages, onSuccess, 
     });
 
     // Try to match files to denied images
-    const newReplacements = { ...replacements };
+    const matchedFiles = [];
     
     deniedImages.forEach(proof => {
       const proofBaseName = proof.filename.toLowerCase();
       
       // Try exact match first
       if (fileMap[proofBaseName]) {
-        const file = fileMap[proofBaseName];
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          newReplacements[proof.id] = {
-            file,
-            preview: e.target.result,
-            filename: file.name
-          };
-          setReplacements({ ...newReplacements });
-        };
-        reader.readAsDataURL(file);
+        matchedFiles.push({ proofId: proof.id, file: fileMap[proofBaseName] });
       }
     });
+    
+    // Process all matched files
+    for (const { proofId, file } of matchedFiles) {
+      await handleFileSelect(proofId, file);
+      // Small delay to keep UI responsive
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    
+    if (matchedFiles.length > 0) {
+      showToast(`Matched ${matchedFiles.length} file(s) to denied images`, "success");
+    } else {
+      showToast("No files matched denied image names", "info");
+    }
   };
 
   // Remove a replacement
   const removeReplacement = (proofId) => {
+    // Revoke object URL
+    const url = objectUrlsRef.current.get(proofId);
+    if (url) {
+      URL.revokeObjectURL(url);
+      objectUrlsRef.current.delete(proofId);
+    }
+    
     const newReplacements = { ...replacements };
     delete newReplacements[proofId];
     setReplacements(newReplacements);
@@ -112,14 +208,54 @@ const BatchReplaceModal = ({ isOpen, onClose, gallery, deniedImages, onSuccess, 
     setUploading(true);
     
     try {
+      let filesToUpload = replacementList;
+      
+      // Compress images if not skipped
+      if (!skipCompression) {
+        setCompressionProgress({ stage: 'preparing', percentage: 0, total: replacementList.length });
+        
+        const files = replacementList.map(r => r.newFile);
+        const compressedFiles = await compressImages(files, {
+          maxWidth: 3000,
+          maxHeight: 3000,
+          quality: 0.92,
+          concurrency: 3,
+          onOverallProgress: (progress) => {
+            setCompressionProgress({
+              ...progress,
+              stage: 'compressing',
+              currentFile: Math.min(progress.completed + 1, progress.total)
+            });
+          }
+        });
+        
+        // Update replacement list with compressed files
+        filesToUpload = replacementList.map((item, index) => ({
+          ...item,
+          newFile: compressedFiles[index]
+        }));
+        
+        // Calculate compression savings
+        const originalSize = files.reduce((sum, file) => sum + file.size, 0);
+        const compressedSize = compressedFiles.reduce((sum, file) => sum + file.size, 0);
+        const savings = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
+        
+        if (savings > 0) {
+          console.log(`Compression saved ${savings}% (${(originalSize / 1024 / 1024).toFixed(1)}MB → ${(compressedSize / 1024 / 1024).toFixed(1)}MB)`);
+        }
+      }
+      
+      // Reset compression progress and start upload
+      setCompressionProgress(null);
+      
       await batchReplaceProofImages(
         gallery.id,
-        replacementList,
+        filesToUpload,
         userEmail,
         (progressData) => setProgress(progressData)
       );
       
-      showToast(`Successfully replaced ${replacementList.length} image(s)`, "success");
+      showToast(`Successfully replaced ${filesToUpload.length} image(s)`, "success");
       if (onSuccess) onSuccess();
       onClose();
     } catch (error) {
@@ -128,6 +264,7 @@ const BatchReplaceModal = ({ isOpen, onClose, gallery, deniedImages, onSuccess, 
     } finally {
       setUploading(false);
       setProgress(null);
+      setCompressionProgress(null);
     }
   };
 
@@ -184,6 +321,17 @@ const BatchReplaceModal = ({ isOpen, onClose, gallery, deniedImages, onSuccess, 
           <p className="help-text">
             Upload new versions of denied images. Previous versions are preserved for reference.
           </p>
+          <label className="compression-toggle">
+            <input
+              type="checkbox"
+              checked={!skipCompression}
+              onChange={(e) => setSkipCompression(!e.target.checked)}
+              disabled={uploading}
+            />
+            <Zap size={16} />
+            <span>Compress images for faster upload</span>
+            <small>(Recommended for large files)</small>
+          </label>
         </div>
 
         <div className="modal-body">
@@ -211,7 +359,32 @@ const BatchReplaceModal = ({ isOpen, onClose, gallery, deniedImages, onSuccess, 
                 <div className="replacement-section">
                   {replacements[proof.id] ? (
                     <div className="replacement-preview">
-                      <img src={replacements[proof.id].preview} alt="Replacement" />
+                      {replacements[proof.id].loading ? (
+                        <div className="thumbnail-loading">
+                          <div className="thumbnail-placeholder">
+                            <Loader size={32} className="loading-spinner" />
+                          </div>
+                          <div className="file-info">
+                            <p className="filename">{replacements[proof.id].filename}</p>
+                            <p className="filesize">{replacements[proof.id].size}</p>
+                          </div>
+                        </div>
+                      ) : replacements[proof.id].error ? (
+                        <div className="thumbnail-error">
+                          <div className="thumbnail-placeholder error">
+                            <ImageIcon size={48} className="placeholder-icon" />
+                          </div>
+                          <div className="file-info">
+                            <p className="filename">{replacements[proof.id].filename}</p>
+                            <p className="filesize">{replacements[proof.id].size}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <img src={replacements[proof.id].preview} alt="Replacement" />
+                          <p className="filename">{replacements[proof.id].filename}</p>
+                        </>
+                      )}
                       <button
                         className="remove-btn"
                         onClick={() => removeReplacement(proof.id)}
@@ -219,7 +392,6 @@ const BatchReplaceModal = ({ isOpen, onClose, gallery, deniedImages, onSuccess, 
                       >
                         <X size={16} />
                       </button>
-                      <p className="filename">{replacements[proof.id].filename}</p>
                     </div>
                   ) : (
                     <div
@@ -259,15 +431,49 @@ const BatchReplaceModal = ({ isOpen, onClose, gallery, deniedImages, onSuccess, 
           </div>
         </div>
 
-        {progress && (
-          <div className="upload-progress">
+        {compressionProgress && (
+          <div className="compression-progress">
+            <div className="progress-header">
+              <ImageIcon size={16} />
+              <span>
+                {compressionProgress.stage === 'preparing' 
+                  ? 'Preparing images...' 
+                  : `Compressing image ${compressionProgress.currentFile || 1} of ${compressionProgress.total}...`
+                }
+              </span>
+            </div>
             <div className="progress-bar">
               <div 
-                className="progress-fill" 
+                className="progress-fill compression" 
+                style={{ width: `${compressionProgress.percentage}%` }}
+              />
+            </div>
+            <p className="progress-detail">
+              {compressionProgress.percentage.toFixed(0)}% complete
+            </p>
+          </div>
+        )}
+
+        {progress && (
+          <div className="upload-progress">
+            <div className="progress-header">
+              <Upload size={16} />
+              <span>
+                {progress.status === 'uploading' 
+                  ? `Uploading version ${progress.completed + 1} of ${progress.total}...`
+                  : 'Processing...'
+                }
+              </span>
+            </div>
+            <div className="progress-bar">
+              <div 
+                className="progress-fill upload" 
                 style={{ width: `${progress.percentage}%` }}
               />
             </div>
-            <p>Uploading new versions... {progress.completed} of {progress.total}</p>
+            <p className="progress-detail">
+              {progress.completed} of {progress.total} completed
+            </p>
           </div>
         )}
 
