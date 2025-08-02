@@ -1,0 +1,277 @@
+/* src/pages/Proofing.css */
+.proofing-page {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+}
+
+.header-content h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 2rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.header-content p {
+  margin: 0;
+  color: #6c757d;
+  font-size: 1rem;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #0056b3;
+}
+
+.filters-section {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.search-box {
+  flex: 1;
+  min-width: 300px;
+}
+
+.search-box input {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.status-filters {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.filter-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid #dee2e6;
+  background: white;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover {
+  background-color: #f8f9fa;
+}
+
+.filter-btn.active {
+  background-color: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: #6c757d;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  text-align: center;
+  color: #6c757d;
+}
+
+.empty-state h3 {
+  margin: 1rem 0 0.5rem 0;
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: #495057;
+}
+
+.galleries-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1.5rem;
+}
+
+.gallery-card {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.gallery-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.gallery-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.gallery-header h3 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  flex: 1;
+}
+
+.gallery-actions {
+  display: flex;
+  gap: 0.5rem;
+  position: relative;
+  z-index: 1;
+}
+
+.btn-icon {
+  padding: 0.375rem;
+  background: none;
+  border: 1px solid #dee2e6;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  color: #6c757d;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background-color: #f8f9fa;
+  color: #495057;
+}
+
+.gallery-info {
+  margin-bottom: 1rem;
+}
+
+.school-name {
+  margin: 0 0 0.5rem 0;
+  color: #6c757d;
+  font-size: 0.875rem;
+}
+
+.gallery-stats {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.813rem;
+  color: #6c757d;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.stat.denied {
+  color: #dc3545;
+}
+
+.gallery-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 1rem;
+  border-top: 1px solid #f1f3f4;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.813rem;
+  font-weight: 500;
+}
+
+.deadline {
+  font-size: 0.813rem;
+  color: #6c757d;
+}
+
+.deadline-urgent {
+  color: #dc3545;
+  font-weight: 500;
+}
+
+.deadline-soon {
+  color: #ffc107;
+  font-weight: 500;
+}
+
+.deadline-overdue {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.gallery-meta {
+  font-size: 0.75rem;
+  color: #adb5bd;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .proofing-page {
+    padding: 1rem;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .filters-section {
+    flex-direction: column;
+  }
+  
+  .search-box {
+    min-width: unset;
+  }
+  
+  .status-filters {
+    flex-wrap: wrap;
+  }
+  
+  .galleries-grid {
+    grid-template-columns: 1fr;
+  }
+}

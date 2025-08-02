@@ -1,0 +1,365 @@
+/* src/pages/ProofingReview.css */
+.proofing-review-page {
+  min-height: 100vh;
+  background-color: #f8f9fa;
+}
+
+/* Loading and Error States */
+.loading-container,
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  text-align: center;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Email Prompt */
+.email-prompt-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.email-prompt-modal {
+  background: white;
+  padding: 2rem;
+  border-radius: 0.5rem;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.email-prompt-modal h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.email-prompt-modal p {
+  margin: 0 0 1.5rem 0;
+  color: #6c757d;
+}
+
+.email-prompt-modal input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+}
+
+.email-prompt-modal .btn-primary {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.email-prompt-modal .btn-primary:hover {
+  background-color: #0056b3;
+}
+
+/* Review Header */
+.review-header {
+  background: white;
+  padding: 2rem;
+  border-bottom: 1px solid #dee2e6;
+  margin-bottom: 2rem;
+}
+
+.header-content h1 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.school-name {
+  margin: 0 0 1rem 0;
+  color: #6c757d;
+  font-size: 1rem;
+}
+
+.deadline-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #6c757d;
+  margin-bottom: 1.5rem;
+}
+
+.deadline-info.overdue {
+  color: #dc3545;
+  font-weight: 500;
+}
+
+/* Progress Section */
+.progress-section {
+  margin-top: 1.5rem;
+}
+
+.progress-stats {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  color: #6c757d;
+}
+
+.stat.approved {
+  color: #28a745;
+  font-weight: 500;
+}
+
+.stat.denied {
+  color: #dc3545;
+  font-weight: 500;
+}
+
+.stat.pending {
+  color: #ffc107;
+  font-weight: 500;
+}
+
+.progress-bar {
+  height: 8px;
+  background-color: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: #007bff;
+  transition: width 0.3s ease;
+}
+
+.progress-percentage {
+  font-size: 0.813rem;
+  color: #6c757d;
+}
+
+/* Proofs Grid */
+.proofs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
+  padding: 0 2rem 2rem;
+}
+
+.proof-item {
+  background: white;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.proof-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.proof-image-container {
+  position: relative;
+  padding-bottom: 66.67%; /* 3:2 aspect ratio */
+  background-color: #f8f9fa;
+}
+
+.proof-image-container img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background-color: #f8f9fa;
+}
+
+.status-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+}
+
+.status-overlay.approved {
+  background-color: rgba(40, 167, 69, 0.8);
+}
+
+.status-overlay.denied {
+  background-color: rgba(220, 53, 69, 0.8);
+}
+
+.proof-info {
+  padding: 1rem;
+}
+
+.filename {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #495057;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-approve,
+.btn-deny {
+  flex: 1;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 0.25rem;
+  font-size: 0.813rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  transition: all 0.2s;
+}
+
+.btn-approve {
+  background-color: #28a745;
+  color: white;
+}
+
+.btn-approve:hover {
+  background-color: #218838;
+}
+
+.btn-deny {
+  background-color: #dc3545;
+  color: white;
+}
+
+.btn-deny:hover {
+  background-color: #c82333;
+}
+
+.denial-notes {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #dc3545;
+  font-style: italic;
+}
+
+/* Completion Message */
+.completion-message {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  padding: 2rem 3rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  z-index: 100;
+}
+
+.completion-content h2 {
+  margin: 0.5rem 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.completion-content p {
+  margin: 0;
+  color: #6c757d;
+}
+
+.success-icon {
+  color: #28a745;
+}
+
+.warning-icon {
+  color: #ffc107;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .review-header {
+    padding: 1rem;
+  }
+  
+  .header-content h1 {
+    font-size: 1.5rem;
+  }
+  
+  .progress-stats {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  
+  .proofs-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+    padding: 0 1rem 1rem;
+  }
+  
+  .proof-info {
+    padding: 0.75rem;
+  }
+  
+  .filename {
+    font-size: 0.813rem;
+  }
+  
+  .completion-message {
+    width: 90%;
+    padding: 1.5rem;
+  }
+}

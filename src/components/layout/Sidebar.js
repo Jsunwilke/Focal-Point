@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Scan,
   MessageCircle,
+  Image,
 } from "lucide-react";
 import "./Sidebar.css";
 
@@ -95,6 +96,13 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       label: "Tracking",
       icon: Scan,
       path: "/tracking",
+      enabled: true,
+    },
+    {
+      id: "proofing",
+      label: "Proofing",
+      icon: Image,
+      path: "/proofing",
       enabled: true,
     },
     {

@@ -1,0 +1,305 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserId() {
+      return request.auth.uid;
+    }
+    
+    function getUserData() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function userExists() {
+      return firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+    
+    function getUserRole() {
+      return userExists() && 'role' in getUserData() ? getUserData().role : '';
+    }
+    
+    function getOrganizationId() {
+      return userExists() && 'organizationID' in getUserData() ? getUserData().organizationID : '';
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+    
+    function isManager() {
+      return isAuthenticated() && (getUserRole() == 'manager' || getUserRole() == 'admin');
+    }
+    
+    function isEmployee() {
+      return isAuthenticated() && (getUserRole() == 'employee' || getUserRole() == 'manager' || getUserRole() == 'admin');
+    }
+    
+    // Validate file type
+    function isValidImageType() {
+      return request.resource.contentType.matches('image/.*') ||
+             request.resource.contentType == 'image/jpeg' ||
+             request.resource.contentType == 'image/png' ||
+             request.resource.contentType == 'image/gif' ||
+             request.resource.contentType == 'image/webp';
+    }
+    
+    function isValidDocumentType() {
+      return request.resource.contentType == 'application/pdf' ||
+             request.resource.contentType == 'text/plain' ||
+             request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+             request.resource.contentType == 'application/msword';
+    }
+    
+    // Validate file size (in MB)
+    function isValidFileSize(maxSizeMB) {
+      return request.resource.size <= maxSizeMB * 1024 * 1024;
+    }
+    
+    // Extract organization ID from path
+    function getOrgIdFromPath(path) {
+      return path.split('/')[0];
+    }
+
+    // Organization-scoped storage
+    match /organizations/{orgId}/{allPaths=**} {
+      allow read: if isAuthenticated() && getOrganizationId() == orgId;
+      allow write: if isAuthenticated() && getOrganizationId() == orgId && isManager();
+    }
+
+    // User profile photos - Updated path and roles
+    match /user-photos/{userId}/{fileName} {
+      allow read: if isAuthenticated() && 
+                     getOrganizationId() == getUserData().organizationID;
+      allow write: if isAuthenticated() && 
+                      (userId == getUserId() || isAdmin()) &&
+                      isValidImageType() && 
+                      isValidFileSize(20); // 20MB limit for profile photos (increased from 5MB)
+      allow delete: if isAuthenticated() && 
+                       (userId == getUserId() || isAdmin());
+    }
+
+    // Daily job report attachments
+    match /reports/{orgId}/{reportId}/{fileName} {
+      allow read: if isAuthenticated() && getOrganizationId() == orgId;
+      allow write: if isAuthenticated() && 
+                      getOrganizationId() == orgId &&
+                      (isValidImageType() || isValidDocumentType()) &&
+                      isValidFileSize(50); // 50MB limit for report attachments
+    }
+
+    // Session photos and documentation
+    match /sessions/{orgId}/{sessionId}/{fileName} {
+      allow read: if isAuthenticated() && getOrganizationId() == orgId;
+      allow write: if isAuthenticated() && 
+                      getOrganizationId() == orgId &&
+                      isEmployee() && // Updated to use app's role system
+                      isValidImageType() &&
+                      isValidFileSize(100); // 100MB limit for session photos
+    }
+
+    // Sports job photos
+    match /sports/{orgId}/{jobId}/{fileName} {
+      allow read: if isAuthenticated() && getOrganizationId() == orgId;
+      allow write: if isAuthenticated() && 
+                      getOrganizationId() == orgId &&
+                      isEmployee() && // Updated to use app's role system
+                      isValidImageType() &&
+                      isValidFileSize(100); // 100MB limit for sports photos
+    }
+
+    // School photos and documents
+    match /schools/{orgId}/{schoolId}/{fileName} {
+      allow read: if isAuthenticated() && getOrganizationId() == orgId;
+      allow write: if isAuthenticated() && 
+                      getOrganizationId() == orgId &&
+                      isManager() &&
+                      (isValidImageType() || isValidDocumentType()) &&
+                      isValidFileSize(25); // 25MB limit for school documents
+    }
+
+    // Location photos for schools - Updated with organization validation
+    match /locationPhotos/{orgId}/{schoolId}/{fileName} {
+      allow read: if isAuthenticated() && 
+                     (
+                       // Allow access with download token (for URLs)
+                       request.auth.token.email != null ||
+                       // Standard organization validation
+                       (userExists() &&
+                        getOrganizationId() == orgId)
+                     );
+      allow write: if isAuthenticated() && 
+                      userExists() &&
+                      getOrganizationId() == orgId &&
+                      isEmployee() &&
+                      isValidImageType() &&
+                      isValidFileSize(25); // 25MB limit for location photos
+      allow delete: if isAuthenticated() && 
+                       userExists() &&
+                       getOrganizationId() == orgId &&
+                       isManager();
+    }
+
+    // Equipment photos and documentation
+    match /equipment/{orgId}/{equipmentType}/{itemId}/{fileName} {
+      allow read: if isAuthenticated() && getOrganizationId() == orgId;
+      allow write: if isAuthenticated() && 
+                      getOrganizationId() == orgId &&
+                      isEmployee() && // Updated to use app's role system
+                      isValidImageType() &&
+                      isValidFileSize(10); // 10MB limit for equipment photos
+    }
+
+    // Template assets (logos, backgrounds, etc.)
+    match /templates/{orgId}/{templateId}/{fileName} {
+      allow read: if isAuthenticated() && getOrganizationId() == orgId;
+      allow write: if isAuthenticated() && 
+                      getOrganizationId() == orgId &&
+                      isManager() &&
+                      isValidImageType() &&
+                      isValidFileSize(25); // 25MB limit for template assets
+    }
+
+    // Organization branding (logos, etc.)
+    match /branding/{orgId}/{fileName} {
+      allow read: if isAuthenticated() && getOrganizationId() == orgId;
+      allow write: if isAuthenticated() && 
+                      getOrganizationId() == orgId &&
+                      isAdmin() &&
+                      isValidImageType() &&
+                      isValidFileSize(10); // 10MB limit for branding assets
+    }
+
+    // Backup and exports (admin only)
+    match /backups/{orgId}/{fileName} {
+      allow read: if isAuthenticated() && getOrganizationId() == orgId && isAdmin();
+      allow write: if false; // Only Firebase Functions can write backups
+    }
+
+    match /exports/{orgId}/{fileName} {
+      allow read: if isAuthenticated() && getOrganizationId() == orgId && isManager();
+      allow write: if false; // Only Firebase Functions can write exports
+    }
+
+    // Temporary uploads (processing area)
+    match /temp/{orgId}/{userId}/{fileName} {
+      allow read, write: if isAuthenticated() && 
+                            getOrganizationId() == orgId &&
+                            userId == getUserId() &&
+                            isValidFileSize(500); // 500MB temp limit
+      // Auto-delete rule should be set up via Firebase Functions
+    }
+
+    // Daily job report photos - Updated with organization validation
+    match /dailyReports/{orgId}/{userId}/{fileName} {
+      allow read: if isAuthenticated() && 
+                     (
+                       // Allow access with download token (for URLs)
+                       request.auth.token.email != null ||
+                       // Standard organization validation
+                       (userExists() &&
+                        getOrganizationId() == orgId &&
+                        (userId == getUserId() || isManager()))
+                     );
+      allow write: if isAuthenticated() && 
+                      userExists() &&
+                      getOrganizationId() == orgId &&
+                      userId == getUserId() &&
+                      isValidImageType() &&
+                      isValidFileSize(20); // 20MB limit
+      allow delete: if isAuthenticated() && 
+                       userExists() &&
+                       getOrganizationId() == orgId &&
+                       (userId == getUserId() || isManager());
+    }
+
+    // Photoshoot notes photos - Updated with organization validation
+    match /photoshootNotes/{orgId}/{noteId}/{fileName} {
+      allow read: if isAuthenticated() && 
+                     (
+                       // Allow access with download token (for URLs)
+                       request.auth.token.email != null ||
+                       // Standard organization validation
+                       (userExists() &&
+                        getOrganizationId() == orgId)
+                     );
+      allow write: if isAuthenticated() && 
+                      userExists() &&
+                      getOrganizationId() == orgId &&
+                      isEmployee() &&
+                      isValidImageType() &&
+                      isValidFileSize(20); // 20MB limit
+      allow delete: if isAuthenticated() && 
+                       userExists() &&
+                       getOrganizationId() == orgId &&
+                       isManager();
+    }
+
+    // Public assets (if any) - read-only
+    match /public/{fileName} {
+      allow read: if true;
+      allow write: if false; // Only Firebase Functions/Admin SDK can write
+    }
+
+    // System files (templates, defaults, etc.) - read-only
+    match /system/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only Firebase Functions/Admin SDK can write
+    }
+
+    // Proof gallery images - Initial uploads
+    match /proof-images/{galleryId}/{fileName} {
+      // PUBLIC ACCESS: Anyone can read proof images (for public gallery links)
+      allow read: if true;
+      
+      // Only authenticated users from the organization can upload
+      allow write: if isAuthenticated() && 
+                      userExists() &&
+                      // Verify the gallery exists and user has access to it
+                      firestore.exists(/databases/(default)/documents/proofGalleries/$(galleryId)) &&
+                      // Check user belongs to the organization that owns the gallery
+                      getOrganizationId() == firestore.get(/databases/(default)/documents/proofGalleries/$(galleryId)).data.organizationId &&
+                      isValidImageType() &&
+                      isValidFileSize(50); // 50MB limit for proof images
+                      
+      // Only admins from the organization can delete
+      allow delete: if isAuthenticated() && 
+                       userExists() &&
+                       firestore.exists(/databases/(default)/documents/proofGalleries/$(galleryId)) &&
+                       getOrganizationId() == firestore.get(/databases/(default)/documents/proofGalleries/$(galleryId)).data.organizationId &&
+                       isAdmin();
+    }
+
+    // Proof gallery images - Versioned uploads (for revisions)
+    match /proof-images/{galleryId}/versions/{proofId}/{fileName} {
+      // PUBLIC ACCESS: Anyone can read proof image versions
+      allow read: if true;
+      
+      // Only authenticated users from the organization can upload new versions
+      allow write: if isAuthenticated() && 
+                      userExists() &&
+                      // Verify the gallery exists and user has access to it
+                      firestore.exists(/databases/(default)/documents/proofGalleries/$(galleryId)) &&
+                      // Check user belongs to the organization that owns the gallery
+                      getOrganizationId() == firestore.get(/databases/(default)/documents/proofGalleries/$(galleryId)).data.organizationId &&
+                      isValidImageType() &&
+                      isValidFileSize(50); // 50MB limit for proof images
+                      
+      // Only admins from the organization can delete versions
+      allow delete: if isAuthenticated() && 
+                       userExists() &&
+                       firestore.exists(/databases/(default)/documents/proofGalleries/$(galleryId)) &&
+                       getOrganizationId() == firestore.get(/databases/(default)/documents/proofGalleries/$(galleryId)).data.organizationId &&
+                       isAdmin();
+    }
+
+    // Default deny rule for all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

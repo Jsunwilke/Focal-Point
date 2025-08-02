@@ -28,6 +28,8 @@ import WorkflowDashboard from "./components/workflow/WorkflowDashboard";
 import WorkflowSettings from "./pages/WorkflowSettings";
 import Tracking from "./pages/Tracking";
 import Chat from "./pages/Chat";
+import Proofing from "./pages/Proofing";
+import ProofingReview from "./pages/ProofingReview";
 import "./App.css";
 
 const AppContent = () => {
@@ -49,6 +51,7 @@ const AppContent = () => {
       <Routes>
         {/* Public routes */}
         <Route path="/accept-invitation" element={<InvitationAcceptance />} />
+        <Route path="/proof/:id" element={<ProofingReview />} />
 
         {/* Auth routes - only show if not logged in */}
         {!user && (
@@ -122,6 +125,7 @@ const AppContent = () => {
                       <Route path="/schools" element={<SchoolManagement />} />
                       <Route path="/sports" element={<Sports />} />
                       <Route path="/tracking" element={<Tracking />} />
+                      <Route path="/proofing" element={<Proofing />} />
                       <Route path="/chat" element={<Chat />} />
                       <Route path="/daily-reports" element={<DailyReports />} />
                       <Route path="/settings" element={<Settings />} />

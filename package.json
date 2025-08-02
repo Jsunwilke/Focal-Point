@@ -13,6 +13,7 @@
   "homepage": ".",
   "dependencies": {
     "@react-google-maps/api": "^2.20.7",
+    "bcryptjs": "^3.0.2",
     "bootstrap": "^5.3.0",
     "bootstrap-icons": "^1.11.0",
     "chart.js": "^4.4.0",
