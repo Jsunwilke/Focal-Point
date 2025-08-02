@@ -1,0 +1,152 @@
+/* src/components/districts/DistrictCard.css */
+.district-card {
+  background-color: var(--background);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.district-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color);
+}
+
+.district-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.district-card__icon {
+  width: 48px;
+  height: 48px;
+  background-color: var(--primary-light);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-color);
+}
+
+.district-card__menu {
+  position: relative;
+}
+
+.district-card__menu-button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background-color: transparent;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.district-card__menu-button:hover {
+  background-color: var(--background-secondary);
+  color: var(--text-primary);
+}
+
+.menu-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+}
+
+.district-card__menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: var(--background);
+  background-color: #ffffff; /* Fallback for solid background */
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.district-card__menu-dropdown button {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  background-color: transparent;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.2s ease;
+}
+
+.district-card__menu-dropdown button:hover {
+  background-color: var(--background-secondary);
+}
+
+.district-card__menu-dropdown button.danger {
+  color: var(--error-color);
+}
+
+.menu-divider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 0.25rem 0;
+}
+
+.district-card__content {
+  margin-bottom: 1rem;
+}
+
+.district-card__name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.75rem 0;
+}
+
+.district-card__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.district-card__stat {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.district-card__stat svg {
+  color: var(--text-muted);
+}
+
+.district-card__footer {
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.district-card__view-link {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--primary-color);
+  font-weight: 500;
+}

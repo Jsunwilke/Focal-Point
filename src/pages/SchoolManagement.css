@@ -16,6 +16,12 @@
   flex: 1;
 }
 
+.schools-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 .schools-title {
   font-size: var(--font-size-3xl);
   font-weight: var(--font-weight-bold);
@@ -425,6 +431,96 @@
   font-style: italic;
 }
 
+/* Tab Buttons */
+.tab-buttons {
+  display: flex;
+  gap: 0.25rem;
+  background-color: var(--color-background-secondary);
+  padding: 0.25rem;
+  border-radius: var(--border-radius);
+}
+
+.tab-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+  background-color: var(--color-hover);
+  color: var(--color-text);
+}
+
+.tab-button.active {
+  background-color: var(--color-background);
+  color: var(--color-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* District Filter Badge */
+.district-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem 0.25rem 0.5rem;
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  border-radius: var(--border-radius);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.district-filter-badge button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin-left: 0.25rem;
+  border: none;
+  background-color: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.district-filter-badge button:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* School Card District Badge */
+.school-card__district {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  border-radius: var(--border-radius);
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+/* Districts Grid */
+.districts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg);
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .schools-controls {
@@ -439,7 +535,27 @@
     align-self: flex-start;
   }
 
-  .schools-grid {
+  .schools-grid,
+  .districts-grid {
     grid-template-columns: 1fr;
+  }
+
+  .schools-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .schools-header__actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .tab-buttons {
+    width: 100%;
+  }
+
+  .tab-button {
+    flex: 1;
+    justify-content: center;
   }
 }

@@ -889,11 +889,19 @@ export const subscribeToDailyJobReports = (organizationID, callback, errorCallba
 
 // Subscribe to new daily job reports only (optimized for cache-first approach)
 export const subscribeToNewDailyJobReports = (organizationID, callback, errorCallback, latestCachedTimestamp = null) => {
-  // If no cached timestamp, use a very old timestamp to get minimal results
-  const effectiveTimestamp = latestCachedTimestamp || new Date('2020-01-01');
+  // Validate latestCachedTimestamp before using it
+  let effectiveTimestamp;
   
-  if (!latestCachedTimestamp) {
-    console.log(`[DailyReports] ⚠️ No cached timestamp provided, using fallback timestamp: ${effectiveTimestamp.toISOString()}`);
+  if (latestCachedTimestamp && latestCachedTimestamp instanceof Date && !isNaN(latestCachedTimestamp.getTime())) {
+    effectiveTimestamp = latestCachedTimestamp;
+    console.log(`[DailyReports] Using cached timestamp: ${effectiveTimestamp.toISOString()}`);
+  } else {
+    effectiveTimestamp = new Date('2020-01-01');
+    if (latestCachedTimestamp) {
+      console.warn('[DailyReports] ⚠️ Invalid cached timestamp provided, using fallback timestamp:', latestCachedTimestamp);
+    } else {
+      console.log(`[DailyReports] No cached timestamp provided, using fallback timestamp: ${effectiveTimestamp.toISOString()}`);
+    }
   }
 
   // Listen only for reports newer than the effective timestamp
@@ -908,10 +916,15 @@ export const subscribeToNewDailyJobReports = (organizationID, callback, errorCal
   );
 
   const listenerTag = `optimized-${Date.now()}`;
-  console.log(`[DailyReports-${listenerTag}] Subscribing to NEW reports after ${effectiveTimestamp.toISOString()} for organization ${organizationID}`);
-  console.log(`[DailyReports-${listenerTag}] Query timestamp value: ${effectiveTimestamp.getTime()}ms`);
-  console.log(`[DailyReports-${listenerTag}] Firebase Timestamp query: ${timestampQuery.toDate().toISOString()}`);
-  console.log(`[DailyReports-${listenerTag}] Query will look for reports where timestamp > ${effectiveTimestamp.toISOString()}`);
+  
+  try {
+    console.log(`[DailyReports-${listenerTag}] Subscribing to NEW reports after ${effectiveTimestamp.toISOString()} for organization ${organizationID}`);
+    console.log(`[DailyReports-${listenerTag}] Query timestamp value: ${effectiveTimestamp.getTime()}ms`);
+    console.log(`[DailyReports-${listenerTag}] Firebase Timestamp query: ${timestampQuery.toDate().toISOString()}`);
+    console.log(`[DailyReports-${listenerTag}] Query will look for reports where timestamp > ${effectiveTimestamp.toISOString()}`);
+  } catch (err) {
+    console.error(`[DailyReports-${listenerTag}] Error logging timestamp info:`, err);
+  }
 
   return onSnapshot(
     q,
@@ -1037,6 +1050,8 @@ export const createSchool = async (organizationID, schoolData) => {
     const schoolRef = await addDoc(collection(firestore, "schools"), {
       ...schoolData,
       organizationID,
+      districtId: schoolData.districtId || null,
+      districtName: schoolData.districtName || null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -1049,10 +1064,20 @@ export const createSchool = async (organizationID, schoolData) => {
 
 export const updateSchool = async (schoolId, schoolData) => {
   try {
-    await updateDoc(doc(firestore, "schools", schoolId), {
+    const updateData = {
       ...schoolData,
       updatedAt: serverTimestamp(),
-    });
+    };
+    
+    // Ensure districtId and districtName are handled
+    if ('districtId' in schoolData) {
+      updateData.districtId = schoolData.districtId || null;
+    }
+    if ('districtName' in schoolData) {
+      updateData.districtName = schoolData.districtName || null;
+    }
+    
+    await updateDoc(doc(firestore, "schools", schoolId), updateData);
   } catch (error) {
     console.error("Error updating school:", error);
     throw error;

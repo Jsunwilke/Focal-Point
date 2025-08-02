@@ -10,7 +10,7 @@
     "studio-management"
   ],
   "main": "src/index.js",
-  "homepage": ".",
+  "homepage": "/",
   "dependencies": {
     "@react-google-maps/api": "^2.20.7",
     "bcryptjs": "^3.0.2",

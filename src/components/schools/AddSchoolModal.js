@@ -1,7 +1,8 @@
 // src/components/schools/AddSchoolModal.js
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
-import { X, School, MapPin, User, Mail, Phone, Save, Map } from "lucide-react";
+import { X, School, MapPin, User, Mail, Phone, Save, Map, Building2 } from "lucide-react";
+import { useDistricts } from "../../contexts/DistrictContext";
 import Button from "../shared/Button";
 import GoogleMapModal from "../shared/GoogleMapModal";
 import "../shared/Modal.css";
@@ -13,9 +14,14 @@ const AddSchoolModal = ({
   onAdd,
   isEditing = false,
 }) => {
+  const { districts, loading: districtsLoading } = useDistricts();
   const [formData, setFormData] = useState({
     // School name (using 'value' to match your current structure)
     value: school?.value || school?.name || "",
+
+    // District assignment
+    districtId: school?.districtId || "",
+    districtName: school?.districtName || "",
 
     // Address fields
     street: school?.street || "",
@@ -41,10 +47,20 @@ const AddSchoolModal = ({
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => {
+      const updated = {
+        ...prev,
+        [name]: value,
+      };
+      
+      // If district is changed, update the district name
+      if (name === 'districtId') {
+        const selectedDistrict = districts.find(d => d.id === value);
+        updated.districtName = selectedDistrict ? selectedDistrict.name : '';
+      }
+      
+      return updated;
+    });
 
     // Clear error when user starts typing
     if (errors[name]) {
@@ -241,6 +257,31 @@ const AddSchoolModal = ({
               {errors.value && (
                 <span className="form-error-text">{errors.value}</span>
               )}
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="districtId" className="form-label">
+                <Building2 size={14} style={{ marginRight: '4px', display: 'inline' }} />
+                District
+              </label>
+              <select
+                id="districtId"
+                name="districtId"
+                className="form-input"
+                value={formData.districtId}
+                onChange={handleChange}
+                disabled={districtsLoading}
+              >
+                <option value="">No District</option>
+                {districts.map((district) => (
+                  <option key={district.id} value={district.id}>
+                    {district.name} ({district.schoolCount || 0} schools)
+                  </option>
+                ))}
+              </select>
+              <span className="form-hint">
+                Assign this school to a district for better organization
+              </span>
             </div>
           </div>
 

@@ -1,0 +1,240 @@
+/* src/components/districts/AssignSchoolsModal.css */
+
+.assign-schools__search {
+  margin-bottom: 2rem;
+  padding: 0 1.5rem;
+}
+
+.search-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 2.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  background-color: var(--background);
+  transition: all 0.2s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: var(--text-secondary);
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.assign-schools__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 1.5rem;
+}
+
+.school-group {
+  margin-bottom: 2.5rem;
+  background-color: var(--background-secondary);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+}
+
+.school-group:last-child {
+  margin-bottom: 0;
+}
+
+.school-group__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--border-light);
+}
+
+.school-group__header h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.select-all-btn {
+  padding: 0.375rem 1rem;
+  border: 1px solid var(--primary-color);
+  border-radius: var(--radius-md);
+  background-color: transparent;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--primary-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.select-all-btn:hover {
+  background-color: var(--primary-light);
+  border-color: var(--primary-color);
+}
+
+.school-group__items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.school-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background-color: var(--background);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.school-item.selected {
+  background-color: var(--primary-light);
+  border-color: var(--primary-color);
+}
+
+.school-item.selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: var(--primary-color);
+}
+
+.school-item:hover {
+  background-color: var(--background-muted);
+  transform: translateX(4px);
+}
+
+.school-item.selected:hover {
+  background-color: var(--primary-light);
+}
+
+.school-item__checkbox {
+  color: var(--primary-color);
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.school-item__checkbox svg {
+  width: 20px;
+  height: 20px;
+}
+
+.school-item__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.school-item__name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.375rem;
+  line-height: 1.3;
+}
+
+.school-item__details {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.school-item__district {
+  padding: 0.125rem 0.5rem;
+  background-color: var(--primary-light);
+  color: var(--primary-color);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+.selection-summary {
+  margin-right: auto;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  background-color: var(--background-secondary);
+  border-radius: var(--radius-md);
+}
+
+/* Custom scrollbar */
+.assign-schools__list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.assign-schools__list::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.assign-schools__list::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.assign-schools__list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* Empty state styling */
+.school-group:empty {
+  display: none;
+}
+
+/* Improve modal actions spacing */
+.modal__actions {
+  padding: 1.5rem !important;
+  gap: 1rem;
+  border-top: 2px solid var(--border-light);
+  background-color: var(--background-secondary);
+}

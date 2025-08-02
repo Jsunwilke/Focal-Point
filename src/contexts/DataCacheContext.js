@@ -855,9 +855,27 @@ export const DataCacheProvider = ({ children }) => {
         });
         
         if (sortedReports[0].timestamp) {
-          latestTimestamp = sortedReports[0].timestamp.toDate ? 
-            sortedReports[0].timestamp.toDate() : 
-            new Date(sortedReports[0].timestamp.seconds * 1000);
+          // Try to extract a valid date from the timestamp
+          let tempDate;
+          try {
+            if (sortedReports[0].timestamp.toDate) {
+              tempDate = sortedReports[0].timestamp.toDate();
+            } else if (sortedReports[0].timestamp.seconds) {
+              tempDate = new Date(sortedReports[0].timestamp.seconds * 1000);
+            }
+            
+            // Validate the date
+            if (tempDate instanceof Date && !isNaN(tempDate.getTime())) {
+              latestTimestamp = tempDate;
+              secureLogger.debug('DataCacheContext: Valid latest timestamp found:', tempDate.toISOString());
+            } else {
+              secureLogger.warn('DataCacheContext: Invalid timestamp found in cached reports, using null');
+              latestTimestamp = null;
+            }
+          } catch (err) {
+            secureLogger.error('DataCacheContext: Error parsing timestamp:', err);
+            latestTimestamp = null;
+          }
         }
       }
       

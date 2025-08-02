@@ -9,6 +9,7 @@ import RecordTable from './RecordTable';
 import ConfirmationModal from '../shared/ConfirmationModal';
 import NotificationModal from '../shared/NotificationModal';
 import { sanitizeSearchTerm, defaultRateLimiter } from '../../utils/inputSanitizer';
+import statusColors from '../../../status-colors.json';
 import '../shared/ConfirmationModal.css';
 import '../shared/NotificationModal.css';
 
@@ -169,16 +170,10 @@ const SDCardTab = ({ organizationID }) => {
   };
 
   const getStatusColor = (status) => {
-    const colors = {
-      'Job Box': '#f59e0b',
-      'Camera': '#10b981',
-      'Envelope': '#f59e0b',
-      'Uploaded': '#3b82f6',
-      'Cleared': '#6b7280',
-      'Camera Bag': '#8b5cf6',
-      'Personal': '#ec4899'
-    };
-    return colors[status] || '#6b7280';
+    // Normalize the status to match the JSON keys (lowercase)
+    const normalizedStatus = status.toLowerCase();
+    const statusConfig = statusColors.sdCardStatuses[normalizedStatus];
+    return statusConfig ? statusConfig.hex : '#8E8E93'; // Default to iOS gray
   };
 
   const formatDate = (timestamp) => {

@@ -155,7 +155,20 @@ const ProofingReview = () => {
   // Format deadline
   const formatDeadline = (deadline) => {
     if (!deadline) return null;
-    const date = deadline.toDate ? deadline.toDate() : new Date(deadline);
+    
+    let date;
+    try {
+      date = deadline.toDate ? deadline.toDate() : new Date(deadline);
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid deadline date:', deadline);
+        return null;
+      }
+    } catch (error) {
+      console.error('Error parsing deadline date:', error);
+      return null;
+    }
+    
     const now = new Date();
     const daysUntil = Math.ceil((date - now) / (1000 * 60 * 60 * 24));
     

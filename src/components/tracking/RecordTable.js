@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import statusColors from '../../../status-colors.json';
 
 const RecordTable = ({ records, type, onDelete }) => {
   const [sortField, setSortField] = useState('timestamp');
@@ -45,25 +46,15 @@ const RecordTable = ({ records, type, onDelete }) => {
   };
 
   const getStatusColor = (status) => {
+    // Normalize the status to match the JSON keys (lowercase)
+    const normalizedStatus = status.toLowerCase();
+    
     if (type === 'sdcard') {
-      const colors = {
-        'Job Box': '#f59e0b',
-        'Camera': '#10b981',
-        'Envelope': '#f59e0b',
-        'Uploaded': '#3b82f6',
-        'Cleared': '#6b7280',
-        'Camera Bag': '#8b5cf6',
-        'Personal': '#ec4899'
-      };
-      return colors[status] || '#6b7280';
+      const statusConfig = statusColors.sdCardStatuses[normalizedStatus];
+      return statusConfig ? statusConfig.hex : '#8E8E93'; // Default to iOS gray
     } else {
-      const colors = {
-        'Packed': '#3b82f6',
-        'Picked Up': '#10b981',
-        'Left Job': '#f59e0b',
-        'Turned In': '#6b7280'
-      };
-      return colors[status] || '#6b7280';
+      const statusConfig = statusColors.jobBoxStatuses[normalizedStatus];
+      return statusConfig ? statusConfig.hex : '#8E8E93'; // Default to iOS gray
     }
   };
 

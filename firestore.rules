@@ -248,6 +248,46 @@ service cloud.firestore {
                        belongsToSameOrg(request.auth.uid, resource.data.organizationID);
     }
 
+    // Districts collection
+    match /districts/{districtId} {
+      // Validation function for district data
+      function isValidDistrict() {
+        return request.resource.data.keys().hasAll(['name', 'organizationID']) &&
+               request.resource.data.name is string &&
+               request.resource.data.name.size() > 0 &&
+               request.resource.data.name.size() <= 100 &&
+               request.resource.data.organizationID is string;
+      }
+      
+      // Users can read districts from their organization
+      allow read: if request.auth != null && 
+                     belongsToSameOrg(request.auth.uid, resource.data.organizationID);
+      
+      // Admins/Managers can create districts
+      allow create: if request.auth != null && 
+                       isAdminOrManager(request.auth.uid) &&
+                       belongsToSameOrg(request.auth.uid, request.resource.data.organizationID) &&
+                       isValidDistrict() &&
+                       request.resource.data.schoolCount == 0;
+      
+      // Admins/Managers can update districts
+      allow update: if request.auth != null && 
+                       isAdminOrManager(request.auth.uid) &&
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
+                       // Prevent changing organizationID
+                       request.resource.data.organizationID == resource.data.organizationID &&
+                       // Validate name if changed
+                       (!request.resource.data.keys().hasAny(['name']) || 
+                        (request.resource.data.name is string && 
+                         request.resource.data.name.size() > 0 && 
+                         request.resource.data.name.size() <= 100));
+      
+      // Admins can delete districts
+      allow delete: if request.auth != null && 
+                       isAdmin(request.auth.uid) &&
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationID);
+    }
+
     // Schools collection
     match /schools/{schoolId} {
       // Users can read schools from their organization
@@ -267,10 +307,14 @@ service cloud.firestore {
                        // Ensure locationPhotos is an array
                        request.resource.data.locationPhotos is list;
       
-      // Admins/Managers can update schools
+      // Admins/Managers can update schools (including district assignment)
       allow update: if request.auth != null && 
                        isAdminOrManager(request.auth.uid) &&
-                       belongsToSameOrg(request.auth.uid, resource.data.organizationID);
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
+                       // If updating districtId, ensure it's either null or a valid string
+                       (!request.resource.data.keys().hasAny(['districtId']) || 
+                        request.resource.data.districtId == null || 
+                        request.resource.data.districtId is string);
       
       // Admins can delete schools (soft delete recommended)
       allow delete: if request.auth != null && 

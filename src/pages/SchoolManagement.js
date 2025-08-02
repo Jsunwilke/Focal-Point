@@ -16,17 +16,32 @@ import {
   Filter,
   Calendar,
   FileText,
+  Building2,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { useDistricts } from "../contexts/DistrictContext";
 import { getSchools, createSchool, updateSchool } from "../firebase/firestore";
 import Button from "../components/shared/Button";
 import AddSchoolModal from "../components/schools/AddSchoolModal";
 import SchoolSessionsModal from "../components/schools/SchoolSessionsModal";
 import CreateTrackingWorkflowModal from "../components/shared/CreateTrackingWorkflowModal";
+import DistrictCard from "../components/districts/DistrictCard";
+import AddDistrictModal from "../components/districts/AddDistrictModal";
+import AssignSchoolsModal from "../components/districts/AssignSchoolsModal";
 import "./SchoolManagement.css";
 
 const SchoolManagement = () => {
   const { userProfile, organization } = useAuth();
+  const { 
+    districts, 
+    loading: districtsLoading, 
+    createDistrict, 
+    updateDistrict, 
+    deleteDistrict,
+    assignSchoolsToDistrict,
+    getDistrictsSorted 
+  } = useDistricts();
+  const [activeTab, setActiveTab] = useState("schools");
   const [schools, setSchools] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortField, setSortField] = useState("value"); // Default sort by name
@@ -40,6 +55,11 @@ const SchoolManagement = () => {
   const [workflowSchool, setWorkflowSchool] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // District state
+  const [showAddDistrictModal, setShowAddDistrictModal] = useState(false);
+  const [editingDistrict, setEditingDistrict] = useState(null);
+  const [assigningDistrict, setAssigningDistrict] = useState(null);
+  const [selectedDistrictFilter, setSelectedDistrictFilter] = useState("");
 
   // Sort options
   const sortOptions = [
@@ -58,10 +78,19 @@ const SchoolManagement = () => {
   const filteredAndSortedSchools = useMemo(() => {
     let filtered = schools;
 
+    // Filter by district
+    if (selectedDistrictFilter) {
+      if (selectedDistrictFilter === "unassigned") {
+        filtered = schools.filter(school => !school.districtId);
+      } else {
+        filtered = schools.filter(school => school.districtId === selectedDistrictFilter);
+      }
+    }
+
     // Filter by search term
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
-      filtered = schools.filter((school) => {
+      filtered = filtered.filter((school) => {
         const name = (school.value || school.name || "").toLowerCase();
         const city = (school.city || "").toLowerCase();
         const state = (school.state || "").toLowerCase();
@@ -69,6 +98,7 @@ const SchoolManagement = () => {
         const contactEmail = (school.contactEmail || "").toLowerCase();
         const street = (school.street || "").toLowerCase();
         const notes = (school.notes || "").toLowerCase();
+        const districtName = (school.districtName || "").toLowerCase();
 
         return (
           name.includes(term) ||
@@ -77,7 +107,8 @@ const SchoolManagement = () => {
           contactName.includes(term) ||
           contactEmail.includes(term) ||
           street.includes(term) ||
-          notes.includes(term)
+          notes.includes(term) ||
+          districtName.includes(term)
         );
       });
     }
@@ -105,7 +136,19 @@ const SchoolManagement = () => {
     });
 
     return sorted;
-  }, [schools, searchTerm, sortField, sortDirection]);
+  }, [schools, searchTerm, sortField, sortDirection, selectedDistrictFilter]);
+
+
+  // Filtered districts for search
+  const filteredDistricts = useMemo(() => {
+    if (!searchTerm.trim()) return getDistrictsSorted();
+    
+    const term = searchTerm.toLowerCase();
+    return getDistrictsSorted().filter(district => {
+      const name = (district.name || "").toLowerCase();
+      return name.includes(term);
+    });
+  }, [districts, searchTerm, getDistrictsSorted]);
 
   const loadSchools = async () => {
     if (!organization?.id) return;
@@ -205,6 +248,58 @@ const SchoolManagement = () => {
     return coordinates;
   };
 
+  // District handlers
+  const handleAddDistrict = async (districtData) => {
+    try {
+      await createDistrict(districtData);
+      setShowAddDistrictModal(false);
+    } catch (err) {
+      setError("Failed to add district");
+      console.error("Error adding district:", err);
+    }
+  };
+
+  const handleUpdateDistrict = async (districtData) => {
+    try {
+      await updateDistrict(editingDistrict.id, districtData);
+      setEditingDistrict(null);
+    } catch (err) {
+      setError("Failed to update district");
+      console.error("Error updating district:", err);
+    }
+  };
+
+  const handleDeleteDistrict = async (district) => {
+    if (window.confirm(`Are you sure you want to delete "${district.name}"? All schools will be unassigned from this district.`)) {
+      try {
+        await deleteDistrict(district.id);
+      } catch (err) {
+        setError("Failed to delete district");
+        console.error("Error deleting district:", err);
+      }
+    }
+  };
+
+  const handleAssignSchools = async (schoolIds) => {
+    try {
+      await assignSchoolsToDistrict(assigningDistrict.id, schoolIds);
+      setAssigningDistrict(null);
+      await loadSchools(); // Reload schools to show updated assignments
+    } catch (err) {
+      setError("Failed to assign schools to district");
+      console.error("Error assigning schools:", err);
+    }
+  };
+
+  const handleViewDistrictSchools = (district) => {
+    setSelectedDistrictFilter(district.id);
+    setActiveTab("schools");
+  };
+
+  const clearDistrictFilter = () => {
+    setSelectedDistrictFilter("");
+  };
+
   const formatAddress = (school) => {
     const addressParts = [];
     if (school.street) addressParts.push(school.street);
@@ -220,10 +315,10 @@ const SchoolManagement = () => {
     return school.schoolAddress || "No address provided";
   };
 
-  if (loading) {
+  if (loading || districtsLoading) {
     return (
       <div className="schools-loading">
-        <p>Loading schools...</p>
+        <p>Loading...</p>
       </div>
     );
   }
@@ -232,54 +327,110 @@ const SchoolManagement = () => {
     <div className="school-management">
       <div className="schools-header">
         <div className="schools-header__content">
-          <h1 className="schools-title">School Management</h1>
+          <h1 className="schools-title">School & District Management</h1>
           <p className="schools-subtitle">
-            Manage your partner schools and contact information
+            Manage your partner schools and organize them into districts
           </p>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => setShowAddModal(true)}
-          className="schools-add-btn"
-        >
-          <Plus size={16} />
-          Add School
-        </Button>
+        <div className="schools-header__actions">
+          <div className="tab-buttons">
+            <button
+              className={`tab-button ${activeTab === "schools" ? "active" : ""}`}
+              onClick={() => setActiveTab("schools")}
+            >
+              <School size={16} />
+              Schools
+            </button>
+            <button
+              className={`tab-button ${activeTab === "districts" ? "active" : ""}`}
+              onClick={() => setActiveTab("districts")}
+            >
+              <Building2 size={16} />
+              Districts
+            </button>
+          </div>
+          <Button
+            variant="primary"
+            onClick={() => activeTab === "schools" ? setShowAddModal(true) : setShowAddDistrictModal(true)}
+            className="schools-add-btn"
+          >
+            <Plus size={16} />
+            Add {activeTab === "schools" ? "School" : "District"}
+          </Button>
+        </div>
       </div>
 
       {error && <div className="schools-error">{error}</div>}
 
       <div className="schools-content">
-        <div className="schools-stats">
-          <div className="schools-stat">
-            <h3 className="schools-stat__number">{schools.length}</h3>
-            <p className="schools-stat__label">Total Schools</p>
-          </div>
-          <div className="schools-stat">
-            <h3 className="schools-stat__number">
-              {schools.filter((s) => s.contactEmail).length}
-            </h3>
-            <p className="schools-stat__label">With Email</p>
-          </div>
-          <div className="schools-stat">
-            <h3 className="schools-stat__number">
-              {schools.filter((s) => s.coordinates || s.schoolAddress).length}
-            </h3>
-            <p className="schools-stat__label">With Location</p>
-          </div>
-          {searchTerm && (
-            <div className="schools-stat schools-stat--search">
-              <h3 className="schools-stat__number">
-                {filteredAndSortedSchools.length}
-              </h3>
-              <p className="schools-stat__label">Search Results</p>
+        {activeTab === "schools" ? (
+          <div className="schools-stats">
+            <div className="schools-stat">
+              <h3 className="schools-stat__number">{schools.length}</h3>
+              <p className="schools-stat__label">Total Schools</p>
             </div>
-          )}
-        </div>
+            <div className="schools-stat">
+              <h3 className="schools-stat__number">
+                {schools.filter((s) => s.districtId).length}
+              </h3>
+              <p className="schools-stat__label">In Districts</p>
+            </div>
+            <div className="schools-stat">
+              <h3 className="schools-stat__number">
+                {schools.filter((s) => s.contactEmail).length}
+              </h3>
+              <p className="schools-stat__label">With Email</p>
+            </div>
+            {searchTerm && (
+              <div className="schools-stat schools-stat--search">
+                <h3 className="schools-stat__number">
+                  {filteredAndSortedSchools.length}
+                </h3>
+                <p className="schools-stat__label">Search Results</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="schools-stats">
+            <div className="schools-stat">
+              <h3 className="schools-stat__number">{districts.length}</h3>
+              <p className="schools-stat__label">Total Districts</p>
+            </div>
+            <div className="schools-stat">
+              <h3 className="schools-stat__number">
+                {districts.reduce((sum, d) => sum + (d.schoolCount || 0), 0)}
+              </h3>
+              <p className="schools-stat__label">Total Schools</p>
+            </div>
+            {searchTerm && (
+              <div className="schools-stat schools-stat--search">
+                <h3 className="schools-stat__number">
+                  {filteredDistricts.length}
+                </h3>
+                <p className="schools-stat__label">Search Results</p>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="schools-list">
           <div className="schools-list__header">
-            <h2 className="schools-list__title">Schools</h2>
+            <h2 className="schools-list__title">
+              {activeTab === "schools" ? "Schools" : "Districts"}
+            </h2>
+            {selectedDistrictFilter && activeTab === "schools" && (
+              <div className="district-filter-badge">
+                <Building2 size={14} />
+                <span>
+                  {selectedDistrictFilter === "unassigned" 
+                    ? "Unassigned Schools" 
+                    : districts.find(d => d.id === selectedDistrictFilter)?.name}
+                </span>
+                <button onClick={clearDistrictFilter}>
+                  <X size={14} />
+                </button>
+              </div>
+            )}
 
             {/* Search and Sort Controls */}
             <div className="schools-controls">
@@ -289,7 +440,9 @@ const SchoolManagement = () => {
                   <Search size={16} className="schools-search__icon" />
                   <input
                     type="text"
-                    placeholder="Search schools by name, city, contact..."
+                    placeholder={activeTab === "schools" 
+                      ? "Search schools by name, city, district..." 
+                      : "Search districts by name..."}
                     value={searchTerm}
                     onChange={handleSearchChange}
                     className="schools-search__input"
@@ -305,16 +458,17 @@ const SchoolManagement = () => {
                 </div>
               </div>
 
-              {/* Sort Menu */}
-              <div className="schools-sort">
-                <button
-                  className="schools-sort__button"
-                  onClick={() => setShowSortMenu(!showSortMenu)}
-                >
-                  <ArrowUpDown size={16} />
-                  <span>Sort: {getCurrentSortLabel()}</span>
-                  <ChevronDown size={16} />
-                </button>
+              {/* Sort Menu - Only for schools */}
+              {activeTab === "schools" && (
+                <div className="schools-sort">
+                  <button
+                    className="schools-sort__button"
+                    onClick={() => setShowSortMenu(!showSortMenu)}
+                  >
+                    <ArrowUpDown size={16} />
+                    <span>Sort: {getCurrentSortLabel()}</span>
+                    <ChevronDown size={16} />
+                  </button>
 
                 {showSortMenu && (
                   <div className="schools-sort__menu">
@@ -338,11 +492,13 @@ const SchoolManagement = () => {
                     ))}
                   </div>
                 )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
 
-          {filteredAndSortedSchools.length === 0 ? (
+          {activeTab === "schools" ? (
+            filteredAndSortedSchools.length === 0 ? (
             <div className="schools-empty">
               <School size={48} className="schools-empty__icon" />
               {searchTerm ? (
@@ -383,6 +539,12 @@ const SchoolManagement = () => {
                       <h3 className="school-card__name">
                         {school.value || school.name || "Unnamed School"}
                       </h3>
+                      {school.districtName && (
+                        <div className="school-card__district">
+                          <Building2 size={12} />
+                          <span>{school.districtName}</span>
+                        </div>
+                      )}
                       <div className="school-card__address">
                         <MapPin size={14} />
                         <span>{formatAddress(school)}</span>
@@ -456,8 +618,54 @@ const SchoolManagement = () => {
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )
+          ) : (
+            /* Districts Tab */
+            filteredDistricts.length === 0 ? (
+              <div className="schools-empty">
+                <Building2 size={48} className="schools-empty__icon" />
+                {searchTerm ? (
+                  <>
+                    <h3 className="schools-empty__title">No districts found</h3>
+                    <p className="schools-empty__description">
+                      No districts match your search for "{searchTerm}"
+                    </p>
+                    <Button variant="secondary" onClick={clearSearch}>
+                      Clear Search
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="schools-empty__title">No districts yet</h3>
+                    <p className="schools-empty__description">
+                      Create districts to organize your schools
+                    </p>
+                    <Button
+                      variant="primary"
+                      onClick={() => setShowAddDistrictModal(true)}
+                    >
+                      <Plus size={16} />
+                      Create First District
+                    </Button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="districts-grid">
+                {filteredDistricts.map((district) => (
+                  <DistrictCard
+                    key={district.id}
+                    district={district}
+                    onEdit={setEditingDistrict}
+                    onDelete={handleDeleteDistrict}
+                    onViewSchools={handleViewDistrictSchools}
+                    onManageSchools={setAssigningDistrict}
+                  />
+                ))}
+              </div>
+            )
           )}
         </div>
       </div>
@@ -500,6 +708,31 @@ const SchoolManagement = () => {
           school={workflowSchool}
           organizationID={organization?.id}
           onSuccess={handleWorkflowSuccess}
+        />
+      )}
+
+      {/* District Modals */}
+      {showAddDistrictModal && (
+        <AddDistrictModal
+          onClose={() => setShowAddDistrictModal(false)}
+          onAdd={handleAddDistrict}
+        />
+      )}
+
+      {editingDistrict && (
+        <AddDistrictModal
+          district={editingDistrict}
+          onClose={() => setEditingDistrict(null)}
+          onAdd={handleUpdateDistrict}
+          isEditing={true}
+        />
+      )}
+
+      {assigningDistrict && (
+        <AssignSchoolsModal
+          district={assigningDistrict}
+          onClose={() => setAssigningDistrict(null)}
+          onAssign={handleAssignSchools}
         />
       )}
     </div>

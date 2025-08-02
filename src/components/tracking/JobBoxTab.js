@@ -9,6 +9,7 @@ import RecordTable from './RecordTable';
 import ConfirmationModal from '../shared/ConfirmationModal';
 import NotificationModal from '../shared/NotificationModal';
 import { sanitizeSearchTerm, defaultRateLimiter } from '../../utils/inputSanitizer';
+import statusColors from '../../../status-colors.json';
 import '../shared/ConfirmationModal.css';
 import '../shared/NotificationModal.css';
 
@@ -169,13 +170,10 @@ const JobBoxTab = ({ organizationID }) => {
   };
 
   const getStatusColor = (status) => {
-    const colors = {
-      'Packed': '#3b82f6',
-      'Picked Up': '#10b981',
-      'Left Job': '#f59e0b',
-      'Turned In': '#6b7280'
-    };
-    return colors[status] || '#6b7280';
+    // Normalize the status to match the JSON keys (lowercase)
+    const normalizedStatus = status.toLowerCase();
+    const statusConfig = statusColors.jobBoxStatuses[normalizedStatus];
+    return statusConfig ? statusConfig.hex : '#8E8E93'; // Default to iOS gray
   };
 
   const formatDate = (timestamp) => {
