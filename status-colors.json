@@ -1,61 +1,62 @@
 {
   "sdCardStatuses": {
-    "job box": {
-      "hex": "#FF9500",
-      "rgb": {"r": 255, "g": 149, "b": 0},
-      "name": "Orange"
+    "active": {
+      "name": "Active",
+      "hex": "#34C759"
     },
-    "camera": {
-      "hex": "#34C759",
-      "rgb": {"r": 52, "g": 199, "b": 89},
-      "name": "Green"
+    "in use": {
+      "name": "In Use",
+      "hex": "#007AFF"
     },
-    "envelope": {
-      "hex": "#FFCC00",
-      "rgb": {"r": 255, "g": 204, "b": 0},
-      "name": "Yellow"
+    "imported": {
+      "name": "Imported",
+      "hex": "#5856D6"
     },
-    "uploaded": {
-      "hex": "#007AFF",
-      "rgb": {"r": 0, "g": 122, "b": 255},
-      "name": "Blue"
+    "archive": {
+      "name": "Archive",
+      "hex": "#8E8E93"
     },
-    "cleared": {
-      "hex": "#8E8E93",
-      "rgb": {"r": 142, "g": 142, "b": 147},
-      "name": "Gray"
+    "error": {
+      "name": "Error",
+      "hex": "#FF3B30"
     },
-    "camera bag": {
-      "hex": "#AF52DE",
-      "rgb": {"r": 175, "g": 82, "b": 222},
-      "name": "Purple"
+    "processing": {
+      "name": "Processing",
+      "hex": "#FF9500"
     },
-    "personal": {
-      "hex": "#5856D6",
-      "rgb": {"r": 88, "g": 86, "b": 214},
-      "name": "Indigo"
+    "ready": {
+      "name": "Ready",
+      "hex": "#00C7BE"
     }
   },
   "jobBoxStatuses": {
-    "packed": {
-      "hex": "#007AFF",
-      "rgb": {"r": 0, "g": 122, "b": 255},
-      "name": "Blue"
+    "active": {
+      "name": "Active",
+      "hex": "#34C759"
     },
-    "picked up": {
-      "hex": "#34C759",
-      "rgb": {"r": 52, "g": 199, "b": 89},
-      "name": "Green"
+    "completed": {
+      "name": "Completed",
+      "hex": "#007AFF"
     },
-    "left job": {
-      "hex": "#FF9500",
-      "rgb": {"r": 255, "g": 149, "b": 0},
-      "name": "Orange"
+    "processing": {
+      "name": "Processing",
+      "hex": "#FF9500"
     },
-    "turned in": {
-      "hex": "#8E8E93",
-      "rgb": {"r": 142, "g": 142, "b": 147},
-      "name": "Gray"
+    "archived": {
+      "name": "Archived",
+      "hex": "#8E8E93"
+    },
+    "pending": {
+      "name": "Pending",
+      "hex": "#FFCC00"
+    },
+    "error": {
+      "name": "Error",
+      "hex": "#FF3B30"
+    },
+    "ready": {
+      "name": "Ready",
+      "hex": "#00C7BE"
     }
   }
 }

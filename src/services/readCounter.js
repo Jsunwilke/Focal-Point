@@ -384,6 +384,48 @@ class FirestoreReadCounter {
     secureLogger.info('Read counter data exported');
   }
 
+  // Record an error occurrence
+  recordError(collection, component, errorMessage) {
+    if (!this.isEnabled) return;
+    
+    try {
+      // Initialize error tracking if not exists
+      if (!this.counts.session.errors) {
+        this.counts.session.errors = {};
+      }
+      if (!this.counts.daily.errors) {
+        this.counts.daily.errors = {};
+      }
+
+      const errorKey = `${collection}-${component}`;
+      
+      // Session errors
+      if (!this.counts.session.errors[errorKey]) {
+        this.counts.session.errors[errorKey] = [];
+      }
+      this.counts.session.errors[errorKey].push({
+        timestamp: Date.now(),
+        message: errorMessage
+      });
+
+      // Daily errors
+      if (!this.counts.daily.errors[errorKey]) {
+        this.counts.daily.errors[errorKey] = [];
+      }
+      this.counts.daily.errors[errorKey].push({
+        timestamp: Date.now(),
+        message: errorMessage
+      });
+
+      // Notify listeners
+      this.notifyListeners();
+
+      secureLogger.error(`Read error in ${component} for ${collection}:`, errorMessage);
+    } catch (error) {
+      secureLogger.error('Error recording error:', error);
+    }
+  }
+
   // Cleanup
   destroy() {
     if (this.saveInterval) {

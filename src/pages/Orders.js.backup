@@ -1,0 +1,552 @@
+// Orders Page Component
+// Displays Captura orders with search, filter, and pagination
+
+import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
+import { useOrders } from '../contexts/OrdersContext';
+import { 
+  Search, 
+  RefreshCw, 
+  Filter, 
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Package,
+  DollarSign,
+  Clock,
+  Eye,
+  X
+} from 'lucide-react';
+import '../components/shared/Modal.css';
+import './Orders.css';
+
+const Orders = () => {
+  const {
+    orders,
+    loading,
+    error,
+    pagination,
+    filters,
+    refreshing,
+    searchOrders,
+    filterByStatus,
+    filterByDateRange,
+    sortOrders,
+    refreshOrders,
+    goToPage,
+    clearFilters,
+    loadOrderDetails,
+    selectedOrder,
+    setSelectedOrder
+  } = useOrders();
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [showRawJson, setShowRawJson] = useState(false);
+
+  // Order status options
+  const statusOptions = [
+    { value: '', label: 'All Status' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'processing', label: 'Processing' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'shipped', label: 'Shipped' },
+    { value: 'cancelled', label: 'Cancelled' }
+  ];
+
+  // Format currency
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount || 0);
+  };
+
+  // Format date
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  // Handle search
+  const handleSearch = (e) => {
+    e.preventDefault();
+    searchOrders(searchTerm);
+  };
+
+  // Handle status filter
+  const handleStatusFilter = (status) => {
+    setSelectedStatus(status);
+    filterByStatus(status || null);
+  };
+
+  // Handle date range filter
+  const handleDateFilter = () => {
+    if (dateRange.start && dateRange.end) {
+      filterByDateRange(new Date(dateRange.start), new Date(dateRange.end));
+    }
+  };
+
+  // Handle sort
+  const handleSort = (field) => {
+    const currentSortOrder = filters.sortBy === field && filters.sortOrder === 'asc' ? 'desc' : 'asc';
+    sortOrders(field, currentSortOrder);
+  };
+
+  // Clear all filters
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setSelectedStatus('');
+    setDateRange({ start: '', end: '' });
+    clearFilters();
+  };
+
+  // View order details
+  const handleViewOrder = (order) => {
+    loadOrderDetails(order.id);
+  };
+
+  // Close order details modal
+  const handleCloseDetails = () => {
+    setSelectedOrder(null);
+    setShowRawJson(false);
+  };
+
+  // Get status badge class
+  const getStatusClass = (status) => {
+    const statusClasses = {
+      pending: 'orders__status--pending',
+      processing: 'orders__status--processing',
+      completed: 'orders__status--completed',
+      shipped: 'orders__status--shipped',
+      cancelled: 'orders__status--cancelled'
+    };
+    return statusClasses[status] || 'orders__status--default';
+  };
+
+  if (loading && orders.length === 0) {
+    return (
+      <div className="orders__loading">
+        <div className="orders__spinner"></div>
+        <p>Loading orders...</p>
+      </div>
+    );
+  }
+
+  // Check for Firebase Functions not deployed error
+  if (error && (error.includes('Failed to fetch') || error.includes('Function not found'))) {
+    return (
+      <div className="orders">
+        <div className="orders__header">
+          <h1 className="orders__title">Orders</h1>
+        </div>
+        <div className="orders__error" style={{ padding: '2rem', textAlign: 'center' }}>
+          <h3>Firebase Functions Not Deployed</h3>
+          <p>The Orders feature requires Firebase Functions to be deployed.</p>
+          <p>To deploy the functions, run:</p>
+          <pre style={{ 
+            background: 'var(--bg-secondary)', 
+            padding: '1rem', 
+            borderRadius: 'var(--border-radius)',
+            margin: '1rem auto',
+            maxWidth: '600px'
+          }}>
+            firebase deploy --only functions
+          </pre>
+          <p style={{ marginTop: '1rem' }}>
+            Or deploy specific Captura functions:
+          </p>
+          <pre style={{ 
+            background: 'var(--bg-secondary)', 
+            padding: '1rem', 
+            borderRadius: 'var(--border-radius)',
+            margin: '1rem auto',
+            maxWidth: '600px'
+          }}>
+            firebase deploy --only functions:getCapturaOrders,functions:getCapturaOrder,functions:getCapturaOrderStats
+          </pre>
+          <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+            After deployment, refresh this page to load orders.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+
+  return (
+    <>
+      <div className="orders">
+      <div className="orders__header">
+        <h1 className="orders__title">Orders</h1>
+        
+        <div className="orders__actions">
+          <button 
+            className="orders__refresh-btn"
+            onClick={refreshOrders}
+            disabled={refreshing}
+            title="Refresh orders"
+          >
+            <RefreshCw className={refreshing ? 'orders__refresh-icon--spinning' : ''} size={20} />
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="orders__error">
+          <p>{error}</p>
+        </div>
+      )}
+
+      <div className="orders__controls">
+        <form className="orders__search" onSubmit={handleSearch}>
+          <input
+            type="text"
+            className="orders__search-input"
+            placeholder="Search orders..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <button type="submit" className="orders__search-btn">
+            <Search size={20} />
+          </button>
+        </form>
+
+        <button 
+          className="orders__filter-toggle"
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          <Filter size={20} />
+          Filters
+          {(filters.status || filters.startDate || filters.endDate) && (
+            <span className="orders__filter-badge">Active</span>
+          )}
+        </button>
+      </div>
+
+      {showFilters && (
+        <div className="orders__filters">
+          <div className="orders__filter-group">
+            <label>Status</label>
+            <select 
+              value={selectedStatus} 
+              onChange={(e) => handleStatusFilter(e.target.value)}
+              className="orders__filter-select"
+            >
+              {statusOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="orders__filter-group">
+            <label>Start Date</label>
+            <input
+              type="date"
+              value={dateRange.start}
+              onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+              className="orders__filter-input"
+            />
+          </div>
+
+          <div className="orders__filter-group">
+            <label>End Date</label>
+            <input
+              type="date"
+              value={dateRange.end}
+              onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+              className="orders__filter-input"
+            />
+          </div>
+
+          <button 
+            className="orders__filter-apply"
+            onClick={handleDateFilter}
+            disabled={!dateRange.start || !dateRange.end}
+          >
+            Apply Date Filter
+          </button>
+
+          <button 
+            className="orders__filter-clear"
+            onClick={handleClearFilters}
+          >
+            Clear All
+          </button>
+        </div>
+      )}
+
+      <div className="orders__table-container">
+        <table className="orders__table">
+          <thead>
+            <tr>
+              <th onClick={() => handleSort('orderNumber')}>
+                Order # {filters.sortBy === 'orderNumber' && (filters.sortOrder === 'asc' ? '↑' : '↓')}
+              </th>
+              <th onClick={() => handleSort('customerName')}>
+                Customer {filters.sortBy === 'customerName' && (filters.sortOrder === 'asc' ? '↑' : '↓')}
+              </th>
+              <th onClick={() => handleSort('orderDate')}>
+                Date {filters.sortBy === 'orderDate' && (filters.sortOrder === 'asc' ? '↑' : '↓')}
+              </th>
+              <th>Gallery</th>
+              <th onClick={() => handleSort('status')}>
+                Status {filters.sortBy === 'status' && (filters.sortOrder === 'asc' ? '↑' : '↓')}
+              </th>
+              <th onClick={() => handleSort('total')}>
+                Total {filters.sortBy === 'total' && (filters.sortOrder === 'asc' ? '↑' : '↓')}
+              </th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orders.length === 0 ? (
+              <tr>
+                <td colSpan="7" className="orders__empty">
+                  <Package size={48} />
+                  <p>No orders found</p>
+                </td>
+              </tr>
+            ) : (
+              orders.map(order => (
+                <tr key={order.id}>
+                  <td className="orders__order-number">{order.orderNumber}</td>
+                  <td>
+                    <div className="orders__customer">
+                      <div className="orders__customer-name">{order.customerName}</div>
+                      {order.customerEmail && (
+                        <div className="orders__customer-email">{order.customerEmail}</div>
+                      )}
+                    </div>
+                  </td>
+                  <td>{formatDate(order.orderDate)}</td>
+                  <td>{order.galleryName || 'N/A'}</td>
+                  <td>
+                    <span className={`orders__status ${getStatusClass(order.status)}`}>
+                      {order.status}
+                    </span>
+                  </td>
+                  <td className="orders__total">{formatCurrency(order.total)}</td>
+                  <td>
+                    <button 
+                      className="orders__view-btn"
+                      onClick={() => handleViewOrder(order)}
+                      title="View details"
+                    >
+                      <Eye size={18} />
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {pagination.totalPages > 1 && (
+        <div className="orders__pagination">
+          <button
+            className="orders__page-btn"
+            onClick={() => goToPage(pagination.currentPage - 1)}
+            disabled={pagination.currentPage === 1}
+          >
+            <ChevronLeft size={20} />
+          </button>
+          
+          <span className="orders__page-info">
+            Page {pagination.currentPage} of {pagination.totalPages} 
+            ({pagination.totalCount} total orders)
+          </span>
+          
+          <button
+            className="orders__page-btn"
+            onClick={() => goToPage(pagination.currentPage + 1)}
+            disabled={pagination.currentPage === pagination.totalPages}
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
+      )}
+
+      </div>
+      
+      {selectedOrder && (() => {
+        const modalContent = (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10001,
+            padding: '2rem'
+          }}
+          onClick={handleCloseDetails}
+        >
+          <div 
+            style={{
+              position: 'relative',
+              margin: 0,
+              transform: 'none'
+            }}
+            className="modal modal--large" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal__header">
+              <h2 className="modal__title">Order Details</h2>
+              <button className="modal__close" onClick={handleCloseDetails}>
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="modal__content">
+              <div className="orders__detail-section">
+                <h3>Order Information</h3>
+                <div className="orders__detail-grid">
+                  <div className="orders__detail-item">
+                    <label>Order Number:</label>
+                    <span>{selectedOrder.orderNumber}</span>
+                  </div>
+                  <div className="orders__detail-item">
+                    <label>Date:</label>
+                    <span>{formatDate(selectedOrder.orderDate)}</span>
+                  </div>
+                  <div className="orders__detail-item">
+                    <label>Status:</label>
+                    <span className={`orders__status ${getStatusClass(selectedOrder.status)}`}>
+                      {selectedOrder.status}
+                    </span>
+                  </div>
+                  <div className="orders__detail-item">
+                    <label>Gallery:</label>
+                    <span>{selectedOrder.galleryName || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="orders__detail-section">
+                <h3>Customer Information</h3>
+                <div className="orders__detail-grid">
+                  <div className="orders__detail-item">
+                    <label>Name:</label>
+                    <span>{selectedOrder.customerName}</span>
+                  </div>
+                  <div className="orders__detail-item">
+                    <label>Email:</label>
+                    <span>{selectedOrder.customerEmail || 'N/A'}</span>
+                  </div>
+                  <div className="orders__detail-item">
+                    <label>Phone:</label>
+                    <span>{selectedOrder.customerPhone || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {selectedOrder.items && selectedOrder.items.length > 0 && (
+                <div className="orders__detail-section">
+                  <h3>Order Items</h3>
+                  <table className="orders__items-table">
+                    <thead>
+                      <tr>
+                        <th>Product</th>
+                        <th>Quantity</th>
+                        <th>Price</th>
+                        <th>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedOrder.items.map((item, index) => (
+                        <tr key={item.id || index}>
+                          <td>{item.productName}</td>
+                          <td>{item.quantity}</td>
+                          <td>{formatCurrency(item.price)}</td>
+                          <td>{formatCurrency(item.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="orders__detail-section">
+                <h3>Order Summary</h3>
+                <div className="orders__summary">
+                  <div className="orders__summary-item">
+                    <span>Subtotal:</span>
+                    <span>{formatCurrency(selectedOrder.subtotal)}</span>
+                  </div>
+                  <div className="orders__summary-item">
+                    <span>Tax:</span>
+                    <span>{formatCurrency(selectedOrder.tax)}</span>
+                  </div>
+                  <div className="orders__summary-item">
+                    <span>Shipping:</span>
+                    <span>{formatCurrency(selectedOrder.shipping)}</span>
+                  </div>
+                  <div className="orders__summary-item orders__summary-total">
+                    <span>Total:</span>
+                    <span>{formatCurrency(selectedOrder.total)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {selectedOrder.notes && (
+                <div className="orders__detail-section">
+                  <h3>Notes</h3>
+                  <p className="orders__notes">{selectedOrder.notes}</p>
+                </div>
+              )}
+
+              <div className="orders__detail-section">
+                <div className="orders__raw-json-header">
+                  <h3>Raw Order Data</h3>
+                  <button 
+                    className="orders__json-toggle"
+                    onClick={() => setShowRawJson(!showRawJson)}
+                  >
+                    {showRawJson ? 'Hide' : 'Show'} Raw JSON
+                  </button>
+                </div>
+                
+                {showRawJson && selectedOrder.rawData && (
+                  <div className="orders__raw-json-container">
+                    <button 
+                      className="orders__copy-json"
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(selectedOrder.rawData, null, 2));
+                        alert('JSON copied to clipboard!');
+                      }}
+                    >
+                      Copy JSON
+                    </button>
+                    <pre className="orders__raw-json">
+                      {JSON.stringify(selectedOrder.rawData, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+        
+        return ReactDOM.createPortal(modalContent, document.body);
+      })()}
+    </>
+  );
+};
+
+export default Orders;

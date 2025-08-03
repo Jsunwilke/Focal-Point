@@ -68,7 +68,8 @@
       "Bash(timeout 20 npm start)",
       "WebFetch(domain:developers.google.com)",
       "WebFetch(domain:aftershoot.com)",
-      "WebFetch(domain:blog.pixieset.com)"
+      "WebFetch(domain:blog.pixieset.com)",
+      "WebFetch(domain:api.imagequix-dev.com)"
     ],
     "deny": []
   }

@@ -3,6 +3,7 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onRequest, onCall } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { logger } = require('firebase-functions');
+const axios = require('axios');
 
 // Initialize admin (only once)
 if (!admin.apps.length) {
@@ -1623,5 +1624,428 @@ exports.onNewChatMessage = onDocumentCreated('messages/{conversationId}/messages
     } catch (error) {
         logger.error(`Error sending chat notifications for message ${messageId}:`, error);
         // Don't throw - we don't want to retry notification sends
+    }
+});
+
+// ======================================
+// CAPTURA API PROXY FUNCTIONS
+// ======================================
+
+// Cache for OAuth tokens
+let capturaTokenCache = {
+    token: null,
+    expiresAt: null
+};
+
+/**
+ * Get Captura OAuth token with caching
+ */
+async function getCapturaAccessToken() {
+    // Check if we have a valid cached token
+    if (capturaTokenCache.token && capturaTokenCache.expiresAt && new Date() < capturaTokenCache.expiresAt) {
+        logger.info('Using cached Captura token');
+        return capturaTokenCache.token;
+    }
+
+    logger.info('Fetching new Captura token');
+
+    // Get credentials from environment config or fallback to hardcoded values
+    const clientId = process.env.CAPTURA_CLIENT_ID || '1ab255f1-5a89-4ae8-b454-4da98b64afcb';
+    const clientSecret = process.env.CAPTURA_CLIENT_SECRET || '18458cffbe1e0fe82b2c99d4ead741cc8271640b0020d8f61035945be374675913a32303e32ce6c6a78d88c91554419e19cd458ce28d490302d2c1dd020df03d';
+    const tokenUrl = 'https://api.imagequix.com/api/oauth/token';
+
+    try {
+        const response = await axios.post(tokenUrl, 
+            new URLSearchParams({
+                grant_type: 'client_credentials',
+                client_id: clientId,
+                client_secret: clientSecret
+            }).toString(),
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            }
+        );
+
+        const { access_token, expires_in = 3600 } = response.data;
+        
+        // Cache the token with expiration
+        capturaTokenCache.token = access_token;
+        capturaTokenCache.expiresAt = new Date(Date.now() + (expires_in - 300) * 1000); // 5 min buffer
+        
+        logger.info('Captura token obtained successfully');
+        return access_token;
+    } catch (error) {
+        logger.error('Error getting Captura token:', error.response?.data || error.message);
+        throw new Error('Failed to authenticate with Captura API');
+    }
+}
+
+// Function 13: Get Captura Orders
+exports.getCapturaOrders = onCall({
+    cors: true,
+    maxInstances: 10,
+}, async (request) => {
+    let url = ''; // Define url at function scope
+    
+    try {
+        // Validate authentication
+        if (!request.auth) {
+            throw new Error('Authentication required');
+        }
+
+        // Get account ID from environment or use default
+        const accountId = process.env.CAPTURA_ACCOUNT_ID || 'J98TA9W';
+
+        // Get access token
+        const accessToken = await getCapturaAccessToken();
+
+        // Build URL with the correct endpoint
+        const params = new URLSearchParams();
+        
+        // Add query parameters if provided
+        const { 
+            start = 1, 
+            end = 500, // Increased to handle more orders per day
+            orderStartDate,
+            orderEndDate,
+            orderType,
+            paymentStatus
+        } = request.data || {};
+        
+        // Add pagination parameters
+        params.append('start', start.toString());
+        params.append('end', end.toString());
+        
+        // Add filter parameters if provided
+        if (orderStartDate) params.append('orderStartDate', orderStartDate);
+        if (orderEndDate) params.append('orderEndDate', orderEndDate);
+        if (orderType) params.append('orderType', orderType);
+        if (paymentStatus) params.append('paymentStatus', paymentStatus);
+        
+        // Use the working endpoint
+        url = `https://api.imagequix.com/api/v1/account/${accountId}/order?${params.toString()}`;
+        
+        logger.info(`Fetching orders from Captura: ${url}`);
+        
+        const response = await axios.get(url, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+        });
+
+        logger.info(`Captura orders fetched successfully. Status: ${response.status}`);
+        
+        // Log the response structure to understand the data
+        if (response.data) {
+            logger.info(`Response data structure:`, {
+                hasData: true,
+                dataType: typeof response.data,
+                isArray: Array.isArray(response.data),
+                keys: typeof response.data === 'object' && !Array.isArray(response.data) 
+                    ? Object.keys(response.data).slice(0, 10) // First 10 keys
+                    : 'N/A',
+                arrayLength: Array.isArray(response.data) ? response.data.length : 'N/A',
+                firstItemKeys: Array.isArray(response.data) && response.data.length > 0 
+                    ? Object.keys(response.data[0]).slice(0, 10)
+                    : 'N/A'
+            });
+        }
+
+        return {
+            success: true,
+            data: response.data
+        };
+
+    } catch (error) {
+        // Log detailed error information
+        logger.error('Error in getCapturaOrders:', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            message: error.message,
+            url: url
+        });
+        
+        if (error.response?.status === 401) {
+            // Clear token cache on auth error
+            capturaTokenCache = { token: null, expiresAt: null };
+            throw new Error('Authentication failed - invalid token');
+        }
+        
+        if (error.response?.status === 404) {
+            throw new Error(`Orders endpoint not found. The API endpoint may be incorrect: ${url}`);
+        }
+        
+        throw new Error(error.response?.data?.message || error.message || 'Failed to fetch orders');
+    }
+});
+
+// Function 14: Get Single Captura Order
+exports.getCapturaOrder = onCall({
+    cors: true,
+    maxInstances: 10,
+}, async (request) => {
+    let url = ''; // Define url at function scope
+    
+    try {
+        // Validate authentication
+        if (!request.auth) {
+            throw new Error('Authentication required');
+        }
+
+        const { orderId } = request.data;
+
+        if (!orderId) {
+            throw new Error('Order ID is required');
+        }
+
+        // Get account ID from environment or use default
+        const accountId = process.env.CAPTURA_ACCOUNT_ID || 'J98TA9W';
+
+        // Get access token
+        const accessToken = await getCapturaAccessToken();
+
+        // Make request to Captura API - using 'order' not 'orders'
+        url = `https://api.imagequix.com/api/v1/account/${accountId}/order/${orderId}`;
+        
+        logger.info(`Fetching order ${orderId} from Captura`);
+        
+        const response = await axios.get(url, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        logger.info(`Captura order ${orderId} fetched successfully`);
+        
+        // Log the structure to understand it better
+        logger.info('Order response structure:', {
+            hasOrders: !!response.data.orders,
+            hasBillTo: !!response.data.billTo,
+            hasShipTo: !!response.data.shipTo,
+            hasItems: !!response.data.items,
+            itemsCount: response.data.items?.length || 0,
+            directFields: Object.keys(response.data || {}),
+            // Check if it's nested in orders array
+            firstOrderHasItems: response.data.orders?.[0]?.items ? response.data.orders[0].items.length : 'N/A'
+        });
+
+        return {
+            success: true,
+            data: response.data
+        };
+
+    } catch (error) {
+        // Log detailed error information
+        logger.error('Error in getCapturaOrder:', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            headers: error.response?.headers,
+            message: error.message,
+            url: url
+        });
+        
+        if (error.response?.status === 401) {
+            // Clear token cache on auth error
+            capturaTokenCache = { token: null, expiresAt: null };
+            throw new Error('Authentication failed - invalid token');
+        }
+        
+        if (error.response?.status === 404) {
+            throw new Error(`Order endpoint not found. The API endpoint may be incorrect: ${url}`);
+        }
+        
+        throw new Error(error.response?.data?.message || error.message || 'Failed to fetch order');
+    }
+});
+
+// Function 15: Get Captura Order Statistics
+// NOTE: This endpoint might not exist in the Captura API
+// You may need to fetch orders and calculate statistics locally
+exports.getCapturaOrderStats = onCall({
+    cors: true,
+    maxInstances: 10,
+}, async (request) => {
+    try {
+        // Validate authentication
+        if (!request.auth) {
+            throw new Error('Authentication required');
+        }
+
+        const { dateRange = 'month' } = request.data;
+
+        // For now, throw an error indicating this endpoint doesn't exist
+        // TODO: Implement statistics calculation by fetching orders and computing stats
+        throw new Error('Statistics endpoint not implemented. The Captura API may not have a dedicated statistics endpoint.');
+
+        // Alternative implementation could be:
+        // 1. Fetch orders with date filters
+        // 2. Calculate statistics (total orders, revenue, etc.) in the function
+        // 3. Return computed statistics
+
+    } catch (error) {
+        logger.error('Error in getCapturaOrderStats:', error.message);
+        throw error;
+    }
+});
+
+// Function 16: Test Captura API Endpoints (for debugging)
+exports.testCapturaEndpoints = onCall({
+    cors: true,
+    maxInstances: 1,
+}, async (request) => {
+    try {
+        // Validate authentication
+        if (!request.auth) {
+            throw new Error('Authentication required');
+        }
+
+        // Get access token
+        const accessToken = await getCapturaAccessToken();
+        const accountId = process.env.CAPTURA_ACCOUNT_ID || 'J98TA9W';
+        
+        // Test different possible endpoint formats
+        const endpoints = [
+            // Base URL without any parameters
+            `https://api.imagequix.com/api/v1/account/${accountId}/orders`,
+            
+            // With minimal parameters
+            `https://api.imagequix.com/api/v1/account/${accountId}/orders?page=1`,
+            `https://api.imagequix.com/api/v1/account/${accountId}/orders?page=1&pageSize=50`,
+            
+            // With full parameters like current implementation
+            `https://api.imagequix.com/api/v1/account/${accountId}/orders?page=1&pageSize=50&sortBy=orderDate&sortOrder=desc`,
+            
+            // Alternative URL structures
+            `https://api.imagequix.com/api/v1/accounts/${accountId}/orders`,
+            `https://api.imagequix.com/api/v1/orders?accountId=${accountId}`,
+            `https://api.imagequix.com/api/orders?accountId=${accountId}`,
+            `https://api.imagequix.com/api/account/${accountId}/orders`,
+            `https://api.imagequix.com/v1/account/${accountId}/orders`,
+            
+            // Singular form
+            `https://api.imagequix.com/api/v1/account/${accountId}/order`,
+            
+            // Development URL
+            `https://api.imagequix-dev.com/api/v1/account/${accountId}/orders`,
+        ];
+        
+        const results = [];
+        
+        for (const endpoint of endpoints) {
+            try {
+                logger.info(`Testing endpoint: ${endpoint}`);
+                const response = await axios.get(endpoint, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    timeout: 5000
+                });
+                
+                results.push({
+                    endpoint,
+                    success: true,
+                    status: response.status,
+                    hasData: !!response.data
+                });
+                
+                logger.info(`Success: ${endpoint} returned status ${response.status}`);
+            } catch (error) {
+                results.push({
+                    endpoint,
+                    success: false,
+                    status: error.response?.status,
+                    error: error.response?.statusText || error.message
+                });
+                
+                logger.info(`Failed: ${endpoint} - ${error.response?.status} ${error.response?.statusText || error.message}`);
+            }
+        }
+        
+        return {
+            success: true,
+            token: accessToken ? 'Token obtained successfully' : 'No token',
+            results
+        };
+        
+    } catch (error) {
+        logger.error('Error in testCapturaEndpoints:', error);
+        throw new Error(error.message || 'Failed to test endpoints');
+    }
+});
+
+// Function 17: Get Captura Orders Simple (without parameters)
+exports.getCapturaOrdersSimple = onCall({
+    cors: true,
+    maxInstances: 10,
+}, async (request) => {
+    let url = ''; // Define url at function scope
+    
+    try {
+        // Validate authentication
+        if (!request.auth) {
+            throw new Error('Authentication required');
+        }
+
+        // Get account ID from environment or use default
+        const accountId = process.env.CAPTURA_ACCOUNT_ID || 'J98TA9W';
+
+        // Get access token
+        const accessToken = await getCapturaAccessToken();
+
+        // Try base URL without any parameters first
+        url = `https://api.imagequix.com/api/v1/account/${accountId}/orders`;
+        
+        logger.info(`Testing simple orders fetch from: ${url}`);
+        
+        const response = await axios.get(url, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+        });
+
+        logger.info(`Simple orders fetch successful. Status: ${response.status}`);
+        logger.info(`Response data structure:`, {
+            hasData: !!response.data,
+            dataType: typeof response.data,
+            keys: response.data ? Object.keys(response.data) : [],
+            ordersCount: response.data?.orders?.length || response.data?.length || 'unknown'
+        });
+
+        return {
+            success: true,
+            url: url,
+            status: response.status,
+            data: response.data
+        };
+
+    } catch (error) {
+        // Log detailed error information
+        logger.error('Error in getCapturaOrdersSimple:', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            headers: error.response?.headers,
+            message: error.message,
+            url: url
+        });
+        
+        return {
+            success: false,
+            url: url,
+            status: error.response?.status,
+            error: error.response?.data?.message || error.message || 'Failed to fetch orders',
+            details: error.response?.data
+        };
     }
 });

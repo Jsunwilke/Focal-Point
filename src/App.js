@@ -8,6 +8,7 @@ import { ChatProvider } from "./contexts/ChatContext";
 import { DataCacheProvider } from "./contexts/DataCacheContext";
 import { DistrictProvider } from "./contexts/DistrictContext";
 import { YearbookProvider } from "./contexts/YearbookContext";
+import { OrdersProvider } from "./contexts/OrdersContext";
 import LoginPage from "./components/auth/LoginPage";
 import StudioSignup from "./components/auth/StudioSignup";
 import InvitationAcceptance from "./components/auth/InvitationAcceptance";
@@ -32,6 +33,8 @@ import Tracking from "./pages/Tracking";
 import Chat from "./pages/Chat";
 import Proofing from "./pages/Proofing";
 import ProofingReview from "./pages/ProofingReview";
+import Orders from "./pages/Orders";
+import TestCaptura from "./pages/TestCaptura";
 import "./App.css";
 
 const AppContent = () => {
@@ -128,6 +131,8 @@ const AppContent = () => {
                       <Route path="/sports" element={<Sports />} />
                       <Route path="/tracking" element={<Tracking />} />
                       <Route path="/proofing" element={<Proofing />} />
+                      <Route path="/orders" element={<Orders />} />
+                      <Route path="/test-captura" element={<TestCaptura />} />
                       <Route path="/chat" element={<Chat />} />
                       <Route path="/daily-reports" element={<DailyReports />} />
                       <Route path="/settings" element={<Settings />} />
@@ -152,11 +157,13 @@ const App = () => {
           <ChatProvider>
             <DistrictProvider>
               <YearbookProvider>
-                <WorkflowProvider>
-                  <div className="app">
-                    <AppContent />
-                  </div>
-                </WorkflowProvider>
+                <OrdersProvider>
+                  <WorkflowProvider>
+                    <div className="app">
+                      <AppContent />
+                    </div>
+                  </WorkflowProvider>
+                </OrdersProvider>
               </YearbookProvider>
             </DistrictProvider>
           </ChatProvider>

@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore, enableNetwork, disableNetwork } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getFunctions } from "firebase/functions";
 
 // Validate that all required environment variables are present
 const requiredEnvVars = [
@@ -51,4 +52,7 @@ try {
 // Initialize Firebase Storage
 const storage = getStorage(app);
 
-export { app, auth, firestore, storage, enableNetwork, disableNetwork };
+// Initialize Firebase Functions
+const functions = getFunctions(app);
+
+export { app, auth, firestore, storage, functions, enableNetwork, disableNetwork };
