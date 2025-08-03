@@ -7,6 +7,7 @@ import { ToastProvider } from "./contexts/ToastContext";
 import { ChatProvider } from "./contexts/ChatContext";
 import { DataCacheProvider } from "./contexts/DataCacheContext";
 import { DistrictProvider } from "./contexts/DistrictContext";
+import { YearbookProvider } from "./contexts/YearbookContext";
 import LoginPage from "./components/auth/LoginPage";
 import StudioSignup from "./components/auth/StudioSignup";
 import InvitationAcceptance from "./components/auth/InvitationAcceptance";
@@ -150,11 +151,13 @@ const App = () => {
         <DataCacheProvider>
           <ChatProvider>
             <DistrictProvider>
-              <WorkflowProvider>
-                <div className="app">
-                  <AppContent />
-                </div>
-              </WorkflowProvider>
+              <YearbookProvider>
+                <WorkflowProvider>
+                  <div className="app">
+                    <AppContent />
+                  </div>
+                </WorkflowProvider>
+              </YearbookProvider>
             </DistrictProvider>
           </ChatProvider>
         </DataCacheProvider>

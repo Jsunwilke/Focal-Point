@@ -1,6 +1,6 @@
 // src/components/dashboard/UpcomingSessionsWidget.js
 import React, { useState, useEffect } from 'react';
-import { CalendarClock } from 'lucide-react';
+import { CalendarClock, Users } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
 import { getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from '../../utils/sessionTypes';
@@ -268,13 +268,13 @@ const UpcomingSessionsWidget = ({ onSessionClick }) => {
                     lineHeight: "1.2",
                     display: "flex",
                     alignItems: "center",
-                    gap: "2px",
+                    gap: "4px",
                     background: "rgba(255, 255, 255, 0.2)",
                     padding: "2px 6px",
                     borderRadius: "12px"
                   }}
                 >
-                  <span style={{ fontSize: "16px" }}>👥</span>
+                  <Users size={14} />
                   <span>{getEmployeeCount(session)}</span>
                 </div>
               </div>

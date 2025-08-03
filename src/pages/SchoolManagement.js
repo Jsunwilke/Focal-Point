@@ -17,6 +17,7 @@ import {
   Calendar,
   FileText,
   Building2,
+  BookOpen,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useDistricts } from "../contexts/DistrictContext";
@@ -28,6 +29,7 @@ import CreateTrackingWorkflowModal from "../components/shared/CreateTrackingWork
 import DistrictCard from "../components/districts/DistrictCard";
 import AddDistrictModal from "../components/districts/AddDistrictModal";
 import AssignSchoolsModal from "../components/districts/AssignSchoolsModal";
+import YearbookShootListModal from "../components/yearbook/YearbookShootListModal";
 import "./SchoolManagement.css";
 
 const SchoolManagement = () => {
@@ -53,6 +55,8 @@ const SchoolManagement = () => {
   const [selectedSchool, setSelectedSchool] = useState(null);
   const [showWorkflowModal, setShowWorkflowModal] = useState(false);
   const [workflowSchool, setWorkflowSchool] = useState(null);
+  const [showYearbookModal, setShowYearbookModal] = useState(false);
+  const [yearbookSchool, setYearbookSchool] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   // District state
@@ -210,6 +214,16 @@ const SchoolManagement = () => {
   const handleWorkflowSuccess = (workflowId) => {
     console.log("✅ Workflow created successfully:", workflowId);
     // Could show a success message or redirect to workflow view
+  };
+
+  const handleViewYearbook = (school) => {
+    setYearbookSchool(school);
+    setShowYearbookModal(true);
+  };
+
+  const handleCloseYearbookModal = () => {
+    setShowYearbookModal(false);
+    setYearbookSchool(null);
   };
 
   const handleSearchChange = (e) => {
@@ -567,6 +581,13 @@ const SchoolManagement = () => {
                       </button>
                       <button
                         className="school-card__menu-btn"
+                        onClick={() => handleViewYearbook(school)}
+                        title="Yearbook Shoot List"
+                      >
+                        <BookOpen size={16} />
+                      </button>
+                      <button
+                        className="school-card__menu-btn"
                         onClick={() => setEditingSchool(school)}
                         title="Edit School"
                       >
@@ -708,6 +729,15 @@ const SchoolManagement = () => {
           school={workflowSchool}
           organizationID={organization?.id}
           onSuccess={handleWorkflowSuccess}
+        />
+      )}
+
+      {showYearbookModal && yearbookSchool && (
+        <YearbookShootListModal
+          isOpen={showYearbookModal}
+          onClose={handleCloseYearbookModal}
+          schoolId={yearbookSchool.id}
+          schoolName={yearbookSchool.value || yearbookSchool.name}
         />
       )}
 

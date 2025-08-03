@@ -307,14 +307,24 @@ service cloud.firestore {
                        // Ensure locationPhotos is an array
                        request.resource.data.locationPhotos is list;
       
-      // Admins/Managers can update schools (including district assignment)
+      // Admins/Managers can update schools (including district assignment and yearbook settings)
       allow update: if request.auth != null && 
                        isAdminOrManager(request.auth.uid) &&
                        belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
                        // If updating districtId, ensure it's either null or a valid string
                        (!request.resource.data.keys().hasAny(['districtId']) || 
                         request.resource.data.districtId == null || 
-                        request.resource.data.districtId is string);
+                        request.resource.data.districtId is string) &&
+                       // Validate yearbook-related fields
+                       (!request.resource.data.keys().hasAny(['currentYearbookListId']) || 
+                        request.resource.data.currentYearbookListId == null || 
+                        request.resource.data.currentYearbookListId is string) &&
+                       (!request.resource.data.keys().hasAny(['yearbookEnabled']) || 
+                        request.resource.data.yearbookEnabled is bool) &&
+                       (!request.resource.data.keys().hasAny(['yearbookStartMonth']) || 
+                        (request.resource.data.yearbookStartMonth is number && 
+                         request.resource.data.yearbookStartMonth >= 1 && 
+                         request.resource.data.yearbookStartMonth <= 12));
       
       // Admins can delete schools (soft delete recommended)
       allow delete: if request.auth != null && 
@@ -1228,6 +1238,103 @@ service cloud.firestore {
                        exists(/databases/$(database)/documents/proofGalleries/$(resource.data.galleryId)) &&
                        belongsToSameOrg(request.auth.uid, 
                          get(/databases/$(database)/documents/proofGalleries/$(resource.data.galleryId)).data.organizationId);
+    }
+
+    // ============================================================================
+    // YEARBOOK SHOOT LISTS COLLECTION
+    // ============================================================================
+    match /yearbookShootLists/{listId} {
+      // Users can read yearbook lists from schools in their organization
+      allow read: if request.auth != null && (
+                     // For queries when no specific document exists yet
+                     resource == null ||
+                     // For actual document reads - check organization match
+                     belongsToSameOrg(request.auth.uid, resource.data.organizationId)
+                   );
+      
+      // Admins and photographers can create yearbook lists
+      allow create: if request.auth != null && 
+                       belongsToSameOrg(request.auth.uid, request.resource.data.organizationId) &&
+                       (isAdmin(request.auth.uid) || getUserRole(request.auth.uid) == 'photographer') &&
+                       // Validate required fields
+                       request.resource.data.keys().hasAll(['organizationId', 'schoolId', 'schoolName', 'schoolYear']) &&
+                       // Validate data types
+                       request.resource.data.organizationId is string &&
+                       request.resource.data.schoolId is string &&
+                       request.resource.data.schoolName is string &&
+                       request.resource.data.schoolYear is string &&
+                       // Validate year format (e.g., "2024-2025")
+                       request.resource.data.schoolYear.matches('^[0-9]{4}-[0-9]{4}$') &&
+                       // Validate optional fields
+                       (!request.resource.data.keys().hasAny(['isActive']) || request.resource.data.isActive is bool) &&
+                       (!request.resource.data.keys().hasAny(['copiedFromId']) || 
+                        request.resource.data.copiedFromId is string || request.resource.data.copiedFromId == null) &&
+                       (!request.resource.data.keys().hasAny(['completedCount']) || 
+                        (request.resource.data.completedCount is number && request.resource.data.completedCount >= 0)) &&
+                       (!request.resource.data.keys().hasAny(['totalCount']) || 
+                        (request.resource.data.totalCount is number && request.resource.data.totalCount >= 0)) &&
+                       (!request.resource.data.keys().hasAny(['items']) || request.resource.data.items is list) &&
+                       (!request.resource.data.keys().hasAny(['startDate']) || request.resource.data.startDate is timestamp) &&
+                       (!request.resource.data.keys().hasAny(['endDate']) || request.resource.data.endDate is timestamp);
+      
+      // Admins and photographers can update yearbook lists
+      allow update: if request.auth != null && 
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationId) &&
+                       (isAdmin(request.auth.uid) || getUserRole(request.auth.uid) == 'photographer') &&
+                       // Prevent changing core identity fields
+                       request.resource.data.organizationId == resource.data.organizationId &&
+                       request.resource.data.schoolId == resource.data.schoolId &&
+                       request.resource.data.schoolYear == resource.data.schoolYear &&
+                       // Validate updated fields
+                       (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['items']) || 
+                        request.resource.data.items is list) &&
+                       (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['completedCount']) || 
+                        (request.resource.data.completedCount is number && request.resource.data.completedCount >= 0)) &&
+                       (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['totalCount']) || 
+                        (request.resource.data.totalCount is number && request.resource.data.totalCount >= 0));
+      
+      // Only admins can delete yearbook lists
+      allow delete: if request.auth != null && 
+                       isAdmin(request.auth.uid) &&
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationId);
+    }
+
+    // ============================================================================
+    // YEARBOOK TEMPLATES COLLECTION
+    // ============================================================================
+    match /yearbookTemplates/{templateId} {
+      // Users can read yearbook templates from their organization
+      allow read: if request.auth != null && 
+                     belongsToSameOrg(request.auth.uid, resource.data.organizationId);
+      
+      // Admins can create yearbook templates
+      allow create: if request.auth != null && 
+                       isAdmin(request.auth.uid) &&
+                       belongsToSameOrg(request.auth.uid, request.resource.data.organizationId) &&
+                       // Validate required fields
+                       request.resource.data.keys().hasAll(['organizationId', 'name', 'categories']) &&
+                       // Validate data types
+                       request.resource.data.organizationId is string &&
+                       request.resource.data.name is string &&
+                       request.resource.data.categories is list &&
+                       // Validate optional fields
+                       (!request.resource.data.keys().hasAny(['description']) || request.resource.data.description is string) &&
+                       (!request.resource.data.keys().hasAny(['schoolType']) || 
+                        request.resource.data.schoolType in ['elementary', 'middle', 'high', 'k8', 'k12', 'other']) &&
+                       (!request.resource.data.keys().hasAny(['isDefault']) || request.resource.data.isDefault is bool) &&
+                       (!request.resource.data.keys().hasAny(['isActive']) || request.resource.data.isActive is bool);
+      
+      // Admins can update yearbook templates
+      allow update: if request.auth != null && 
+                       isAdmin(request.auth.uid) &&
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationId) &&
+                       // Prevent changing organizationId
+                       request.resource.data.organizationId == resource.data.organizationId;
+      
+      // Only admins can delete yearbook templates
+      allow delete: if request.auth != null && 
+                       isAdmin(request.auth.uid) &&
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationId);
     }
 
     // Deny all other documents

@@ -380,7 +380,7 @@
   flex-shrink: 0;
 }
 
-.progress-bar {
+.batch-replace-modal .progress-bar {
   width: 100%;
   height: 8px;
   background-color: #e2e8f0;
@@ -389,16 +389,16 @@
   margin-bottom: 0.5rem;
 }
 
-.progress-fill {
+.batch-replace-modal .progress-fill {
   height: 100%;
   transition: width 0.3s ease;
 }
 
-.progress-fill.compression {
+.batch-replace-modal .progress-fill.compression {
   background-color: #9f7aea;
 }
 
-.progress-fill.upload {
+.batch-replace-modal .progress-fill.upload {
   background-color: #4299e1;
 }
 

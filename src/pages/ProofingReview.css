@@ -125,11 +125,11 @@
 }
 
 /* Progress Section */
-.progress-section {
+.proof-progress-section {
   margin-top: 1.5rem;
 }
 
-.progress-stats {
+.proof-progress-stats {
   display: flex;
   gap: 1.5rem;
   margin-bottom: 0.75rem;
@@ -158,7 +158,7 @@
   font-weight: 500;
 }
 
-.progress-bar {
+.proof-progress-bar {
   height: 8px;
   background-color: #e9ecef;
   border-radius: 4px;
@@ -166,13 +166,13 @@
   margin-bottom: 0.5rem;
 }
 
-.progress-fill {
+.proof-progress-fill {
   height: 100%;
   background-color: #007bff;
   transition: width 0.3s ease;
 }
 
-.progress-percentage {
+.proof-progress-percentage {
   font-size: 0.813rem;
   color: #6c757d;
 }
@@ -350,7 +350,7 @@
     font-size: 1.5rem;
   }
   
-  .progress-stats {
+  .proof-progress-stats {
     flex-wrap: wrap;
     gap: 1rem;
   }

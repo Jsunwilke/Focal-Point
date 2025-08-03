@@ -214,7 +214,7 @@
   flex-shrink: 0;
 }
 
-.progress-bar {
+.school-progress .progress-bar {
   height: 100%;
   transition: width 0.3s ease;
 }

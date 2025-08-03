@@ -261,7 +261,7 @@
   cursor: not-allowed;
 }
 
-.progress-bar {
+.create-gallery-modal .progress-bar {
   height: 12px;
   background-color: #e9ecef;
   border-radius: 6px;
@@ -270,7 +270,7 @@
   position: relative;
 }
 
-.progress-fill {
+.create-gallery-modal .progress-fill {
   height: 100%;
   background-color: #007bff;
   transition: width 0.3s ease;

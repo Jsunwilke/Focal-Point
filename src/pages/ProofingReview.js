@@ -259,8 +259,8 @@ const ProofingReview = () => {
           )}
         </div>
         
-        <div className="progress-section">
-          <div className="progress-stats">
+        <div className="proof-progress-section">
+          <div className="proof-progress-stats">
             <span className="stat approved">
               <Check size={16} />
               {progress.approved} Approved
@@ -274,13 +274,13 @@ const ProofingReview = () => {
               {progress.pending} Pending
             </span>
           </div>
-          <div className="progress-bar">
+          <div className="proof-progress-bar">
             <div 
-              className="progress-fill"
+              className="proof-progress-fill"
               style={{ width: `${progress.percentage}%` }}
             />
           </div>
-          <span className="progress-percentage">{progress.percentage}% Complete</span>
+          <span className="proof-progress-percentage">{progress.percentage}% Complete</span>
         </div>
       </div>
 
