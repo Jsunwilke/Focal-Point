@@ -1127,7 +1127,7 @@ const WeekView = ({
                             })()}
                           </div>
                         )}
-                        {session.notes && (
+                        {(session.notes || session.photographerNotes) && (
                           <div
                             className="session-block__notes"
                             style={{
@@ -1143,7 +1143,8 @@ const WeekView = ({
                               flex: "0 0 auto"
                             }}
                           >
-                            {session.notes}
+                            {session.photographerNotes && !session.notes && "📝 "}
+                            {session.notes || (session.photographerNotes ? "Has photographer notes" : "")}
                           </div>
                         )}
                       </div>
@@ -1562,7 +1563,7 @@ const WeekView = ({
                           })()}
                         </div>
                       )}
-                      {session.notes && (
+                      {(session.notes || session.photographerNotes) && (
                         <div
                           className="session-block__notes"
                           style={{
@@ -1578,7 +1579,8 @@ const WeekView = ({
                             flex: "0 0 auto"
                           }}
                         >
-                          {session.notes}
+                          {session.photographerNotes && !session.notes && "📝 "}
+                          {session.notes || (session.photographerNotes ? "Has photographer notes" : "")}
                         </div>
                       )}
                     </div>

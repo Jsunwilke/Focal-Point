@@ -13,7 +13,7 @@ import {
   CalendarDays,
   Check,
 } from "lucide-react";
-import { getSchools, publishSession } from "../../firebase/firestore";
+import { getSchools, publishSession, getSession } from "../../firebase/firestore";
 import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
 import { getJobBoxByShiftUid } from "../../services/trackingService";
 import { collection, query, where, orderBy, limit, onSnapshot } from "firebase/firestore";
@@ -131,53 +131,40 @@ const SessionDetailsModal = ({
   // Load full session data when modal opens
   useEffect(() => {
     const loadSessionData = async () => {
-      if (isOpen && session && cachedSessions) {
+      if (isOpen && session) {
         setLoading(true);
         try {
           const sessionId = session.sessionId || session.id;
           
-          // Find all calendar entries for this session
-          const relatedEntries = cachedSessions.filter(s => s.sessionId === sessionId);
+          // Load the full session document from Firestore
+          const fullSession = await getSession(sessionId);
           
-          if (relatedEntries.length > 0) {
-            // Reconstruct the full session data from cached entries
-            const firstEntry = relatedEntries[0];
-            
-            // Build photographers array from all entries
-            const photographers = relatedEntries
-              .filter(entry => entry.photographerId)
-              .map(entry => {
-                const photographer = teamMembers.find(m => m.id === entry.photographerId);
-                return {
-                  id: entry.photographerId,
-                  name: entry.photographerName || (photographer ? `${photographer.firstName} ${photographer.lastName}` : 'Unknown'),
-                  email: photographer?.email || '',
-                  notes: '' // Individual notes would need to be stored in the cache
-                };
-              });
-            
-            const fullData = {
+          if (fullSession) {
+            setFullSessionData(fullSession);
+          } else {
+            // Fallback to creating a basic structure from the calendar entry
+            setFullSessionData({
               id: sessionId,
               sessionId: sessionId,
-              date: firstEntry.date,
-              startTime: firstEntry.startTime,
-              endTime: firstEntry.endTime,
-              schoolId: firstEntry.schoolId,
-              schoolName: firstEntry.schoolName,
-              location: firstEntry.location,
-              sessionType: firstEntry.sessionType,
-              sessionTypes: firstEntry.sessionTypes,
-              customSessionType: firstEntry.customSessionType,
-              notes: firstEntry.notes,
-              status: firstEntry.status,
-              isPublished: firstEntry.isPublished,
-              photographers: photographers
-            };
-            
-            setFullSessionData(fullData);
-          } else {
-            // Fallback to passed session data
-            setFullSessionData(session);
+              date: session.date,
+              startTime: session.startTime,
+              endTime: session.endTime,
+              schoolId: session.schoolId,
+              schoolName: session.schoolName,
+              location: session.location,
+              sessionType: session.sessionType,
+              sessionTypes: session.sessionTypes,
+              customSessionType: session.customSessionType,
+              notes: session.notes,
+              photographerNotes: session.photographerNotes || '',
+              status: session.status,
+              isPublished: session.isPublished,
+              photographers: session.photographerId ? [{
+                id: session.photographerId,
+                name: session.photographerName,
+                notes: session.photographerNotes || ''
+              }] : []
+            });
           }
 
           // Load school details if we have a school ID
@@ -197,7 +184,7 @@ const SessionDetailsModal = ({
     };
 
     loadSessionData();
-  }, [isOpen, session, cachedSessions, teamMembers, organization?.id]);
+  }, [isOpen, session, organization?.id]);
 
   // Set up real-time listener for job box data
   useEffect(() => {

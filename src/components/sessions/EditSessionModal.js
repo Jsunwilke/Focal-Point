@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import TimeSelect from "../shared/TimeSelect";
 import SearchableSelect from "../shared/SearchableSelect";
-import { updateSession, deleteSession, getSchools } from "../../firebase/firestore";
+import { updateSession, deleteSession, getSchools, getSession } from "../../firebase/firestore";
 import { getOrganizationSessionTypes, getSessionTypeColor } from "../../utils/sessionTypes";
 import "./CreateSessionModal.css";
 import secureLogger from "../../utils/secureLogger";
@@ -65,29 +65,23 @@ const EditSessionModal = ({
 
   // Load session data when modal opens
   useEffect(() => {
-    if (isOpen && session && cachedSessions) {
-      console.log("Loading session data in EditSessionModal:", session);
+    const loadFullSession = async () => {
+      if (isOpen && session) {
+        console.log("Loading session data in EditSessionModal:", session);
 
-      // Get the latest session data from cache
-      const sessionId = session.sessionId || session.id || session;
-      const relatedEntries = cachedSessions.filter(s => s.sessionId === sessionId);
-      
-      let sessionData = session;
-      if (relatedEntries.length > 0) {
-        // Use cached data to ensure we have the latest
-        const firstEntry = relatedEntries[0];
-        sessionData = {
-          ...session,
-          ...firstEntry,
-          photographers: relatedEntries
-            .filter(entry => entry.photographerId)
-            .map(entry => ({
-              id: entry.photographerId,
-              name: entry.photographerName,
-              notes: session.photographers?.find(p => p.id === entry.photographerId)?.notes || ''
-            }))
-        };
-      }
+        // Get the session ID from the calendar entry
+        const sessionId = session.sessionId || session.id || session;
+        
+        try {
+          // Load the full session document to get all photographer notes
+          const fullSessionData = await getSession(sessionId);
+          
+          if (!fullSessionData) {
+            console.error("Session not found:", sessionId);
+            return;
+          }
+          
+          let sessionData = fullSessionData;
 
       // Extract photographer IDs from the session
       let photographerIds = [];
@@ -106,20 +100,39 @@ const EditSessionModal = ({
         photographerIds = [sessionData.photographerId];
       }
 
-      setFormData({
-        schoolId: sessionData.schoolId || "",
-        date: sessionData.date || "",
-        startTime: sessionData.startTime || "09:00",
-        endTime: sessionData.endTime || "15:00",
-        sessionTypes: Array.isArray(sessionData.sessionTypes) ? sessionData.sessionTypes : (sessionData.sessionType ? [sessionData.sessionType] : []),
-        customSessionType: sessionData.customSessionType || "",
-        photographerIds: photographerIds,
-        photographerNotes: photographerNotes,
-        notes: sessionData.notes || "",
-        status: sessionData.status || "scheduled",
-      });
-    }
-  }, [isOpen, session, cachedSessions]);
+          setFormData({
+            schoolId: sessionData.schoolId || "",
+            date: sessionData.date || "",
+            startTime: sessionData.startTime || "09:00",
+            endTime: sessionData.endTime || "15:00",
+            sessionTypes: Array.isArray(sessionData.sessionTypes) ? sessionData.sessionTypes : (sessionData.sessionType ? [sessionData.sessionType] : []),
+            customSessionType: sessionData.customSessionType || "",
+            photographerIds: photographerIds,
+            photographerNotes: photographerNotes,
+            notes: sessionData.notes || "",
+            status: sessionData.status || "scheduled",
+          });
+        } catch (error) {
+          console.error("Error loading full session data:", error);
+          // Fall back to using the calendar entry data
+          setFormData({
+            schoolId: session.schoolId || "",
+            date: session.date || "",
+            startTime: session.startTime || "09:00",
+            endTime: session.endTime || "15:00",
+            sessionTypes: Array.isArray(session.sessionTypes) ? session.sessionTypes : (session.sessionType ? [session.sessionType] : []),
+            customSessionType: session.customSessionType || "",
+            photographerIds: session.photographerId ? [session.photographerId] : [],
+            photographerNotes: {},
+            notes: session.notes || "",
+            status: session.status || "scheduled",
+          });
+        }
+      }
+    };
+    
+    loadFullSession();
+  }, [isOpen, session]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

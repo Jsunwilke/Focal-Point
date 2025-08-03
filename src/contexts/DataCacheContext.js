@@ -149,6 +149,7 @@ export const DataCacheProvider = ({ children }) => {
             schoolName: session.schoolName || session.location || "",
             location: session.location || session.schoolName || "",
             notes: session.notes,
+            photographerNotes: photographer.notes || '',
           }));
         } else {
           // Session without photographers - create a single entry

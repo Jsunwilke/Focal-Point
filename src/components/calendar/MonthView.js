@@ -412,13 +412,20 @@ const MonthView = ({
                 const sessionColor = getSessionColorByOrder(globalOrderIndex);
                 const photographerCount = session.allPhotographers?.length || 1;
                 
+                // Check if session is unpublished
+                const isUnpublished = session.isPublished === false;
+                const unpublishedSessionColor = session.photographerId === null || session.photographerId === undefined 
+                  ? "#dc3545" 
+                  : sessionColor;
+                
                 return (
                   <div
                     key={session.id}
                     className="month-session"
                     style={{
-                      backgroundColor: sessionColor,
-                      color: "white",
+                      backgroundColor: isUnpublished ? unpublishedSessionColor + "40" : sessionColor,
+                      color: isUnpublished ? unpublishedSessionColor : "white",
+                      border: isUnpublished ? `2px dashed ${unpublishedSessionColor}` : "none",
                       padding: "0.3rem 0.4rem",
                       marginBottom: "0.2rem",
                       borderRadius: "0.25rem",
@@ -440,7 +447,7 @@ const MonthView = ({
                       justifyContent: "space-between",
                       alignItems: "center",
                       fontSize: "0.75rem", 
-                      color: session.isTimeOff ? "#666" : "rgba(255, 255, 255, 0.9)",
+                      color: session.isTimeOff ? "#666" : (isUnpublished ? "inherit" : "rgba(255, 255, 255, 0.9)"),
                       marginBottom: "0.15rem",
                       lineHeight: "1"
                     }}>
@@ -459,7 +466,7 @@ const MonthView = ({
                       <div className="month-session__school" style={{ 
                         fontSize: "0.75rem", 
                         fontWeight: "500",
-                        color: session.isTimeOff ? "inherit" : "white",
+                        color: session.isTimeOff ? "inherit" : (isUnpublished ? "inherit" : "white"),
                         lineHeight: "1.1",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
