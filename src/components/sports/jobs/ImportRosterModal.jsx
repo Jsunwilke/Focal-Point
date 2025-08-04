@@ -95,6 +95,34 @@ const ImportRosterModal = ({ show, onHide, job }) => {
     }
   }, [importedData, importMode, job, generatePreview]);
 
+  // Helper function to detect if an entry is blank/placeholder
+  const isBlankEntry = (entry) => {
+    const firstName = (entry.firstName || '').trim().toLowerCase();
+    const lastName = (entry.lastName || '').trim().toLowerCase();
+    
+    // Check if both names are empty
+    if (!firstName && !lastName) return true;
+    
+    // Check for common placeholder patterns
+    const placeholderPatterns = [
+      /^blank$/i,
+      /^tbd$/i,
+      /^placeholder$/i,
+      /^player\s*\d*$/i,
+      /^athlete\s*\d*$/i,
+      /^extra\s*\d*$/i,
+      /^sub\s*\d*$/i,
+      /^\d+$/  // Just numbers
+    ];
+    
+    const fullName = `${firstName} ${lastName}`.trim();
+    return placeholderPatterns.some(pattern => 
+      pattern.test(firstName) || 
+      pattern.test(lastName) || 
+      pattern.test(fullName)
+    );
+  };
+
   const handleImport = async () => {
     if (!job || !job.id) {
       showToast("Error", "No job selected for import", "error");
@@ -108,12 +136,19 @@ const ImportRosterModal = ({ show, onHide, job }) => {
 
     setLoading(true);
     try {
+      // Process imported data to mark blank entries
+      const processedData = importedData.map(entry => ({
+        ...entry,
+        wasBlank: isBlankEntry(entry),
+        isFilledBlank: false
+      }));
+
       let finalRoster = [];
 
       if (importMode === "replace") {
-        finalRoster = importedData;
+        finalRoster = processedData;
       } else if (importMode === "append") {
-        finalRoster = [...(job.roster || []), ...importedData];
+        finalRoster = [...(job.roster || []), ...processedData];
       } else if (importMode === "merge") {
         // Create a map of existing athletes for efficient lookup
         const existingMap = new Map();
@@ -126,7 +161,7 @@ const ImportRosterModal = ({ show, onHide, job }) => {
         finalRoster = [...(job.roster || [])];
 
         // Add new athletes that don't exist
-        importedData.forEach(athlete => {
+        processedData.forEach(athlete => {
           const idKey = athlete.athleteID;
           const nameKey = `${athlete.firstName}_${athlete.lastName}`.toLowerCase();
           

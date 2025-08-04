@@ -5,7 +5,9 @@
   border-radius: 12px;
   box-shadow: var(--shadow-md, 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1));
   padding: var(--spacing-sm, 8px);
-  border: 1px solid var(--border-color, #d1d5db);
+  border: 0;
+  border-width: 0;
+  border-style: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;

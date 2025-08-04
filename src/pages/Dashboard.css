@@ -4,6 +4,20 @@
   margin: 0 auto;
 }
 
+/* Disable transitions when dragging */
+.dashboard.is-dragging * {
+  transition: none !important;
+}
+
+/* Only allow specific transitions during drag */
+.dashboard.is-dragging .dashboard__widget-container {
+  transition: opacity 0.2s ease !important;
+}
+
+.dashboard.is-dragging .drop-indicator {
+  transition: opacity 0.15s ease !important;
+}
+
 
 
 /* Dashboard Content - Independent Columns */
@@ -23,23 +37,36 @@
 /* Widget container for drag & drop */
 .dashboard__widget-container {
   position: relative;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   border-radius: 8px;
+  will-change: transform;
+}
+
+.dashboard__widget-container:hover:not(.dragging) {
+  cursor: grab;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .dashboard__widget-container:active {
   cursor: grabbing;
+  transform: scale(1.02);
 }
 
 .dashboard__widget-container.drag-over {
   border: 2px dashed var(--primary-color, #2563eb) !important;
   background-color: rgba(37, 99, 235, 0.05);
-  transform: scale(1.02);
 }
 
 .dashboard__widget-container.dragging {
   opacity: 0.5;
-  transform: rotate(2deg);
+  cursor: grabbing;
+  z-index: 1000;
+}
+
+/* Prevent hover effects on children during drag */
+.dashboard.is-dragging .dashboard__widget-container > * {
+  pointer-events: none;
 }
 
 /* Empty column drop zone */
@@ -68,6 +95,19 @@
 
 .column-drag-over .drop-zone-content {
   color: var(--primary-color, #2563eb);
+}
+
+/* Drop indicator styling */
+.drop-indicator {
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Smooth animation for drop indicators */
+.dashboard:not(.is-dragging) .drop-indicator {
+  transition: height 0.2s ease, margin 0.2s ease, opacity 0.2s ease;
 }
 
 /* Drop zones between widgets */

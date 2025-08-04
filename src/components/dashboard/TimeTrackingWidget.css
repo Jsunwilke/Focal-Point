@@ -10,14 +10,18 @@
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
+  position: relative;
 }
 
 .widget-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--spacing-sm, 6px);
+  margin-bottom: var(--spacing-md, 10px);
   flex-shrink: 0;
+  gap: var(--spacing-xs, 6px);
+  position: relative;
+  z-index: 2;
 }
 
 .widget-title {
@@ -37,6 +41,7 @@
   color: var(--text-secondary, #718096);
   cursor: pointer;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .widget-expand-btn:hover {
@@ -51,6 +56,8 @@
   flex: 1;
   overflow: hidden;
   box-sizing: border-box;
+  position: relative;
+  z-index: 1;
 }
 
 /* Compact Status Layout */
@@ -58,10 +65,11 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-md, 12px);
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
   background: var(--bg-secondary, #f7fafc);
   border-radius: var(--radius-lg, 8px);
   border: 1px solid var(--border-light, #e2e8f0);
+  gap: var(--spacing-sm, 8px);
 }
 
 .time-display {

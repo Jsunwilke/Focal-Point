@@ -34,6 +34,20 @@
   background-color: #f8f9fa;
 }
 
+/* Filled blank entry highlighting */
+.roster-table tr.roster-row-filled-blank {
+  background-color: #fff3cd;
+}
+
+.roster-table tr.roster-row-filled-blank:hover {
+  background-color: #ffe8a1;
+}
+
+.filled-blank-indicator {
+  color: #ff9800;
+  vertical-align: middle;
+}
+
 /* Resize Handle Styling */
 .resize-handle {
   position: absolute;

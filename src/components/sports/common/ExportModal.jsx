@@ -12,6 +12,7 @@ const ExportModal = ({ show, onHide, job, rosterData, groupsData }) => {
     roster: true,
     groups: true,
     format: "xlsx",
+    filledBlanksOnly: false,
   });
   const [loading, setLoading] = useState(false);
 
@@ -50,8 +51,14 @@ const ExportModal = ({ show, onHide, job, rosterData, groupsData }) => {
 
       // Add roster sheet if selected
       if (exportOptions.roster && rosterData.length > 0) {
+        // Filter data if needed
+        let dataToExport = rosterData;
+        if (exportOptions.filledBlanksOnly) {
+          dataToExport = rosterData.filter(entry => entry.isFilledBlank === true);
+        }
+
         const rosterWs = XLSX.utils.json_to_sheet(
-          rosterData.map((entry) => ({
+          dataToExport.map((entry) => ({
             Name: entry.lastName || "",
             "Subject ID": entry.firstName || "",
             Special: entry.teacher || "",
@@ -63,7 +70,8 @@ const ExportModal = ({ show, onHide, job, rosterData, groupsData }) => {
           }))
         );
 
-        XLSX.utils.book_append_sheet(wb, rosterWs, "Athletes Roster");
+        const sheetName = exportOptions.filledBlanksOnly ? "Filled Blanks" : "Athletes Roster";
+        XLSX.utils.book_append_sheet(wb, rosterWs, sheetName);
       }
 
       // Add groups sheet if selected
@@ -227,6 +235,24 @@ const ExportModal = ({ show, onHide, job, rosterData, groupsData }) => {
                   checked={exportOptions.groups}
                   onChange={handleOptionChange}
                 />
+                {rosterData.some(entry => entry.isFilledBlank) && exportOptions.roster && (
+                  <Form.Check
+                    type="checkbox"
+                    id="exportFilledBlanksOnly"
+                    name="filledBlanksOnly"
+                    label={
+                      <span className="d-flex align-items-center gap-1">
+                        <span>Export only filled blanks</span>
+                        <span className="badge bg-warning text-dark ms-1">
+                          {rosterData.filter(entry => entry.isFilledBlank).length}
+                        </span>
+                      </span>
+                    }
+                    checked={exportOptions.filledBlanksOnly}
+                    onChange={handleOptionChange}
+                    className="ms-4"
+                  />
+                )}
               </div>
             </Form.Group>
 

@@ -17,6 +17,8 @@ const HoursTrackingWidget = () => {
   const [currentPeriod, setCurrentPeriod] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [firstWeekHours, setFirstWeekHours] = useState(0);
+  const [secondWeekHours, setSecondWeekHours] = useState(0);
 
   // Get start and end of current week (Monday to Sunday)
   const getWeekBounds = () => {
@@ -199,9 +201,39 @@ const HoursTrackingWidget = () => {
           const completedPeriodEntries = periodEntries.filter(entry => entry.status === 'clocked-out');
           const periodHoursTotal = calculateTotalHours(completedPeriodEntries);
           setPeriodHours(periodHoursTotal);
+          
+          // For bi-weekly periods, calculate first and second week hours separately
+          if (period.type === 'bi-weekly') {
+            const firstWeekEnd = new Date(period.start);
+            firstWeekEnd.setDate(firstWeekEnd.getDate() + 6);
+            firstWeekEnd.setHours(23, 59, 59, 999);
+            
+            const secondWeekStart = new Date(firstWeekEnd);
+            secondWeekStart.setDate(secondWeekStart.getDate() + 1);
+            secondWeekStart.setHours(0, 0, 0, 0);
+            
+            // Filter entries by week
+            const firstWeekEntries = completedPeriodEntries.filter(entry => {
+              const entryDate = new Date(entry.date);
+              return entryDate >= period.start && entryDate <= firstWeekEnd;
+            });
+            
+            const secondWeekEntries = completedPeriodEntries.filter(entry => {
+              const entryDate = new Date(entry.date);
+              return entryDate >= secondWeekStart && entryDate <= period.end;
+            });
+            
+            setFirstWeekHours(calculateTotalHours(firstWeekEntries));
+            setSecondWeekHours(calculateTotalHours(secondWeekEntries));
+          } else {
+            setFirstWeekHours(0);
+            setSecondWeekHours(0);
+          }
         } else {
           setCurrentPeriod({ label: 'No period configured', type: 'none' });
           setPeriodHours(0);
+          setFirstWeekHours(0);
+          setSecondWeekHours(0);
         }
 
       } catch (err) {
@@ -318,7 +350,31 @@ const HoursTrackingWidget = () => {
   };
 
   const weekStats = calculateProgress(weekHours, weekTarget, true);
-  const periodStats = calculateProgress(periodHours, periodTarget);
+  
+  // Special handling for bi-weekly pay periods with first week overtime
+  let periodStats;
+  if (currentPeriod?.type === 'bi-weekly' && firstWeekHours > 40) {
+    // Calculate how much of the first week is overtime
+    const firstWeekOvertime = firstWeekHours - 40;
+    const regularHours = 40 + secondWeekHours; // First 40 hours of week 1 + all of week 2
+    const totalHours = firstWeekHours + secondWeekHours;
+    
+    // Calculate percentages for display
+    const totalProgress = (totalHours / periodTarget) * 100;
+    const regularPercentage = (regularHours / totalHours) * 100;
+    const overtimePercentage = (firstWeekOvertime / totalHours) * 100;
+    
+    periodStats = {
+      total: totalProgress,
+      regular: regularPercentage,
+      overtime: overtimePercentage,
+      overtimeHours: firstWeekOvertime,
+      hasOvertime: true,
+      isPartialOT: totalHours < periodTarget // Flag to indicate we're showing OT before hitting target
+    };
+  } else {
+    periodStats = calculateProgress(periodHours, periodTarget);
+  }
 
   return (
     <div className="hours-tracking-widget">
@@ -393,7 +449,7 @@ const HoursTrackingWidget = () => {
             >
               <div 
                 className="progress-wrapper"
-                style={{ width: periodStats.hasOvertime ? '100%' : `${periodStats.total}%` }}
+                style={{ width: periodStats.isPartialOT ? `${periodStats.total}%` : (periodStats.hasOvertime ? '100%' : `${periodStats.total}%`) }}
               >
                 {periodStats.regular > 0 && (
                   <div 

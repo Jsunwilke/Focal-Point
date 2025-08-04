@@ -3,6 +3,7 @@
 /* Compact Job Cards - Primary Card Style */
 .compact-job-card {
   background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   margin-bottom: 16px;
@@ -10,7 +11,6 @@
   min-height: 180px;
   display: flex;
   flex-direction: column;
-  border: 1px solid rgba(0, 0, 0, 0.08);
   overflow: hidden;
 }
 
@@ -31,7 +31,6 @@
   justify-content: space-between;
   align-items: flex-start;
   background: rgba(58, 110, 165, 0.03);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .compact-header .school-info {
@@ -98,8 +97,6 @@
   display: flex;
   justify-content: space-between;
   background: rgba(248, 249, 250, 0.5);
-  border-top: 1px solid rgba(0, 0, 0, 0.04);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
 }
 
 .stats-row .stat-item {
@@ -195,7 +192,6 @@
   padding: 8px 16px 12px;
   display: flex;
   gap: 6px;
-  border-top: 1px solid rgba(0, 0, 0, 0.04);
   background: rgba(248, 249, 250, 0.3);
 }
 

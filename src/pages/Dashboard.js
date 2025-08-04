@@ -1,5 +1,5 @@
 // src/pages/Dashboard.js
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import TimeTrackingWidget from "../components/dashboard/TimeTrackingWidget";
 import PTOBalanceWidget from "../components/dashboard/PTOBalanceWidget";
@@ -157,6 +157,10 @@ const Dashboard = () => {
 
   const [draggedWidget, setDraggedWidget] = useState(null);
   const [dragOver, setDragOver] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  
+  // Throttle drag over updates to prevent jumpiness
+  const dragOverTimeoutRef = useRef(null);
 
   // Update widget order in localStorage
   const saveWidgetOrder = (newWidgets) => {
@@ -170,14 +174,27 @@ const Dashboard = () => {
   // Drag and drop handlers (intelligent positioning)
   const handleDragStart = (e, widget, columnId, index) => {
     setDraggedWidget({ widget, columnId, index });
+    setIsDragging(true);
     e.dataTransfer.effectAllowed = "move";
     e.target.style.opacity = "0.5";
+    
+    // Add dragging class to dashboard
+    document.querySelector('.dashboard')?.classList.add('is-dragging');
   };
 
   const handleDragEnd = (e) => {
     e.target.style.opacity = "1";
     setDraggedWidget(null);
     setDragOver(null);
+    setIsDragging(false);
+    
+    // Remove dragging class from dashboard
+    document.querySelector('.dashboard')?.classList.remove('is-dragging');
+    
+    // Clear any pending drag over timeout
+    if (dragOverTimeoutRef.current) {
+      clearTimeout(dragOverTimeoutRef.current);
+    }
   };
 
   // Calculate drop position based on mouse position within widget
@@ -197,8 +214,15 @@ const Dashboard = () => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     
-    const dropPosition = calculateDropPosition(e, columnId, index);
-    setDragOver(dropPosition);
+    // Throttle drag over updates to prevent jumpiness
+    if (dragOverTimeoutRef.current) {
+      clearTimeout(dragOverTimeoutRef.current);
+    }
+    
+    dragOverTimeoutRef.current = setTimeout(() => {
+      const dropPosition = calculateDropPosition(e, columnId, index);
+      setDragOver(dropPosition);
+    }, 50); // 50ms throttle
   };
 
   // Drop zone specific handlers
@@ -347,18 +371,18 @@ const Dashboard = () => {
     const isActive = draggedWidget && dragOver?.columnId === columnId && 
                     dragOver?.index === insertIndex;
     
-    if (!isActive) return null;
-    
     return (
       <div
         key={`indicator-${columnId}-${insertIndex}`}
+        className="drop-indicator"
         style={{
-          height: '3px',
-          margin: '4px 0',
+          height: isActive ? '3px' : '0',
+          margin: isActive ? '8px 0' : '0',
           background: 'var(--primary-color, #2563eb)',
           borderRadius: '2px',
-          transition: 'all 0.2s ease',
-          opacity: 0.8
+          opacity: isActive ? 1 : 0,
+          transition: isDragging ? 'none' : 'all 0.2s ease',
+          overflow: 'hidden'
         }}
       />
     );
@@ -412,14 +436,6 @@ const Dashboard = () => {
                 onDragOver={(e) => handleWidgetDragOver(e, columnId, index)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleWidgetDrop(e, columnId, index)}
-                style={{
-                  position: 'relative',
-                  transition: 'all 0.2s ease',
-                  opacity: isDragged ? 0.5 : 1,
-                  border: '2px solid transparent',
-                  borderRadius: '8px',
-                  cursor: 'grab'
-                }}
               >
                 {renderWidget(widget)}
               </div>

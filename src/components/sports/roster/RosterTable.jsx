@@ -6,6 +6,7 @@ import {
   ChevronsUpDown,
   Edit,
   Trash2,
+  Star,
 } from "lucide-react";
 import { useJobs } from "../../../contexts/JobsContext";
 import RosterEntryModal from "./RosterEntryModal";
@@ -20,6 +21,7 @@ const RosterTable = ({ roster, jobId, highlightPlayerId }) => {
   const [editingCell, setEditingCell] = useState({ id: null, field: null });
   const [tempValue, setTempValue] = useState("");
   const [fontSize, setFontSize] = useState(14); // Base font size in px
+  const [showOnlyFilledBlanks, setShowOnlyFilledBlanks] = useState(false);
 
   // Column width state - using percentages for responsive design
   const [columnWidths, setColumnWidths] = useState({
@@ -45,8 +47,15 @@ const RosterTable = ({ roster, jobId, highlightPlayerId }) => {
   const adjacentStartWidth = useRef(0);
 
   useEffect(() => {
-    sortRoster(roster, sortField, sortDirection);
-  }, [roster, sortField, sortDirection]);
+    let filteredRoster = roster;
+    
+    // Apply filled blanks filter if enabled
+    if (showOnlyFilledBlanks) {
+      filteredRoster = roster.filter(entry => entry.isFilledBlank === true);
+    }
+    
+    sortRoster(filteredRoster, sortField, sortDirection);
+  }, [roster, sortField, sortDirection, showOnlyFilledBlanks]);
 
   useEffect(() => {
     if (highlightPlayerId) {
@@ -271,6 +280,8 @@ const RosterTable = ({ roster, jobId, highlightPlayerId }) => {
     const isEditing =
       editingCell.id === entry.id && editingCell.field === field;
     const value = entry[field] || "";
+    const isNameField = field === 'firstName' || field === 'lastName';
+    const showFilledBlankIndicator = entry.isFilledBlank && isNameField && value;
 
     if (isEditing) {
       if (field === "notes") {
@@ -320,10 +331,22 @@ const RosterTable = ({ roster, jobId, highlightPlayerId }) => {
           whiteSpace: "normal",
           overflow: "hidden",
           lineHeight: "1.4",
+          display: "flex",
+          alignItems: "center",
+          gap: "4px",
         }}
-        title={value || "Click to edit"}
+        title={showFilledBlankIndicator ? "This entry was filled from a blank" : (value || "Click to edit")}
       >
-        {value || <span className="text-muted">Click to edit</span>}
+        <span style={{ flex: 1 }}>
+          {value || <span className="text-muted">Click to edit</span>}
+        </span>
+        {showFilledBlankIndicator && (
+          <Star 
+            size={14} 
+            className="filled-blank-indicator" 
+            style={{ color: "#ff9800", fill: "#ff9800", flexShrink: 0 }}
+          />
+        )}
       </div>
     );
   };
@@ -392,7 +415,31 @@ const RosterTable = ({ roster, jobId, highlightPlayerId }) => {
       <style>{dynamicStyles}</style>
 
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <h5 className="mb-0">Athletes Roster ({roster.length})</h5>
+        <div className="d-flex align-items-center gap-3">
+          <h5 className="mb-0">Athletes Roster ({sortedRoster.length}{roster.length !== sortedRoster.length && ` of ${roster.length}`})</h5>
+          {roster.some(entry => entry.isFilledBlank) && (
+            <div className="form-check mb-0">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                id="showFilledBlanks"
+                checked={showOnlyFilledBlanks}
+                onChange={(e) => setShowOnlyFilledBlanks(e.target.checked)}
+              />
+              <label 
+                className="form-check-label d-flex align-items-center gap-1" 
+                htmlFor="showFilledBlanks"
+                style={{ cursor: "pointer" }}
+              >
+                <Star size={16} style={{ color: "#ff9800", fill: "#ff9800" }} />
+                Show only filled blanks
+                <span className="badge bg-warning text-dark ms-1">
+                  {roster.filter(entry => entry.isFilledBlank).length}
+                </span>
+              </label>
+            </div>
+          )}
+        </div>
         <Button variant="primary" size="sm" onClick={handleAddEntry}>
           Add Athlete
         </Button>
@@ -542,9 +589,10 @@ const RosterTable = ({ roster, jobId, highlightPlayerId }) => {
               <tr
                 key={entry.id}
                 data-player-id={entry.id}
-                className={
-                  highlightPlayerId === entry.id ? "table-warning" : ""
-                }
+                className={[
+                  highlightPlayerId === entry.id ? "table-warning" : "",
+                  entry.isFilledBlank ? "roster-row-filled-blank" : ""
+                ].filter(Boolean).join(" ")}
               >
                 <td style={{ width: columnWidths.lastName + "%" }}>
                   {renderEditableCell(entry, "lastName")}

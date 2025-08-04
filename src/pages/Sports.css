@@ -128,13 +128,66 @@
 
 /* Tab Navigation */
 .tab-navigation {
-  border-bottom: 1px solid #e5e7eb;
   margin-bottom: 1.5rem;
+  border: none;
+  border-bottom: none;
 }
 
 .tab-navigation nav {
   display: flex;
   gap: 2rem;
+  border: none;
+  border-bottom: none;
+}
+
+.tab-navigation::after {
+  display: none;
+}
+
+/* Override Bootstrap nav styles */
+.sports-page .nav,
+.sports-page .nav-tabs {
+  border: none;
+  border-bottom: none;
+}
+
+.sports-page .nav::after,
+.sports-page .nav-tabs::after {
+  display: none;
+}
+
+/* Override Bootstrap container and pane borders */
+.sports-page .container,
+.sports-page .container-fluid,
+.sports-page .tab-pane,
+.sports-page .tab-content {
+  border: none;
+  box-shadow: none;
+}
+
+/* Remove any Bootstrap card-like borders */
+.sports-page .card,
+.sports-page [class*="card"] {
+  border: none;
+}
+
+/* Force remove all borders from any element that might contain jobs */
+.sports-page div[class*="container"],
+.sports-page div[class*="content"],
+.sports-page div[class*="pane"],
+.sports-page div[class*="tab"],
+.sports-page div[class*="grid"],
+.sports-page div[class*="list"],
+.sports-page div[class*="wrapper"] {
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+
+/* But keep borders on actual job cards */
+.sports-page .compact-job-card {
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .tab-button {
@@ -163,8 +216,15 @@
 }
 
 /* Tab Content */
+.tab-content {
+  border: none;
+  border-top: none;
+}
+
 .tab-content .tab-pane {
   display: none;
+  border: none;
+  border-top: none;
 }
 
 .tab-content .tab-pane.show.active {
@@ -177,6 +237,14 @@
   grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
   gap: 1.5rem;
   margin-top: 1rem;
+  border: none;
+}
+
+/* Remove any wrapper borders */
+.job-grid-wrapper,
+.job-list-wrapper,
+[class*="job-container"] {
+  border: none;
 }
 
 /* Job Cards */
