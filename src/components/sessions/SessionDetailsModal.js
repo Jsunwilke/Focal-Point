@@ -12,6 +12,8 @@ import {
   Edit3,
   CalendarDays,
   Check,
+  Camera,
+  Image,
 } from "lucide-react";
 import { getSchools, publishSession, getSession } from "../../firebase/firestore";
 import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
@@ -21,6 +23,9 @@ import { firestore } from "../../firebase/config";
 import JobBoxStatusTracker from "./JobBoxStatusTracker";
 import secureLogger from "../../utils/secureLogger";
 import { useDataCache } from "../../contexts/DataCacheContext";
+import YearbookShootListModal from "../yearbook/YearbookShootListModal";
+import { getCurrentSchoolYear } from "../../services/yearbookService";
+import LocationPhotosModal from "./LocationPhotosModal";
 
 const SessionDetailsModal = ({
   isOpen,
@@ -42,6 +47,8 @@ const SessionDetailsModal = ({
   const [nextYearDate, setNextYearDate] = useState(null);
   const [jobBoxData, setJobBoxData] = useState(null);
   const [jobBoxLoading, setJobBoxLoading] = useState(true);
+  const [showYearbookModal, setShowYearbookModal] = useState(false);
+  const [showLocationPhotos, setShowLocationPhotos] = useState(false);
 
   // Helper function to check if there's a leap day (Feb 29) between two dates
   const hasLeapDayBetween = (startDate, endDate) => {
@@ -172,6 +179,8 @@ const SessionDetailsModal = ({
           if (schoolId && organization?.id) {
             const schools = await getSchools(organization.id);
             const school = schools.find(s => s.id === schoolId);
+            console.log('SessionDetailsModal - schoolDetails:', school);
+            console.log('SessionDetailsModal - locationPhotos:', school?.locationPhotos);
             setSchoolDetails(school);
           }
         } catch (error) {
@@ -343,21 +352,61 @@ const SessionDetailsModal = ({
                 : "Unknown Photographer"}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              fontSize: "1.5rem",
-              cursor: "pointer",
-              padding: "0.25rem 0.5rem",
-              color: "#6c757d",
-              borderRadius: "4px",
-            }}
-            aria-label="Close"
-          >
-            <X size={20} />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            {schoolDetails?.locationPhotos?.length > 0 && (
+              <button
+                onClick={() => setShowLocationPhotos(true)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "0.5rem",
+                  color: "#6c757d",
+                  borderRadius: "4px",
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                title="View location photos"
+                aria-label="View location photos"
+              >
+                <Image size={18} />
+                <span
+                  style={{
+                    position: "absolute",
+                    top: "-2px",
+                    right: "-2px",
+                    backgroundColor: "#007bff",
+                    color: "white",
+                    fontSize: "0.625rem",
+                    borderRadius: "10px",
+                    padding: "2px 5px",
+                    minWidth: "18px",
+                    textAlign: "center",
+                    fontWeight: "600",
+                  }}
+                >
+                  {schoolDetails.locationPhotos.length}
+                </span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              style={{
+                background: "none",
+                border: "none",
+                fontSize: "1.5rem",
+                cursor: "pointer",
+                padding: "0.25rem 0.5rem",
+                color: "#6c757d",
+                borderRadius: "4px",
+              }}
+              aria-label="Close"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}
@@ -753,6 +802,24 @@ const SessionDetailsModal = ({
                 Edit Session
               </button>
             )}
+            {session?.schoolId && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  // Small delay to ensure proper modal stacking
+                  setTimeout(() => setShowYearbookModal(true), 100);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}
+              >
+                <Camera size={16} />
+                Yearbook Checklist
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -851,10 +918,37 @@ const SessionDetailsModal = ({
     </div>
   );
 
+  // Calculate school year from session date
+  const sessionSchoolYear = session?.date ? getCurrentSchoolYear(new Date(session.date)) : getCurrentSchoolYear();
+
   return (
     <>
       {ReactDOM.createPortal(modalContent, document.body)}
       {confirmationModal && ReactDOM.createPortal(confirmationModal, document.body)}
+      {showYearbookModal && schoolDetails && (
+        <YearbookShootListModal
+          isOpen={showYearbookModal}
+          onClose={() => setShowYearbookModal(false)}
+          schoolId={session.schoolId}
+          schoolName={schoolDetails.name}
+          initialYear={sessionSchoolYear}
+          sessionContext={{
+            sessionId: session.sessionId || session.id,
+            photographerId: session.photographerId,
+            photographerName: session.photographerName || currentPhotographer?.displayName,
+            sessionDate: session.date
+          }}
+        />
+      )}
+      {showLocationPhotos && schoolDetails?.locationPhotos && (
+        <LocationPhotosModal
+          isOpen={showLocationPhotos}
+          onClose={() => setShowLocationPhotos(false)}
+          photos={schoolDetails.locationPhotos}
+          schoolName={schoolDetails.name}
+          lastUpdated={schoolDetails.locationPhotosLastUpdated}
+        />
+      )}
     </>
   );
 };

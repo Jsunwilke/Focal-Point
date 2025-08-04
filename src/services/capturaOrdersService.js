@@ -467,9 +467,22 @@ class CapturaOrdersService {
         : startDate.toISOString().split('T')[0];
     }
     if (endDate) {
-      params.orderEndDate = typeof endDate === 'string'
-        ? endDate
-        : endDate.toISOString().split('T')[0];
+      // Add one day to end date to make it inclusive (API treats end date as exclusive)
+      let adjustedEndDate;
+      if (typeof endDate === 'string') {
+        // Parse the string date, add one day
+        const dateObj = new Date(endDate);
+        dateObj.setDate(dateObj.getDate() + 1);
+        adjustedEndDate = dateObj.toISOString().split('T')[0];
+      } else {
+        // Date object - add one day
+        const dateObj = new Date(endDate);
+        dateObj.setDate(dateObj.getDate() + 1);
+        adjustedEndDate = dateObj.toISOString().split('T')[0];
+      }
+      params.orderEndDate = adjustedEndDate;
+      
+      console.log(`Adjusted end date from ${endDate} to ${adjustedEndDate} for inclusive range`);
     }
     
     return this.getOrders(params);

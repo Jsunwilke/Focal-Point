@@ -123,9 +123,16 @@ service cloud.firestore {
       // Users can update their own profile
       allow update: if request.auth != null && 
                        request.auth.uid == userId &&
-                       // Prevent users from changing their own role or organizationID
-                       request.resource.data.role == resource.data.role &&
-                       request.resource.data.organizationID == resource.data.organizationID;
+                       (
+                         // Allow users to update only their FCM token
+                         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmToken', 'fcmTokenUpdatedAt']) &&
+                          request.resource.data.role == resource.data.role &&
+                          request.resource.data.organizationID == resource.data.organizationID) ||
+                         // Regular profile updates (existing rule)
+                         (request.resource.data.role == resource.data.role &&
+                          request.resource.data.organizationID == resource.data.organizationID &&
+                          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['fcmToken', 'fcmTokenUpdatedAt']))
+                       );
       
       // Admins can update users in their organization
       allow update: if request.auth != null && 
@@ -133,6 +140,20 @@ service cloud.firestore {
                        belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
                        // Prevent changing organizationID
                        request.resource.data.organizationID == resource.data.organizationID;
+      
+      // Admins and Managers can flag/unflag users in their organization
+      allow update: if request.auth != null && 
+                       isAdminOrManager(request.auth.uid) &&
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
+                       // Only allow updating flag-related fields
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isFlagged', 'flagNote', 'flaggedBy']) &&
+                       // Prevent changing core fields
+                       request.resource.data.organizationID == resource.data.organizationID &&
+                       request.resource.data.role == resource.data.role &&
+                       // Validate flag fields
+                       request.resource.data.isFlagged is bool &&
+                       (request.resource.data.flagNote is string || !request.resource.data.keys().hasAny(['flagNote'])) &&
+                       (request.resource.data.flaggedBy is string || !request.resource.data.keys().hasAny(['flaggedBy']));
       
       // **INVITATION FLOW: Allow activating inactive invitations (legacy support)**
       allow update: if request.auth != null &&
@@ -203,6 +224,13 @@ service cloud.firestore {
                        request.resource.data.hasJobBoxAssigned is bool &&
                        (request.resource.data.jobBoxRecordId == null || 
                         request.resource.data.jobBoxRecordId is string) &&
+                       // Prevent changing other session data
+                       request.resource.data.organizationID == resource.data.organizationID;
+      
+      // Allow cloud functions to update clock reminder fields
+      allow update: if request.auth == null &&
+                       // Only allow updating clock reminder tracking fields
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clockInReminderSent', 'clockInReminderSentAt']) &&
                        // Prevent changing other session data
                        request.resource.data.organizationID == resource.data.organizationID;
       
@@ -1245,12 +1273,8 @@ service cloud.firestore {
     // ============================================================================
     match /yearbookShootLists/{listId} {
       // Users can read yearbook lists from schools in their organization
-      allow read: if request.auth != null && (
-                     // For queries when no specific document exists yet
-                     resource == null ||
-                     // For actual document reads - check organization match
-                     belongsToSameOrg(request.auth.uid, resource.data.organizationId)
-                   );
+      allow read: if request.auth != null && 
+                     belongsToSameOrg(request.auth.uid, resource.data.organizationId);
       
       // Admins and photographers can create yearbook lists
       allow create: if request.auth != null && 
@@ -1335,6 +1359,106 @@ service cloud.firestore {
       allow delete: if request.auth != null && 
                        isAdmin(request.auth.uid) &&
                        belongsToSameOrg(request.auth.uid, resource.data.organizationId);
+    }
+
+    // ============================================================================
+    // NOTIFICATION SYSTEM - AUDIT AND LOGGING
+    // ============================================================================
+    
+    // Audit Logs collection (for flag notifications and other audit trails)
+    match /auditLogs/{document} {
+      // Only cloud functions can write audit logs
+      allow write: if false;
+      
+      // Users can read logs about themselves or that they created
+      allow read: if request.auth != null && 
+        (request.auth.uid == resource.data.targetUserId || 
+         request.auth.uid == resource.data.performedBy ||
+         isAdminOrManager(request.auth.uid));
+    }
+    
+    // Notification Logs collection (for notification delivery tracking)
+    match /notificationLogs/{document} {
+      // Only cloud functions can write notification logs
+      allow write: if false;
+      
+      // Only admins can read notification logs for now
+      // (expand this later when notification preferences UI is added)
+      allow read: if request.auth != null && isAdmin(request.auth.uid);
+    }
+
+    // ============================================================================
+    // CAPTURA STATS COLLECTIONS
+    // ============================================================================
+    
+    // Captura Order Batches - Stores detailed order data in batches
+    match /capturaOrderBatches/{dateStr} {
+      // Admins can read order batches from their organization
+      allow read: if request.auth != null && 
+                     isAdmin(request.auth.uid);
+      
+      // Only Cloud Functions can write order batches
+      allow write: if false;
+      
+      // Batches subcollection
+      match /batches/{batchId} {
+        // Admins can read batch data
+        allow read: if request.auth != null && 
+                       isAdmin(request.auth.uid);
+        
+        // Only Cloud Functions can write batch data
+        allow write: if false;
+      }
+      
+      // Summary subcollection
+      match /summary/{summaryType} {
+        // Admins can read summary data
+        allow read: if request.auth != null && 
+                       isAdmin(request.auth.uid);
+        
+        // Only Cloud Functions can write summary data
+        allow write: if false;
+      }
+    }
+    
+    // Captura Order Stats - Pre-calculated statistics
+    match /capturaOrderStats/{statType} {
+      // Admins can read stats
+      allow read: if request.auth != null && 
+                     isAdmin(request.auth.uid);
+      
+      // Only Cloud Functions can write stats
+      allow write: if false;
+      
+      // Yearly stats subcollection
+      match /{year}/{document=**} {
+        // Admins can read yearly stats
+        allow read: if request.auth != null && 
+                       isAdmin(request.auth.uid);
+        
+        // Only Cloud Functions can write
+        allow write: if false;
+      }
+    }
+    
+    // Captura Order Sync Status - Track sync operations
+    match /capturaOrderSyncStatus/{statusDoc} {
+      // Admins can read sync status
+      allow read: if request.auth != null && 
+                     isAdmin(request.auth.uid);
+      
+      // Only Cloud Functions can write sync status
+      allow write: if false;
+      
+      // Sync history logs
+      match /logs/{logId} {
+        // Admins can read sync logs
+        allow read: if request.auth != null && 
+                       isAdmin(request.auth.uid);
+        
+        // Only Cloud Functions can write logs
+        allow write: if false;
+      }
     }
 
     // Deny all other documents

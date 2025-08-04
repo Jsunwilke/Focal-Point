@@ -35,6 +35,8 @@ import Proofing from "./pages/Proofing";
 import ProofingReview from "./pages/ProofingReview";
 import Orders from "./pages/Orders";
 import TestCaptura from "./pages/TestCaptura";
+import CapturaStats from "./pages/CapturaStats";
+import TestCapturaBackfill from "./pages/TestCapturaBackfill";
 import "./App.css";
 
 const AppContent = () => {
@@ -133,6 +135,8 @@ const AppContent = () => {
                       <Route path="/proofing" element={<Proofing />} />
                       <Route path="/orders" element={<Orders />} />
                       <Route path="/test-captura" element={<TestCaptura />} />
+                      <Route path="/stats" element={<CapturaStats />} />
+                      <Route path="/test-backfill" element={<TestCapturaBackfill />} />
                       <Route path="/chat" element={<Chat />} />
                       <Route path="/daily-reports" element={<DailyReports />} />
                       <Route path="/settings" element={<Settings />} />

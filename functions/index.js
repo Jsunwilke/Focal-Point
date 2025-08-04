@@ -15,6 +15,9 @@ const db = admin.firestore();
 // Import notification service
 const { notificationService, NotificationType } = require('./notificationService');
 
+// Import Captura stats functions
+const capturaStats = require('./capturaStats');
+
 // Function 1: Update Player Search Index when sports jobs change
 exports.updatePlayerSearchIndex = onDocumentWritten('sportsJobs/{jobId}', async (event) => {
     const change = event.data;
@@ -1694,17 +1697,14 @@ exports.getCapturaOrders = onCall({
         if (!request.auth) {
             throw new Error('Authentication required');
         }
-
+        
         // Get account ID from environment or use default
         const accountId = process.env.CAPTURA_ACCOUNT_ID || 'J98TA9W';
-
+        
         // Get access token
         const accessToken = await getCapturaAccessToken();
-
-        // Build URL with the correct endpoint
-        const params = new URLSearchParams();
         
-        // Add query parameters if provided
+        // Extract parameters
         const { 
             start = 1, 
             end = 500, // Increased to handle more orders per day
@@ -1714,52 +1714,233 @@ exports.getCapturaOrders = onCall({
             paymentStatus
         } = request.data || {};
         
-        // Add pagination parameters
-        params.append('start', start.toString());
-        params.append('end', end.toString());
+        // Handle date formatting if dates are provided as Date objects or strings
+        let formattedStartDate = orderStartDate;
+        let formattedEndDate = orderEndDate;
         
-        // Add filter parameters if provided
-        if (orderStartDate) params.append('orderStartDate', orderStartDate);
-        if (orderEndDate) params.append('orderEndDate', orderEndDate);
-        if (orderType) params.append('orderType', orderType);
-        if (paymentStatus) params.append('paymentStatus', paymentStatus);
+        // Convert JavaScript Date strings to YYYY-MM-DD format
+        if (orderStartDate instanceof Date || (typeof orderStartDate === 'string' && orderStartDate.includes('GMT'))) {
+            const dateObj = new Date(orderStartDate);
+            formattedStartDate = dateObj.toISOString().split('T')[0];
+        }
         
-        // Use the working endpoint
-        url = `https://api.imagequix.com/api/v1/account/${accountId}/order?${params.toString()}`;
+        if (orderEndDate instanceof Date || (typeof orderEndDate === 'string' && orderEndDate.includes('GMT'))) {
+            const dateObj = new Date(orderEndDate);
+            formattedEndDate = dateObj.toISOString().split('T')[0];
+        }
         
-        logger.info(`Fetching orders from Captura: ${url}`);
+        // Add one day to end date to make it inclusive (API treats end date as exclusive)
+        if (formattedEndDate) {
+            logger.info(`Original end date: ${formattedEndDate}`);
+            const endDateObj = new Date(formattedEndDate + 'T00:00:00'); // Ensure we parse as UTC
+            endDateObj.setUTCDate(endDateObj.getUTCDate() + 1); // Use UTC date to avoid timezone issues
+            const adjustedEndDate = endDateObj.toISOString().split('T')[0];
+            logger.info(`Adjusting end date from ${formattedEndDate} to ${adjustedEndDate} for inclusive range`);
+            formattedEndDate = adjustedEndDate;
+        }
         
+        // Build request parameters - only include filters if provided
+        const params = {
+            start: start.toString(),
+            end: end.toString()
+        };
+
+        // Only add date filters if they are provided
+        if (formattedStartDate) params.orderStartDate = formattedStartDate;
+        if (formattedEndDate) params.orderEndDate = formattedEndDate;
+        if (orderType) params.orderType = orderType;
+        if (paymentStatus) params.paymentStatus = paymentStatus;
+        
+        const hasDateFilters = !!(formattedStartDate || formattedEndDate);
+
+        const queryString = new URLSearchParams(params).toString();
+        url = `https://api.imagequix.com/api/v1/account/${accountId}/order?${queryString}`;
+        
+        logger.info(`=== CAPTURA API REQUEST DEBUG ===`);
+        logger.info(`URL: ${url}`);
+        logger.info('Request parameters:', JSON.stringify(params, null, 2));
+        logger.info(`Has date filters: ${hasDateFilters}`);
+
         const response = await axios.get(url, {
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            }
+                'Content-Type': 'application/json'
+            },
+            timeout: 30000 // 30 second timeout
         });
 
-        logger.info(`Captura orders fetched successfully. Status: ${response.status}`);
+        logger.info(`=== CAPTURA API RESPONSE DEBUG ===`);
+        logger.info('Response status:', response.status);
         
-        // Log the response structure to understand the data
-        if (response.data) {
-            logger.info(`Response data structure:`, {
-                hasData: true,
-                dataType: typeof response.data,
-                isArray: Array.isArray(response.data),
-                keys: typeof response.data === 'object' && !Array.isArray(response.data) 
-                    ? Object.keys(response.data).slice(0, 10) // First 10 keys
-                    : 'N/A',
-                arrayLength: Array.isArray(response.data) ? response.data.length : 'N/A',
-                firstItemKeys: Array.isArray(response.data) && response.data.length > 0 
-                    ? Object.keys(response.data[0]).slice(0, 10)
-                    : 'N/A'
-            });
+        // Comprehensive response structure logging
+        const responseDebug = {
+            hasData: !!response.data,
+            dataType: typeof response.data,
+            topLevelKeys: response.data ? Object.keys(response.data) : []
+        };
+        
+        // Check for orders field
+        if (response.data?.orders !== undefined) {
+            responseDebug.orders = {
+                exists: true,
+                isArray: Array.isArray(response.data.orders),
+                length: Array.isArray(response.data.orders) ? response.data.orders.length : 'not-array',
+                firstOrderKeys: response.data.orders?.[0] ? Object.keys(response.data.orders[0]) : []
+            };
+        }
+        
+        // Check for data field
+        if (response.data?.data !== undefined) {
+            responseDebug.dataField = {
+                exists: true,
+                isArray: Array.isArray(response.data.data),
+                length: Array.isArray(response.data.data) ? response.data.data.length : 'not-array'
+            };
+            
+            if (Array.isArray(response.data.data) && response.data.data.length > 0) {
+                responseDebug.dataField.firstItemKeys = Object.keys(response.data.data[0]);
+                responseDebug.dataField.firstItemHasOrders = !!response.data.data[0].orders;
+                if (response.data.data[0].orders) {
+                    responseDebug.dataField.firstItemOrdersCount = response.data.data[0].orders.length;
+                }
+            }
+        }
+        
+        // Check for pagination fields
+        responseDebug.pagination = {
+            total: response.data?.total,
+            start: response.data?.start,
+            end: response.data?.end
+        };
+        
+        // Check for address fields
+        responseDebug.hasAddresses = {
+            billTo: !!response.data?.billTo,
+            shipTo: !!response.data?.shipTo
+        };
+        
+        logger.info('Response structure:', JSON.stringify(responseDebug, null, 2));
+        
+        // If response is small enough, log it entirely for debugging
+        const responseSize = JSON.stringify(response.data).length;
+        if (responseSize < 2000) {
+            logger.info('Full response (small enough to log):', JSON.stringify(response.data, null, 2));
+        } else {
+            logger.info(`Response too large to log fully (${responseSize} chars)`);
         }
 
+        // Handle different response formats based on actual structure
+        // First priority: Check if we have direct format (orders array at top level)
+        if (response.data?.orders && Array.isArray(response.data.orders)) {
+            // Direct format - orders at top level (unfiltered requests)
+            logger.info('=== USING DIRECT FORMAT HANDLER ===');
+            logger.info(`Direct format contains ${response.data.orders.length} orders`);
+            
+            return {
+                success: true,
+                data: response.data
+            };
+        }
+        // Second priority: Check if we have the wrapped format with date filters
+        else if (response.data?.data && Array.isArray(response.data.data) && response.data.total !== undefined) {
+            // Date filtered format - data array contains orders directly
+            logger.info('=== USING DATE FILTERED FORMAT HANDLER ===');
+            logger.info(`Found ${response.data.data.length} orders in data array`);
+            logger.info(`Total orders reported: ${response.data.total}`);
+            
+            // The data array contains the orders directly when date filters are used
+            const orders = response.data.data;
+            
+            // Log the date range of orders we received
+            if (orders.length > 0) {
+                const orderDates = orders.map(o => o.orderDate?.split(' ')[0]).filter(Boolean);
+                const uniqueDates = [...new Set(orderDates)].sort();
+                logger.info(`=== ORDER DATES RETURNED ===`);
+                logger.info(`Requested: ${params.orderStartDate} to ${params.orderEndDate}`);
+                logger.info(`Received ${orders.length} orders with dates: ${uniqueDates.join(', ')}`);
+                logger.info(`Date range in response: ${uniqueDates[0]} to ${uniqueDates[uniqueDates.length - 1]}`);
+            }
+            
+            // Return in the format expected by the service (consistent with direct format)
+            return {
+                success: true,
+                data: {
+                    orders: orders,
+                    total: response.data.total,
+                    start: response.data.start,
+                    end: response.data.end,
+                    // Extract billTo/shipTo from first order if available
+                    billTo: orders[0]?.billTo || null,
+                    shipTo: orders[0]?.shipTo || null,
+                    accountID: accountId
+                }
+            };
+        }
+        // Third priority: Check if we have the batch format (for backfill function)
+        else if (response.data?.data && Array.isArray(response.data.data)) {
+            // This might be the batch format used by backfill
+            logger.info('=== CHECKING FOR BATCH FORMAT ===');
+            
+            // Check if first item has orders array (batch format)
+            if (response.data.data[0]?.orders && Array.isArray(response.data.data[0].orders)) {
+                logger.info('Detected batch format with nested orders arrays');
+                
+                const allOrders = [];
+                response.data.data.forEach((batchItem, index) => {
+                    if (batchItem.orders && Array.isArray(batchItem.orders)) {
+                        logger.info(`Batch item ${index}: extracting ${batchItem.orders.length} orders`);
+                        
+                        // Merge billTo/shipTo from batch item with each order
+                        const ordersWithContext = batchItem.orders.map(order => ({
+                            ...order,
+                            billTo: batchItem.billTo || order.billTo,
+                            shipTo: batchItem.shipTo || order.shipTo,
+                            accountID: batchItem.accountID || order.accountID
+                        }));
+                        allOrders.push(...ordersWithContext);
+                    }
+                });
+                
+                logger.info(`Total orders extracted from batch format: ${allOrders.length}`);
+                
+                return {
+                    success: true,
+                    data: {
+                        orders: allOrders,
+                        total: response.data.total || allOrders.length,
+                        start: response.data.start,
+                        end: response.data.end,
+                        billTo: response.data.data[0]?.billTo,
+                        shipTo: response.data.data[0]?.shipTo,
+                        accountID: accountId
+                    }
+                };
+            } else {
+                logger.warn('Data array exists but first item has no orders array - treating as empty response');
+            }
+        }
+        
+        // Unexpected format
+        logger.error('=== UNEXPECTED RESPONSE FORMAT ===');
+        logger.error('Cannot find orders in response. Structure:', responseDebug);
+        
+        // If response is small, log it for debugging
+        if (responseSize < 5000) {
+            logger.error('Full response for debugging:', JSON.stringify(response.data, null, 2));
+        }
+        
+        // Return empty result instead of throwing error
+        logger.warn('Returning empty result due to unexpected format');
         return {
             success: true,
-            data: response.data
+            data: {
+                orders: [],
+                total: 0,
+                billTo: null,
+                shipTo: null,
+                accountID: accountId
+            }
         };
-
     } catch (error) {
         // Log detailed error information
         logger.error('Error in getCapturaOrders:', {
@@ -2049,3 +2230,7 @@ exports.getCapturaOrdersSimple = onCall({
         };
     }
 });
+
+// Export Captura stats functions
+exports.syncDailyOrders = capturaStats.syncDailyOrders;
+exports.backfillHistoricalData = capturaStats.backfillHistoricalData;

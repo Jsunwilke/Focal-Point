@@ -44,7 +44,17 @@ export const ChatProvider = ({ children }) => {
       if (userProfile?.organizationID) {
         try {
           const users = await chatService.getOrganizationUsers(userProfile.organizationID);
-          setOrganizationUsers(users.filter(user => user.id !== userProfile.id));
+          console.log('[ChatContext] Loaded organization users:', users);
+          
+          // Log any users without IDs
+          const usersWithoutIds = users.filter(user => !user.id);
+          if (usersWithoutIds.length > 0) {
+            console.error('[ChatContext] Users without IDs:', usersWithoutIds);
+          }
+          
+          // Filter out current user and any users without IDs
+          const validUsers = users.filter(user => user.id && user.id !== userProfile.id);
+          setOrganizationUsers(validUsers);
         } catch (error) {
           console.error('Error loading organization users:', error);
           showToast('Failed to load team members', 'error');
@@ -273,8 +283,16 @@ export const ChatProvider = ({ children }) => {
         throw new Error('User not authenticated');
       }
 
+      // Validate participant IDs
+      const validParticipantIds = participantIds.filter(id => id && typeof id === 'string');
+      if (validParticipantIds.length === 0) {
+        throw new Error('No valid participant IDs provided');
+      }
+
       // Include current user in participants
-      const allParticipants = [userProfile.id, ...participantIds.filter(id => id !== userProfile.id)];
+      const allParticipants = [userProfile.id, ...validParticipantIds.filter(id => id !== userProfile.id)];
+      
+      console.log('[ChatContext] Creating conversation with participants:', allParticipants);
       
       // Check if direct conversation already exists
       if (type === 'direct' && allParticipants.length === 2) {

@@ -25,32 +25,41 @@ class ChatService {
   // Create a new conversation
   async createConversation(participants, type = 'direct', customName = null) {
     try {
-      const batch = writeBatch(firestore);
+      // Validate participants
+      if (!participants || !Array.isArray(participants)) {
+        throw new Error('Invalid participants array');
+      }
+      
+      const validParticipants = participants.filter(id => id && typeof id === 'string');
+      if (validParticipants.length === 0) {
+        throw new Error('No valid participants provided');
+      }
+      
+      console.log('[ChatService] Creating conversation with validated participants:', validParticipants);
       
       // Generate default name based on type and participants
       const defaultName = type === 'direct' 
         ? `Direct conversation` 
         : `Group chat`;
       
-      // Create conversation document
-      const conversationRef = doc(collection(firestore, 'conversations'));
       const conversationData = {
-        participants,
+        participants: validParticipants, // Use validated participants
         type,
         name: customName,
         defaultName,
         createdAt: serverTimestamp(),
         lastActivity: serverTimestamp(),
         lastMessage: null,
-        unreadCounts: participants.reduce((acc, userId) => {
+        unreadCounts: validParticipants.reduce((acc, userId) => {
           acc[userId] = 0;
           return acc;
         }, {})
       };
       
-      batch.set(conversationRef, conversationData);
+      // Use addDoc to create a new conversation with auto-generated ID
+      const conversationRef = await addDoc(collection(firestore, 'conversations'), conversationData);
       
-      await batch.commit();
+      console.log('[ChatService] Conversation created with ID:', conversationRef.id);
       return conversationRef.id;
     } catch (error) {
       console.error('Error creating conversation:', error);

@@ -114,6 +114,14 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       enabled: true,
     },
     {
+      id: "stats",
+      label: "Stats",
+      icon: BarChart3,
+      path: "/stats",
+      enabled: true,
+      adminOnly: true,
+    },
+    {
       id: "daily-reports",
       label: "Daily Reports",
       icon: FileText,

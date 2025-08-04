@@ -18,6 +18,7 @@ import {
   FileText,
   Building2,
   BookOpen,
+  Image,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useDistricts } from "../contexts/DistrictContext";
@@ -30,6 +31,7 @@ import DistrictCard from "../components/districts/DistrictCard";
 import AddDistrictModal from "../components/districts/AddDistrictModal";
 import AssignSchoolsModal from "../components/districts/AssignSchoolsModal";
 import YearbookShootListModal from "../components/yearbook/YearbookShootListModal";
+import LocationPhotosModal from "../components/sessions/LocationPhotosModal";
 import "./SchoolManagement.css";
 
 const SchoolManagement = () => {
@@ -57,6 +59,8 @@ const SchoolManagement = () => {
   const [workflowSchool, setWorkflowSchool] = useState(null);
   const [showYearbookModal, setShowYearbookModal] = useState(false);
   const [yearbookSchool, setYearbookSchool] = useState(null);
+  const [showLocationPhotos, setShowLocationPhotos] = useState(false);
+  const [locationPhotosSchool, setLocationPhotosSchool] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   // District state
@@ -224,6 +228,16 @@ const SchoolManagement = () => {
   const handleCloseYearbookModal = () => {
     setShowYearbookModal(false);
     setYearbookSchool(null);
+  };
+
+  const handleViewLocationPhotos = (school) => {
+    setLocationPhotosSchool(school);
+    setShowLocationPhotos(true);
+  };
+
+  const handleCloseLocationPhotos = () => {
+    setShowLocationPhotos(false);
+    setLocationPhotosSchool(null);
   };
 
   const handleSearchChange = (e) => {
@@ -586,6 +600,33 @@ const SchoolManagement = () => {
                       >
                         <BookOpen size={16} />
                       </button>
+                      {school.locationPhotos?.length > 0 && (
+                        <button
+                          className="school-card__menu-btn"
+                          onClick={() => handleViewLocationPhotos(school)}
+                          title="View Location Photos"
+                          style={{ position: 'relative' }}
+                        >
+                          <Image size={16} />
+                          <span
+                            style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              backgroundColor: '#007bff',
+                              color: 'white',
+                              fontSize: '0.625rem',
+                              borderRadius: '10px',
+                              padding: '2px 4px',
+                              minWidth: '16px',
+                              textAlign: 'center',
+                              fontWeight: '600',
+                            }}
+                          >
+                            {school.locationPhotos.length}
+                          </span>
+                        </button>
+                      )}
                       <button
                         className="school-card__menu-btn"
                         onClick={() => setEditingSchool(school)}
@@ -738,6 +779,16 @@ const SchoolManagement = () => {
           onClose={handleCloseYearbookModal}
           schoolId={yearbookSchool.id}
           schoolName={yearbookSchool.value || yearbookSchool.name}
+        />
+      )}
+
+      {showLocationPhotos && locationPhotosSchool && (
+        <LocationPhotosModal
+          isOpen={showLocationPhotos}
+          onClose={handleCloseLocationPhotos}
+          photos={locationPhotosSchool.locationPhotos}
+          schoolName={locationPhotosSchool.value || locationPhotosSchool.name}
+          lastUpdated={locationPhotosSchool.locationPhotosLastUpdated}
         />
       )}
 

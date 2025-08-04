@@ -69,13 +69,29 @@ const EmployeeSelector = ({
       return;
     }
 
+    // Validate that all selected users have valid IDs
+    const invalidUsers = selectedUsers.filter(user => !user.id);
+    if (invalidUsers.length > 0) {
+      console.error('Invalid users without IDs:', invalidUsers);
+      alert('Error: Some selected users do not have valid IDs. Please try again.');
+      return;
+    }
+
     setIsCreating(true);
     try {
-      const participantIds = selectedUsers.map(user => user.id);
+      const participantIds = selectedUsers
+        .map(user => user.id)
+        .filter(id => id); // Extra safety: filter out any falsy values
+        
+      if (participantIds.length === 0) {
+        throw new Error('No valid participant IDs');
+      }
+      
       const customName = conversationType === 'group' && groupName.trim() 
         ? groupName.trim() 
         : null;
 
+      console.log('Creating conversation with participants:', participantIds);
       const conversationId = await createConversation(participantIds, conversationType, customName);
       
       // Find the created conversation

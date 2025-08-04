@@ -32,7 +32,8 @@ const YearbookShootListModal = ({
   onClose, 
   schoolId, 
   schoolName,
-  initialYear = null 
+  initialYear = null,
+  sessionContext = null // Optional: { sessionId, photographerId, photographerName, sessionDate }
 }) => {
   const { userProfile } = useAuth();
   const { 
@@ -158,12 +159,28 @@ const YearbookShootListModal = ({
     if (!canEdit) return;
 
     try {
-      await updateShootItem(schoolId, selectedYear, itemId, {
+      const updateData = {
         completed: !currentStatus,
         completedDate: !currentStatus ? new Date() : null,
         photographerId: !currentStatus ? userProfile.uid : null,
         photographerName: !currentStatus ? userProfile.displayName : null
-      });
+      };
+
+      // If we have session context and we're marking as complete, include it
+      if (!currentStatus && sessionContext) {
+        updateData.completedBySession = sessionContext.sessionId;
+        if (sessionContext.photographerId) {
+          updateData.photographerId = sessionContext.photographerId;
+        }
+        if (sessionContext.photographerName) {
+          updateData.photographerName = sessionContext.photographerName;
+        }
+        if (sessionContext.sessionDate) {
+          updateData.completedDate = new Date(sessionContext.sessionDate);
+        }
+      }
+
+      await updateShootItem(schoolId, selectedYear, itemId, updateData);
 
       // Update local state optimistically
       setShootList(prev => ({
@@ -276,14 +293,32 @@ const YearbookShootListModal = ({
   if (!isOpen) return null;
 
   const modalContent = (
-    <div className="modal-overlay" style={overlayStyles} onClick={onClose}>
-      <div className="modal-container yearbook-modal" style={modalStyles} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
+    <div style={overlayStyles} onClick={onClose}>
+      <div className="yearbook-modal" style={modalStyles} onClick={(e) => e.stopPropagation()}>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          padding: '1.5rem', 
+          borderBottom: '1px solid var(--border-color)' 
+        }}>
           <div className="yearbook-modal-title">
             <h2>Yearbook Shoot List</h2>
             <span className="school-name">{schoolName}</span>
           </div>
-          <button className="modal-close" onClick={onClose}>
+          <button 
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: '0.5rem',
+              cursor: 'pointer',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
             <X size={20} />
           </button>
         </div>
@@ -370,7 +405,7 @@ const YearbookShootListModal = ({
           />
         </div>
 
-        <div className="modal-body yearbook-content">
+        <div className="yearbook-content" style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }}>
           {loading[`${schoolId}_${selectedYear}`] ? (
             <LoadingSpinner />
           ) : !shootList ? (
@@ -605,7 +640,9 @@ const overlayStyles = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  zIndex: 10001,
+  zIndex: 20000, // Much higher to ensure it's on top
+  isolation: 'isolate', // Create new stacking context
+  pointerEvents: 'auto', // Ensure click events work
 };
 
 const modalStyles = {
@@ -620,6 +657,7 @@ const modalStyles = {
   flexDirection: 'column',
   margin: 0,
   transform: 'none',
+  zIndex: 20001, // Ensure modal content is also high
 };
 
 export default YearbookShootListModal;
