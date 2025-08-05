@@ -35,12 +35,24 @@
 }
 
 /* Filled blank entry highlighting */
-.roster-table tr.roster-row-filled-blank {
-  background-color: #fff3cd;
+.roster-table tr.roster-row-filled-blank,
+.roster-table tr.roster-row-filled-blank > td {
+  background-color: #fff3cd !important;
 }
 
-.roster-table tr.roster-row-filled-blank:hover {
-  background-color: #ffe8a1;
+.roster-table tr.roster-row-filled-blank:hover,
+.roster-table tr.roster-row-filled-blank:hover > td {
+  background-color: #ffe8a1 !important;
+}
+
+/* Override Bootstrap striping for filled blanks */
+.table-striped > tbody > tr.roster-row-filled-blank:nth-of-type(odd) > td,
+.table-striped > tbody > tr.roster-row-filled-blank:nth-of-type(even) > td {
+  background-color: #fff3cd !important;
+}
+
+.table-striped > tbody > tr.roster-row-filled-blank:hover > td {
+  background-color: #ffe8a1 !important;
 }
 
 .filled-blank-indicator {

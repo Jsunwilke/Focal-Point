@@ -127,10 +127,18 @@ export const JobsProvider = ({ children }) => {
         job
       );
       
-      // Update cache with new job
-      const newJob = { ...job, id: docRef.id };
-      const cachedJobs = jobsCacheService.getCachedJobs(organization.id) || [];
-      jobsCacheService.setCachedJobs(organization.id, [newJob, ...cachedJobs]);
+      // If job is linked to a session, update the session's hasSportsJob field
+      if (jobData.sessionId) {
+        try {
+          const sessionRef = doc(firestore, "sessions", jobData.sessionId);
+          await updateDoc(sessionRef, {
+            hasSportsJob: true
+          });
+        } catch (error) {
+          console.error("Error updating session hasSportsJob:", error);
+          // Don't fail the job creation if session update fails
+        }
+      }
       
       showToast("Success", "Sports job created successfully");
       return docRef.id;
@@ -144,17 +152,40 @@ export const JobsProvider = ({ children }) => {
   // Update job
   const updateJob = async (jobId, updates) => {
     try {
+      // Get current job to check for session changes
+      const currentJob = allJobs.find(job => job.id === jobId);
+      
       const jobRef = doc(firestore, SPORTS_JOBS_COLLECTION, jobId);
       await updateDoc(jobRef, {
         ...updates,
         updatedAt: serverTimestamp(),
       });
       
-      // Update cache
-      const currentJob = allJobs.find(job => job.id === jobId);
-      if (currentJob) {
-        const updatedJob = { ...currentJob, ...updates, updatedAt: new Date() };
-        jobsCacheService.updateCachedJob(organization.id, updatedJob);
+      // Handle session linking changes
+      if ('sessionId' in updates && currentJob) {
+        // If old session exists and is different from new one, clear its hasSportsJob
+        if (currentJob.sessionId && currentJob.sessionId !== updates.sessionId) {
+          try {
+            const oldSessionRef = doc(firestore, "sessions", currentJob.sessionId);
+            await updateDoc(oldSessionRef, {
+              hasSportsJob: false
+            });
+          } catch (error) {
+            console.error("Error updating old session hasSportsJob:", error);
+          }
+        }
+        
+        // If new session exists, set its hasSportsJob
+        if (updates.sessionId) {
+          try {
+            const newSessionRef = doc(firestore, "sessions", updates.sessionId);
+            await updateDoc(newSessionRef, {
+              hasSportsJob: true
+            });
+          } catch (error) {
+            console.error("Error updating new session hasSportsJob:", error);
+          }
+        }
       }
       
       showToast("Success", "Job updated successfully");
@@ -168,10 +199,23 @@ export const JobsProvider = ({ children }) => {
   // Delete job
   const deleteJob = async (jobId) => {
     try {
+      // Get the job first to check if it has a sessionId
+      const job = allJobs.find(j => j.id === jobId);
+      
       await deleteDoc(doc(firestore, SPORTS_JOBS_COLLECTION, jobId));
       
-      // Remove from cache
-      jobsCacheService.removeCachedJob(organization.id, jobId);
+      // If job was linked to a session, update the session's hasSportsJob field
+      if (job?.sessionId) {
+        try {
+          const sessionRef = doc(firestore, "sessions", job.sessionId);
+          await updateDoc(sessionRef, {
+            hasSportsJob: false
+          });
+        } catch (error) {
+          console.error("Error updating session hasSportsJob:", error);
+          // Don't fail the job deletion if session update fails
+        }
+      }
       
       showToast("Success", "Job deleted successfully");
     } catch (error) {
