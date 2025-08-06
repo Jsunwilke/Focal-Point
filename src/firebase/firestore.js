@@ -2740,6 +2740,11 @@ export const getWorkflowTemplate = async (templateId) => {
     }
     return null;
   } catch (error) {
+    // Only log permission errors as warnings
+    if (error.code === 'permission-denied') {
+      console.warn(`No permission to access workflow template ${templateId}`);
+      return null;
+    }
     console.error("Error fetching workflow template:", error);
     throw error;
   }
@@ -3106,9 +3111,10 @@ export const completeWorkflowStep = async (workflowId, stepId, completionData = 
 
     // Check if this is the last step and mark workflow as completed if so
     const template = await getWorkflowTemplate(workflow.templateId);
-    const allStepsCompleted = template?.steps?.every(step => 
-      updatedStepProgress[step.id]?.status === "completed"
-    );
+    const allStepsCompleted = template && template.steps ? 
+      template.steps.every(step => 
+        updatedStepProgress[step.id]?.status === "completed"
+      ) : false;
 
     const updateData = {
       stepProgress: updatedStepProgress,

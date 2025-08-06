@@ -1,6 +1,6 @@
 // src/App.js
 import React, { useState } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { WorkflowProvider } from "./contexts/WorkflowContext";
 import { ToastProvider } from "./contexts/ToastContext";
@@ -40,7 +40,7 @@ import TestCapturaBackfill from "./pages/TestCapturaBackfill";
 import "./App.css";
 
 const AppContent = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, userProfile } = useAuth();
   const [showSignup, setShowSignup] = useState(false);
 
   // Show loading spinner while Firebase initializes
@@ -122,7 +122,7 @@ const AppContent = () => {
                 <ProtectedRoute>
                   <Layout>
                     <Routes>
-                      <Route path="/" element={<Dashboard />} />
+                      <Route path="/" element={userProfile?.isAccountant ? <Navigate to="/payroll-timesheets" replace /> : <Dashboard />} />
                       <Route path="/schedule" element={<Schedule />} />
                       <Route path="/time-tracking" element={<TimeTracking />} />
                       <Route path="/mileage" element={<MileageTracking />} />

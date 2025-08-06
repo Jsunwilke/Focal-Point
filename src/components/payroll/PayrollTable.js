@@ -14,6 +14,7 @@ import {
   Search,
   X
 } from 'lucide-react';
+import { formatDuration } from '../../firebase/firestore';
 
 const PayrollTable = ({ payrollData, loading, onEmployeeSelect }) => {
   const [expandedEmployees, setExpandedEmployees] = useState(new Set());
@@ -326,6 +327,9 @@ const PayrollTable = ({ payrollData, loading, onEmployeeSelect }) => {
                 </div>
                 <div className="table-cell table-cell--right hours-cell">
                   <div className="hours-main">{employee.hours.formatted}</div>
+                  <div className="hours-regular">
+                    {formatDuration(employee.hours.total - employee.hours.overtime.total.hours)} reg
+                  </div>
                   {employee.hours.overtime.total.hours > 0 && (
                     <div className="hours-overtime">
                       {employee.hours.overtime.total.formatted} OT

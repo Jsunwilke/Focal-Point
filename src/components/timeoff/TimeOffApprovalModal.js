@@ -19,9 +19,11 @@ import {
   approveTimeOffRequest, 
   denyTimeOffRequest,
   markTimeOffRequestUnderReview,
-  revertTimeOffRequestStatus 
+  revertTimeOffRequestStatus,
+  approveTimeOffRequestPartial 
 } from '../../firebase/timeOffRequests';
 import Button from '../shared/Button';
+import TimeOffPartialApprovalModal from './TimeOffPartialApprovalModal';
 import '../shared/Modal.css';
 import './TimeOffApprovalModal.css';
 
@@ -61,6 +63,7 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
   const [denialReason, setDenialReason] = useState('');
   const [showDenialDialog, setShowDenialDialog] = useState(null);
   const [showUndoConfirm, setShowUndoConfirm] = useState(null);
+  const [showPartialApproval, setShowPartialApproval] = useState(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -97,7 +100,7 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
     if (activeTab === 'pending') {
       return request.status === 'pending';
     } else if (activeTab === 'under_review') {
-      return request.status === 'under_review';
+      return request.status === 'under_review' || request.status === 'partially_approved';
     } else if (activeTab === 'history') {
       return request.status === 'approved' || request.status === 'denied' || request.status === 'cancelled';
     }
@@ -184,6 +187,26 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
     }
   };
 
+  const handlePartialApproval = async (requestId, dayApprovals) => {
+    setProcessingId(requestId);
+    try {
+      await approveTimeOffRequestPartial(
+        requestId,
+        dayApprovals,
+        userProfile.id,
+        `${userProfile.firstName} ${userProfile.lastName}`
+      );
+      setShowPartialApproval(null);
+      await loadRequests();
+      onStatusChange?.();
+    } catch (error) {
+      console.error('Error processing partial approval:', error);
+      alert('Failed to process partial approval. Please try again.');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   // Check if request can be undone (within 24 hours of approval/denial)
   const canUndoStatus = (request) => {
     if (request.status !== 'approved' && request.status !== 'denied') return false;
@@ -234,6 +257,15 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
     return `${diffDays} day${diffDays > 1 ? 's' : ''}`;
   };
 
+  const isMultiDayRequest = (request) => {
+    if (request.isPartialDay) return false;
+    const start = request.startDate.toDate ? request.startDate.toDate() : new Date(request.startDate);
+    const end = request.endDate.toDate ? request.endDate.toDate() : new Date(request.endDate);
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return diffDays > 1;
+  };
+
   const formatTime = (time) => {
     if (!time) return '';
     const [hours, minutes] = time.split(':');
@@ -251,6 +283,13 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
         return <XCircle size={16} className="status-icon denied" />;
       case 'under_review':
         return <Eye size={16} className="status-icon under-review" />;
+      case 'partially_approved':
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+            <CheckCircle size={14} className="status-icon approved" />
+            <XCircle size={14} className="status-icon denied" />
+          </div>
+        );
       default:
         return <Clock size={16} className="status-icon pending" />;
     }
@@ -312,7 +351,7 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
             className={`approval-tab ${activeTab === 'under_review' ? 'active' : ''}`}
             onClick={() => setActiveTab('under_review')}
           >
-            Under Review ({allRequests.filter(r => r.status === 'under_review').length})
+            Under Review ({allRequests.filter(r => r.status === 'under_review' || r.status === 'partially_approved').length})
           </button>
           <button
             className={`approval-tab ${activeTab === 'history' ? 'active' : ''}`}
@@ -441,13 +480,23 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
                           Under Review
                         </Button>
                       )}
+                      {isMultiDayRequest(request) && (
+                        <Button
+                          variant="primary"
+                          size="small"
+                          onClick={() => setShowPartialApproval(request)}
+                          disabled={processingId === request.id}
+                        >
+                          Partial Review
+                        </Button>
+                      )}
                       <Button
                         variant="success"
                         size="small"
                         onClick={() => handleApprove(request)}
                         disabled={processingId === request.id}
                       >
-                        Approve
+                        Approve All
                       </Button>
                       <Button
                         variant="danger"
@@ -455,7 +504,7 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
                         onClick={() => setShowDenialDialog(request)}
                         disabled={processingId === request.id}
                       >
-                        Deny
+                        Deny All
                       </Button>
                     </div>
                   ) : (
@@ -476,6 +525,27 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
                             </span>
                           )}
                         </>
+                      )}
+                      {request.status === 'partially_approved' && request.dayStatuses && (
+                        <div>
+                          <span className="status-text partially-approved">
+                            Partially Approved - {Object.values(request.dayStatuses).filter(d => d.status === 'approved').length} of {calculateDays(request.startDate, request.endDate).replace(' days', '').replace(' day', '')} days approved
+                          </span>
+                          <div style={{ marginTop: '8px', fontSize: '12px' }}>
+                            Last reviewed by {request.lastReviewerName} on {formatDate(request.lastReviewedAt)}
+                          </div>
+                          {isMultiDayRequest(request) && (
+                            <Button
+                              variant="primary"
+                              size="small"
+                              onClick={() => setShowPartialApproval(request)}
+                              disabled={processingId === request.id}
+                              style={{ marginTop: '8px' }}
+                            >
+                              Continue Review
+                            </Button>
+                          )}
+                        </div>
                       )}
                       {(userProfile?.role === 'admin' || userProfile?.role === 'manager' || userProfile?.role === 'owner') && canUndoStatus(request) && (
                         <Button
@@ -566,6 +636,17 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
             </div>
           </div>
         </div>
+      )}
+
+      {/* Partial Approval Modal */}
+      {showPartialApproval && (
+        <TimeOffPartialApprovalModal
+          isOpen={true}
+          onClose={() => setShowPartialApproval(null)}
+          request={showPartialApproval}
+          userProfile={userProfile}
+          onApprove={handlePartialApproval}
+        />
       )}
     </div>
   );

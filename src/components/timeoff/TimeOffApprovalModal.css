@@ -185,6 +185,11 @@
   color: #dc3545;
 }
 
+.status-text.partially-approved {
+  color: #f59e0b;
+  font-weight: 500;
+}
+
 .denial-reason {
   display: block;
   font-size: 14px;

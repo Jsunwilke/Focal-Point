@@ -126,11 +126,17 @@ export const WorkflowProvider = ({ children }) => {
         }
         
         if (!workflowTemplatesRef.current[workflow.templateId]) {
-          readCounter.recordCacheMiss('workflowTemplates', 'WorkflowContext-template');
-          const template = await getWorkflowTemplate(workflow.templateId);
-          workflowCacheService.setCachedTemplate(workflow.templateId, template);
-          workflowTemplatesRef.current[workflow.templateId] = template;
-          return { templateId: workflow.templateId, template };
+          try {
+            readCounter.recordCacheMiss('workflowTemplates', 'WorkflowContext-template');
+            const template = await getWorkflowTemplate(workflow.templateId);
+            workflowCacheService.setCachedTemplate(workflow.templateId, template);
+            workflowTemplatesRef.current[workflow.templateId] = template;
+            return { templateId: workflow.templateId, template };
+          } catch (error) {
+            // Log as warning for missing templates
+            console.warn(`Template ${workflow.templateId} not found or no permission:`, error.message);
+            return { templateId: workflow.templateId, template: null };
+          }
         }
         return null;
       });
@@ -138,7 +144,7 @@ export const WorkflowProvider = ({ children }) => {
       const templateResults = await Promise.all(templatePromises);
       const newTemplates = {};
       templateResults.forEach(result => {
-        if (result) {
+        if (result && result.template) {
           newTemplates[result.templateId] = result.template;
         }
       });
@@ -549,11 +555,21 @@ export const WorkflowProvider = ({ children }) => {
           const allTemplatePromises = templateGroups.map(async (group) => {
             try {
               // This would be more efficient with a batch query, but for now load individually
-              const promises = group.map(templateId => getWorkflowTemplate(templateId));
+              const promises = group.map(async (templateId) => {
+                try {
+                  const template = await getWorkflowTemplate(templateId);
+                  return { templateId, template };
+                } catch (error) {
+                  // Log as warning instead of error for missing templates
+                  console.warn(`Template ${templateId} not found or no permission:`, error.message);
+                  return { templateId, template: null };
+                }
+              });
               const results = await Promise.all(promises);
-              return group.map((templateId, index) => ({ templateId, template: results[index] }));
+              // Filter out null templates
+              return results.filter(result => result.template !== null);
             } catch (error) {
-              console.error('Failed to load template group:', error);
+              console.warn('Failed to load template group:', error.message);
               return [];
             }
           });

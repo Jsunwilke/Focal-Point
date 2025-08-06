@@ -32,6 +32,7 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
   // Check if user has admin/manager permissions
   const isAdminOrManager = userProfile?.role === 'admin' || userProfile?.role === 'manager';
   const isAdminOnly = userProfile?.role === 'admin';
+  const isAccountant = userProfile?.isAccountant === true;
 
   // Navigation items with Lucide icons
   const navigationItems = [
@@ -188,8 +189,17 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
 
       <nav className="sidebar__nav">
         <ul className="sidebar__nav-list">
+          {console.log('Sidebar rendering - isAccountant:', userProfile?.isAccountant, 'role:', userProfile?.role)}
           {navigationItems
-            .filter(item => !item.adminOnly || isAdminOnly)
+            .filter(item => {
+              // If user is an accountant, only show payroll and settings
+              // This takes priority even if they have admin role
+              if (userProfile && userProfile.isAccountant === true) {
+                return item.id === 'payroll' || item.id === 'settings';
+              }
+              // Otherwise, use existing logic
+              return !item.adminOnly || isAdminOnly || isAdminOrManager;
+            })
             .map((item) => {
             const IconComponent = item.icon;
             return (

@@ -317,12 +317,28 @@ const calculateDailyHours = (userEntries, startDate, endDate) => {
 const calculateOvertime = (userEntries, startDate, endDate, overtimeSettings = null) => {
   const dailyHours = calculateDailyHours(userEntries, startDate, endDate);
   
+  // Check if this is a bi-weekly period
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const daysDiff = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
+  const isBiWeeklyPeriod = daysDiff >= 13 && daysDiff <= 15;
+  
   // Use default settings if not provided
   const settings = overtimeSettings || {
-    calculationMethod: 'daily',
+    calculationMethod: isBiWeeklyPeriod ? 'weekly' : 'daily',
     dailyThreshold: 8,
     weeklyThreshold: 40
   };
+  
+  // Debug logging
+  console.log('Overtime Calculation Debug:', {
+    startDate,
+    endDate,
+    daysDiff,
+    isBiWeeklyPeriod,
+    calculationMethod: settings.calculationMethod,
+    overtimeSettings: overtimeSettings
+  });
   
   let dailyOvertime = 0;
   let weeklyOvertime = 0;
@@ -339,10 +355,65 @@ const calculateOvertime = (userEntries, startDate, endDate, overtimeSettings = n
   
   // Group entries by week for weekly overtime calculation
   if (settings.calculationMethod === 'weekly') {
-    // For weekly calculation method, calculate overtime for the entire pay period
-    // Most studios that use weekly overtime calculate it as total hours over 40 for the pay period
-    if (totalHours > settings.weeklyThreshold) {
-      weeklyOvertime = totalHours - settings.weeklyThreshold;
+    // Check if this is a bi-weekly pay period (13-15 days)
+    // Note: daysDiff already calculated above
+    
+    if (isBiWeeklyPeriod) {
+      console.log('Bi-weekly overtime calculation triggered');
+      // For bi-weekly periods, calculate overtime per week
+      // Split the period into two weeks
+      const weekBoundary = new Date(start);
+      weekBoundary.setDate(weekBoundary.getDate() + 6);
+      weekBoundary.setHours(23, 59, 59, 999);
+      
+      console.log('Week boundary calculation:', {
+        startDate: start.toISOString(),
+        weekBoundary: weekBoundary.toISOString(),
+        endDate: end.toISOString()
+      });
+      
+      // Calculate hours for each week
+      let week1Hours = 0;
+      let week2Hours = 0;
+      
+      // Log the dates being processed
+      console.log('Daily hours entries:', Object.entries(dailyHours).map(([date, data]) => ({
+        date,
+        hours: data.hours
+      })));
+      
+      Object.entries(dailyHours).forEach(([dateStr, dayData]) => {
+        const date = new Date(dateStr);
+        if (date <= weekBoundary) {
+          week1Hours += dayData.hours;
+        } else {
+          week2Hours += dayData.hours;
+        }
+      });
+      
+      // Calculate overtime for each week separately
+      const week1Overtime = week1Hours > settings.weeklyThreshold ? week1Hours - settings.weeklyThreshold : 0;
+      const week2Overtime = week2Hours > settings.weeklyThreshold ? week2Hours - settings.weeklyThreshold : 0;
+      weeklyOvertime = week1Overtime + week2Overtime;
+      
+      console.log('Bi-weekly overtime breakdown:', {
+        week1Hours,
+        week1Overtime,
+        week2Hours,
+        week2Overtime,
+        totalWeeklyOvertime: weeklyOvertime,
+        weeklyThreshold: settings.weeklyThreshold
+      });
+    } else {
+      // For non-bi-weekly periods, calculate overtime for the entire period
+      if (totalHours > settings.weeklyThreshold) {
+        weeklyOvertime = totalHours - settings.weeklyThreshold;
+      }
+      console.log('Non-bi-weekly period - calculating overtime for entire period:', {
+        totalHours,
+        weeklyThreshold: settings.weeklyThreshold,
+        weeklyOvertime
+      });
     }
   } else {
     // For daily method, still calculate weekly for informational purposes
@@ -357,6 +428,13 @@ const calculateOvertime = (userEntries, startDate, endDate, overtimeSettings = n
 
   // Determine which overtime to use based on calculation method
   const overtimeHours = settings.calculationMethod === 'weekly' ? weeklyOvertime : dailyOvertime;
+  
+  console.log('Final overtime calculation:', {
+    dailyOvertime,
+    weeklyOvertime,
+    selectedMethod: settings.calculationMethod,
+    finalOvertimeHours: overtimeHours
+  });
 
   return {
     daily: {

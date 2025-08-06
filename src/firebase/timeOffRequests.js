@@ -401,6 +401,85 @@ export const getApprovedTimeOffForDateRange = async (organizationId, startDate, 
   }
 };
 
+// Approve time off request partially (day by day)
+export const approveTimeOffRequestPartial = async (requestId, dayApprovals, approverId, approverName) => {
+  try {
+    const docRef = doc(firestore, 'timeOffRequests', requestId);
+    
+    // Get current request data
+    const requestDoc = await getDoc(docRef, 'approveTimeOffRequestPartial');
+    if (!requestDoc.exists()) {
+      throw new Error('Time off request not found');
+    }
+    
+    const currentData = requestDoc.data();
+    const existingDayStatuses = currentData.dayStatuses || {};
+    
+    // Merge new day approvals with existing ones
+    const updatedDayStatuses = { ...existingDayStatuses };
+    Object.entries(dayApprovals).forEach(([date, approval]) => {
+      updatedDayStatuses[date] = {
+        ...approval,
+        updatedAt: serverTimestamp()
+      };
+    });
+    
+    // Calculate overall status
+    const allDates = Object.keys(updatedDayStatuses);
+    const approvedCount = allDates.filter(date => updatedDayStatuses[date].status === 'approved').length;
+    const deniedCount = allDates.filter(date => updatedDayStatuses[date].status === 'denied').length;
+    const totalDays = Math.ceil((currentData.endDate.toDate() - currentData.startDate.toDate()) / (1000 * 60 * 60 * 24)) + 1;
+    
+    let overallStatus = 'pending';
+    let hasPartialApproval = false;
+    
+    if (approvedCount === totalDays) {
+      overallStatus = 'approved';
+    } else if (deniedCount === totalDays) {
+      overallStatus = 'denied';
+    } else if (approvedCount > 0 || deniedCount > 0) {
+      overallStatus = 'partially_approved';
+      hasPartialApproval = true;
+    }
+    
+    const updates = {
+      dayStatuses: updatedDayStatuses,
+      hasPartialApproval,
+      status: overallStatus,
+      lastReviewedBy: approverId,
+      lastReviewerName: approverName,
+      lastReviewedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    
+    // Add overall approval/denial fields if fully approved/denied
+    if (overallStatus === 'approved') {
+      updates.approvedBy = approverId;
+      updates.approverName = approverName;
+      updates.approvedAt = serverTimestamp();
+    } else if (overallStatus === 'denied') {
+      updates.deniedBy = approverId;
+      updates.denierName = approverName;
+      updates.deniedAt = serverTimestamp();
+    }
+    
+    await updateDoc(docRef, updates);
+    
+    // Clear relevant caches
+    timeOffCacheService.clearTimeOffRequestsCache(currentData.organizationID);
+    localStorage.removeItem(`datacache_timeoff_${currentData.organizationID}`);
+    
+    if (currentData.photographerId) {
+      timeOffCacheService.clearUserTimeOffRequestsCache(currentData.photographerId);
+    }
+    
+    return { id: requestId, ...updates };
+  } catch (error) {
+    console.error('Error approving time off request partially:', error);
+    throw error;
+  }
+};
+
 // Check for conflicts with existing sessions
 export const checkTimeOffConflicts = async (organizationId, photographerId, startDate, endDate) => {
   try {

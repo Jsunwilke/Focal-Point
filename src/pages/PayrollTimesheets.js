@@ -41,8 +41,9 @@ const PayrollTimesheets = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [activeTab, setActiveTab] = useState('time'); // 'time' or 'mileage'
 
-  // Check if user has admin/manager permissions
+  // Check if user has admin/manager permissions or is an accountant
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager';
+  const isAccountant = userProfile?.isAccountant === true;
 
   useEffect(() => {
     if (selectedPeriod && organization?.id) {
@@ -184,15 +185,15 @@ const PayrollTimesheets = () => {
     setCustomDates(dates);
   };
 
-  // Access control - redirect if not admin/manager
-  if (!isAdmin) {
+  // Access control - redirect if not admin/manager/accountant
+  if (!isAdmin && !isAccountant) {
     return (
       <div className="payroll-access-denied">
         <div className="access-denied-content">
           <Shield size={64} className="access-denied-icon" />
           <h2>Access Restricted</h2>
           <p>
-            Payroll timesheets are only available to administrators and managers.
+            Payroll timesheets are only available to administrators, managers, and accountants.
             Please contact your organization administrator if you need access.
           </p>
         </div>

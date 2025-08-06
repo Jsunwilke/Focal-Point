@@ -1,0 +1,159 @@
+/* src/components/timeoff/TimeOffPartialApprovalModal.css */
+
+.partial-approval-modal {
+  width: 100%;
+  max-width: 800px;
+}
+
+.partial-approval-modal .modal__subtitle {
+  margin-top: 4px;
+  font-size: 14px;
+  color: #6c757d;
+  font-weight: normal;
+}
+
+.partial-approval-modal .error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #dc2626;
+  font-size: 14px;
+}
+
+.partial-approval-modal .request-summary {
+  background-color: #f8f9fa;
+}
+
+.partial-approval-modal .summary-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.partial-approval-modal .summary-row:last-child {
+  margin-bottom: 0;
+}
+
+.partial-approval-modal .status-summary {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.partial-approval-modal .status-counts {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+
+.partial-approval-modal .status-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.partial-approval-modal .status-count.approved {
+  color: #16a34a;
+}
+
+.partial-approval-modal .status-count.denied {
+  color: #dc2626;
+}
+
+.partial-approval-modal .status-count.pending {
+  color: #6b7280;
+}
+
+.partial-approval-modal .bulk-actions {
+  display: flex;
+  gap: 8px;
+  padding: 16px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.partial-approval-modal .days-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.partial-approval-modal .day-row {
+  transition: all 0.2s ease;
+}
+
+.partial-approval-modal .day-row:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.partial-approval-modal .day-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.partial-approval-modal .day-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.partial-approval-modal .day-actions .btn--small {
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
+.partial-approval-modal .denial-reason-input input {
+  transition: border-color 0.2s ease;
+}
+
+.partial-approval-modal .denial-reason-input input:focus {
+  outline: none;
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
+/* Mobile responsive */
+@media (max-width: 640px) {
+  .partial-approval-modal {
+    max-width: 100%;
+    margin: 10px;
+  }
+
+  .partial-approval-modal .status-counts {
+    gap: 16px;
+  }
+
+  .partial-approval-modal .day-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .partial-approval-modal .day-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .partial-approval-modal .bulk-actions {
+    flex-direction: column;
+  }
+
+  .partial-approval-modal .bulk-actions .btn {
+    width: 100%;
+    margin-left: 0 !important;
+    margin-top: 8px;
+  }
+
+  .partial-approval-modal .bulk-actions .btn:first-child {
+    margin-top: 0;
+  }
+}
