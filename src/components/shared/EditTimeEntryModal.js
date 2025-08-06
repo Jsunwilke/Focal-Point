@@ -25,6 +25,7 @@ const EditTimeEntryModal = ({ isOpen, onClose, onSuccess, timeEntry }) => {
   
   const [formData, setFormData] = useState({
     date: '',
+    clockOutDate: '',
     sessionId: '',
     clockInTime: '',
     clockOutTime: '',
@@ -42,8 +43,12 @@ const EditTimeEntryModal = ({ isOpen, onClose, onSuccess, timeEntry }) => {
       const clockInDate = timeEntry.clockInTime?.toDate ? timeEntry.clockInTime.toDate() : new Date(timeEntry.clockInTime);
       const clockOutDate = timeEntry.clockOutTime?.toDate ? timeEntry.clockOutTime.toDate() : new Date(timeEntry.clockOutTime);
       
+      // Extract the date part for clock out (might be different day)
+      const clockOutDateStr = `${clockOutDate.getFullYear()}-${String(clockOutDate.getMonth() + 1).padStart(2, '0')}-${String(clockOutDate.getDate()).padStart(2, '0')}`;
+      
       setFormData({
         date: timeEntry.date,
+        clockOutDate: clockOutDateStr,
         sessionId: timeEntry.sessionId || '',
         clockInTime: clockInDate.toTimeString().slice(0, 5), // HH:MM format
         clockOutTime: clockOutDate.toTimeString().slice(0, 5), // HH:MM format
@@ -97,6 +102,30 @@ const EditTimeEntryModal = ({ isOpen, onClose, onSuccess, timeEntry }) => {
       }
     }
 
+    // Clock out date validation
+    if (!formData.clockOutDate) {
+      newErrors.clockOutDate = 'Clock out date is required';
+    } else {
+      const clockOutDate = new Date(formData.clockOutDate);
+      const clockInDate = new Date(formData.date);
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+      
+      if (clockOutDate > today) {
+        newErrors.clockOutDate = 'Cannot set clock out date in the future';
+      }
+      
+      if (clockOutDate < clockInDate) {
+        newErrors.clockOutDate = 'Clock out date cannot be before clock in date';
+      }
+      
+      // Check that clock out date is not more than 1 day after clock in
+      const daysDiff = Math.floor((clockOutDate - clockInDate) / (1000 * 60 * 60 * 24));
+      if (daysDiff > 1) {
+        newErrors.clockOutDate = 'Shift cannot span more than 2 days';
+      }
+    }
+
     // Time validation
     if (!formData.clockInTime) {
       newErrors.clockInTime = 'Clock in time is required';
@@ -106,18 +135,18 @@ const EditTimeEntryModal = ({ isOpen, onClose, onSuccess, timeEntry }) => {
       newErrors.clockOutTime = 'Clock out time is required';
     }
 
-    if (formData.clockInTime && formData.clockOutTime) {
+    if (formData.clockInTime && formData.clockOutTime && formData.date && formData.clockOutDate) {
       const clockIn = new Date(`${formData.date}T${formData.clockInTime}`);
-      const clockOut = new Date(`${formData.date}T${formData.clockOutTime}`);
+      const clockOut = new Date(`${formData.clockOutDate}T${formData.clockOutTime}`);
       
       if (clockOut <= clockIn) {
         newErrors.clockOutTime = 'Clock out time must be after clock in time';
       }
 
-      // Check for reasonable work hours (not more than 16 hours)
+      // Check for reasonable work hours (not more than 24 hours)
       const diffHours = (clockOut - clockIn) / (1000 * 60 * 60);
-      if (diffHours > 16) {
-        newErrors.clockOutTime = 'Work session cannot exceed 16 hours';
+      if (diffHours > 24) {
+        newErrors.clockOutTime = 'Work session cannot exceed 24 hours';
       }
     }
 
@@ -167,7 +196,7 @@ const EditTimeEntryModal = ({ isOpen, onClose, onSuccess, timeEntry }) => {
     try {
       // Check for time overlaps with other entries (excluding current entry)
       const clockInDateTime = new Date(`${formData.date}T${formData.clockInTime}`);
-      const clockOutDateTime = new Date(`${formData.date}T${formData.clockOutTime}`);
+      const clockOutDateTime = new Date(`${formData.clockOutDate}T${formData.clockOutTime}`);
       
       const overlapResult = await checkTimeOverlap(
         user.uid,
@@ -228,7 +257,7 @@ const EditTimeEntryModal = ({ isOpen, onClose, onSuccess, timeEntry }) => {
     
     try {
       const clockInDateTime = new Date(`${formData.date}T${formData.clockInTime}`);
-      const clockOutDateTime = new Date(`${formData.date}T${formData.clockOutTime}`);
+      const clockOutDateTime = new Date(`${formData.clockOutDate}T${formData.clockOutTime}`);
       
       const updateData = {
         clockInTime: clockInDateTime,
@@ -281,9 +310,9 @@ const EditTimeEntryModal = ({ isOpen, onClose, onSuccess, timeEntry }) => {
   };
 
   const calculateDuration = () => {
-    if (formData.clockInTime && formData.clockOutTime) {
+    if (formData.clockInTime && formData.clockOutTime && formData.date && formData.clockOutDate) {
       const clockIn = new Date(`${formData.date}T${formData.clockInTime}`);
-      const clockOut = new Date(`${formData.date}T${formData.clockOutTime}`);
+      const clockOut = new Date(`${formData.clockOutDate}T${formData.clockOutTime}`);
       
       if (clockOut > clockIn) {
         const diffMs = clockOut - clockIn;
@@ -343,36 +372,6 @@ const EditTimeEntryModal = ({ isOpen, onClose, onSuccess, timeEntry }) => {
 
         {/* Content */}
         <form onSubmit={handleSubmit} className="modal-content">
-          {/* Date Selection */}
-          <div className="form-section">
-            <div className="form-group">
-              <label>Date *</label>
-              <div className="date-input-group">
-                <Calendar size={16} />
-                <input
-                  type="date"
-                  name="date"
-                  value={formData.date}
-                  onChange={handleInputChange}
-                  max={new Date().toISOString().split('T')[0]}
-                  className={errors.date ? 'error' : ''}
-                  required
-                />
-              </div>
-              {errors.date && (
-                <div className="error-message">
-                  <AlertCircle size={14} />
-                  <span>{errors.date}</span>
-                </div>
-              )}
-              {formData.date && (
-                <div className="date-preview">
-                  {formatDate(formData.date)}
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Session Selection */}
           <div className="form-section">
             <div className="form-group">
@@ -400,11 +399,33 @@ const EditTimeEntryModal = ({ isOpen, onClose, onSuccess, timeEntry }) => {
             </div>
           </div>
 
-          {/* Time Inputs */}
+          {/* Clock In Date and Time */}
           <div className="form-section">
-            <div className="time-inputs-grid">
+            <h4 className="section-title">Clock In</h4>
+            <div className="datetime-inputs-grid">
               <div className="form-group">
-                <label>Clock In Time *</label>
+                <label>Date *</label>
+                <div className="date-input-group">
+                  <Calendar size={16} />
+                  <input
+                    type="date"
+                    name="date"
+                    value={formData.date}
+                    onChange={handleInputChange}
+                    max={new Date().toISOString().split('T')[0]}
+                    className={errors.date ? 'error' : ''}
+                    required
+                  />
+                </div>
+                {errors.date && (
+                  <div className="error-message">
+                    <AlertCircle size={14} />
+                    <span>{errors.date}</span>
+                  </div>
+                )}
+              </div>
+              <div className="form-group">
+                <label>Time *</label>
                 <input
                   type="time"
                   name="clockInTime"
@@ -420,9 +441,37 @@ const EditTimeEntryModal = ({ isOpen, onClose, onSuccess, timeEntry }) => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
 
+          {/* Clock Out Date and Time */}
+          <div className="form-section">
+            <h4 className="section-title">Clock Out</h4>
+            <div className="datetime-inputs-grid">
               <div className="form-group">
-                <label>Clock Out Time *</label>
+                <label>Date *</label>
+                <div className="date-input-group">
+                  <Calendar size={16} />
+                  <input
+                    type="date"
+                    name="clockOutDate"
+                    value={formData.clockOutDate}
+                    onChange={handleInputChange}
+                    max={new Date().toISOString().split('T')[0]}
+                    min={formData.date}
+                    className={errors.clockOutDate ? 'error' : ''}
+                    required
+                  />
+                </div>
+                {errors.clockOutDate && (
+                  <div className="error-message">
+                    <AlertCircle size={14} />
+                    <span>{errors.clockOutDate}</span>
+                  </div>
+                )}
+              </div>
+              <div className="form-group">
+                <label>Time *</label>
                 <input
                   type="time"
                   name="clockOutTime"

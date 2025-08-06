@@ -72,6 +72,13 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       enabled: true,
     },
     {
+      id: "workflows2",
+      label: "Workflows (SQL)",
+      icon: Workflow,
+      path: "/workflows2",
+      enabled: true,
+    },
+    {
       id: "chat",
       label: "Chat",
       icon: MessageCircle,

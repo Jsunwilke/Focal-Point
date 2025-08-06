@@ -373,7 +373,7 @@ const PayrollTable = ({ payrollData, loading, onEmployeeSelect }) => {
                               <div className="time-entry-cell">{formattedEntry.duration}</div>
                               <div className="time-entry-cell">
                                 <span className={`status-badge status-badge--${formattedEntry.status}`}>
-                                  {formattedEntry.status}
+                                  {formattedEntry.status === 'clocked-in' ? 'ACTIVE' : formattedEntry.status}
                                 </span>
                               </div>
                               <div className="time-entry-cell time-entry-notes">

@@ -12,7 +12,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
-  Download
+  Download,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -20,6 +21,7 @@ import {
   getCurrentTimeEntry,
   clockIn,
   clockOut,
+  clockOutManual,
   getTimeEntries,
   getTodayTimeEntries,
   calculateTotalHours,
@@ -43,6 +45,9 @@ const TimeTrackingModal = ({ isOpen, onClose }) => {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentDate, setCurrentDate] = useState(new Date().toISOString().split('T')[0]);
   const [dateRange, setDateRange] = useState('today');
+  const [manualClockOut, setManualClockOut] = useState(false);
+  const [clockOutDate, setClockOutDate] = useState('');
+  const [clockOutTime, setClockOutTime] = useState('');
 
   // Load data when modal opens
   useEffect(() => {
@@ -64,13 +69,22 @@ const TimeTrackingModal = ({ isOpen, onClose }) => {
         const now = new Date();
         const elapsed = (now.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
         setElapsedTime(elapsed);
+        
+        // If shift is longer than 12 hours, suggest manual clock out
+        if (elapsed > 12 && !manualClockOut) {
+          // Set default clock out date/time
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          setClockOutDate(yesterday.toISOString().split('T')[0]);
+          setClockOutTime('23:59');
+        }
       }, 1000);
     }
 
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [currentEntry]);
+  }, [currentEntry, manualClockOut]);
 
   const loadTimeData = async () => {
     try {
@@ -154,10 +168,38 @@ const TimeTrackingModal = ({ isOpen, onClose }) => {
       // Reload data
       await loadTimeData();
       setNotes('');
+      setManualClockOut(false);
       
       addToast('Clocked out successfully!', 'success');
     } catch (error) {
       console.error('Error clocking out:', error);
+      addToast(error.message || 'Failed to clock out', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleManualClockOut = async () => {
+    if (!clockOutDate || !clockOutTime) {
+      addToast('Please select both date and time for clock out', 'error');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const clockOutDateTime = new Date(`${clockOutDate}T${clockOutTime}`);
+      await clockOutManual(user.uid, organization.id, clockOutDateTime, notes || null);
+      
+      // Reload data
+      await loadTimeData();
+      setNotes('');
+      setManualClockOut(false);
+      setClockOutDate('');
+      setClockOutTime('');
+      
+      addToast('Clocked out successfully!', 'success');
+    } catch (error) {
+      console.error('Error with manual clock out:', error);
       addToast(error.message || 'Failed to clock out', 'error');
     } finally {
       setLoading(false);
@@ -317,6 +359,58 @@ const TimeTrackingModal = ({ isOpen, onClose }) => {
 
               {isOnBreak && (
                 <div className="clock-out-section">
+                  {/* Long shift warning */}
+                  {elapsedTime > 12 && (
+                    <div className="long-shift-warning">
+                      <AlertCircle size={16} />
+                      <span>You've been clocked in for over {Math.floor(elapsedTime)} hours!</span>
+                    </div>
+                  )}
+                  
+                  {/* Manual clock out toggle */}
+                  {elapsedTime > 12 && (
+                    <div className="clock-out-mode-toggle">
+                      <button
+                        type="button"
+                        className={`mode-btn ${!manualClockOut ? 'active' : ''}`}
+                        onClick={() => setManualClockOut(false)}
+                      >
+                        Clock Out Now
+                      </button>
+                      <button
+                        type="button"
+                        className={`mode-btn ${manualClockOut ? 'active' : ''}`}
+                        onClick={() => setManualClockOut(true)}
+                      >
+                        Set Custom Time
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Manual clock out fields */}
+                  {manualClockOut && (
+                    <div className="manual-clock-out-fields">
+                      <div className="form-group">
+                        <label>Clock Out Date *</label>
+                        <input
+                          type="date"
+                          value={clockOutDate}
+                          onChange={(e) => setClockOutDate(e.target.value)}
+                          min={currentEntry?.date || ''}
+                          max={new Date().toISOString().split('T')[0]}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Clock Out Time *</label>
+                        <input
+                          type="time"
+                          value={clockOutTime}
+                          onChange={(e) => setClockOutTime(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="form-group">
                     <label>Notes (Optional)</label>
                     <textarea
@@ -342,11 +436,11 @@ const TimeTrackingModal = ({ isOpen, onClose }) => {
                 ) : (
                   <button
                     className="clock-btn clock-out-btn"
-                    onClick={handleClockOut}
-                    disabled={loading}
+                    onClick={manualClockOut ? handleManualClockOut : handleClockOut}
+                    disabled={loading || (manualClockOut && (!clockOutDate || !clockOutTime))}
                   >
                     <Square size={18} />
-                    {loading ? 'Clocking Out...' : 'Clock Out'}
+                    {loading ? 'Clocking Out...' : (manualClockOut ? 'Confirm Clock Out' : 'Clock Out')}
                   </button>
                 )}
               </div>

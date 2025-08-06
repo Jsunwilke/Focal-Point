@@ -30,8 +30,8 @@ const UpcomingSessionsWidget = ({ onSessionClick }) => {
         today.setHours(0, 0, 0, 0); // Start of today
         
         const endDate = new Date(now);
-        endDate.setDate(endDate.getDate() + 14); // Next 14 days
-        endDate.setHours(23, 59, 59, 999); // End of the 14th day
+        endDate.setDate(endDate.getDate() + 3); // Next 3 days
+        endDate.setHours(23, 59, 59, 999); // End of the 3rd day
 
         // Format dates as strings for consistent comparison
         const formatDateString = (date) => {

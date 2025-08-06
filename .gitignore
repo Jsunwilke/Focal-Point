@@ -74,3 +74,5 @@ firestore-debug.log
 # Temporary files
 *.tmp
 *.temp
+
+/src/generated/prisma

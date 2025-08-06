@@ -727,7 +727,7 @@
 /* Summary Cards */
 .payroll-summary-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--spacing-md);
   margin-bottom: var(--spacing-lg);
 }
@@ -763,6 +763,9 @@
   font-weight: var(--font-weight-bold);
   color: var(--text-primary);
   margin-bottom: var(--spacing-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .summary-card-label {
@@ -1199,17 +1202,35 @@
 }
 
 .status-badge {
-  padding: 2px 6px;
+  padding: 4px 8px;
   border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  display: inline-block;
+  min-width: 60px;
+  text-align: center;
 }
 
 .status-badge--clocked-in {
-  background: var(--success-light);
-  color: var(--success-color);
+  background: #10b981;
+  color: white;
+  animation: pulse 2s infinite;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+  font-weight: 700;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
 }
 
 .status-badge--clocked-out {

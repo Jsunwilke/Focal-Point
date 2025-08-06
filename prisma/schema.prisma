@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Workflow {
+  id             String          @id @default(cuid())
+  name           String
+  description    String?
+  organizationId String
+  isActive       Boolean         @default(true)
+  isDefault      Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  createdBy      String?
+  items          WorkflowItem[]
+  stages         WorkflowStage[]
+
+  @@index([organizationId])
+  @@index([organizationId, isActive])
+}
+
+model WorkflowStage {
+  id          String         @id @default(cuid())
+  workflowId  String
+  name        String
+  description String?
+  order       Int
+  color       String?
+  icon        String?
+  isCompleted Boolean        @default(false)
+  settings    Json?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  items       WorkflowItem[]
+  workflow    Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@index([workflowId, order])
+}
+
+model WorkflowItem {
+  id             String        @id @default(cuid())
+  workflowId     String
+  stageId        String
+  type           String
+  title          String
+  description    String?
+  priority       String?
+  status         String?
+  jobId          String?
+  sessionId      String?
+  schoolId       String?
+  photographerId String?
+  metadata       Json?
+  tags           String[]
+  dueDate        DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  createdBy      String?
+  assignedTo     String?
+  stage          WorkflowStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  workflow       Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId, stageId])
+  @@index([workflowId, createdAt])
+  @@index([stageId])
+  @@index([jobId])
+  @@index([sessionId])
+}

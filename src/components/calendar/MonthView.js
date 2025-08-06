@@ -217,16 +217,35 @@ const MonthView = ({
     // Combine grouped regular sessions with individual time off entries
     const finalSessions = [...uniqueSessionsArray, ...timeOffSessions];
     
+    // Sort sessions by start time, then by end time
+    const sortedSessions = finalSessions.sort((a, b) => {
+      // First sort by start time
+      if (a.startTime && b.startTime) {
+        const startComparison = a.startTime.localeCompare(b.startTime);
+        if (startComparison !== 0) {
+          return startComparison;
+        }
+        // If start times are the same, sort by end time
+        if (a.endTime && b.endTime) {
+          return a.endTime.localeCompare(b.endTime);
+        }
+      }
+      // Keep time off sessions at the end if no time specified
+      if (a.isTimeOff && !b.isTimeOff) return 1;
+      if (!a.isTimeOff && b.isTimeOff) return -1;
+      return 0;
+    });
+    
     // Filter based on schedule type
     if (scheduleType === "my") {
-      return finalSessions.filter((session) =>
+      return sortedSessions.filter((session) =>
         session.photographerId === userProfile?.id || 
         (session.photographerIds && session.photographerIds.includes(userProfile?.id)) ||
         (session.allPhotographers && session.allPhotographers.includes(userProfile?.id))
       );
     }
     
-    return finalSessions;
+    return sortedSessions;
   };
 
 

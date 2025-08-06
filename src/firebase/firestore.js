@@ -2068,6 +2068,55 @@ export const clockOut = async (userId, organizationID, notes = null) => {
   }
 };
 
+// Clock out with manual date/time (for fixing forgotten clock outs)
+export const clockOutManual = async (userId, organizationID, clockOutDateTime, notes = null) => {
+  try {
+    const currentEntry = await getCurrentTimeEntry(userId, organizationID);
+    
+    if (!currentEntry) {
+      throw new Error("No active time entry found. Please clock in first.");
+    }
+
+    // Get the clock in time to validate
+    const clockInTime = currentEntry.clockInTime?.toDate ? 
+      currentEntry.clockInTime.toDate() : 
+      new Date(currentEntry.clockInTime);
+    
+    // Validate clock out time is after clock in
+    if (clockOutDateTime <= clockInTime) {
+      throw new Error("Clock out time must be after clock in time.");
+    }
+    
+    // Validate clock out is not in the future
+    if (clockOutDateTime > new Date()) {
+      throw new Error("Cannot clock out in the future.");
+    }
+    
+    // Validate shift is not longer than 24 hours
+    const diffHours = (clockOutDateTime - clockInTime) / (1000 * 60 * 60);
+    if (diffHours > 24) {
+      throw new Error("Shift cannot exceed 24 hours.");
+    }
+
+    const updateData = {
+      clockOutTime: Timestamp.fromDate(clockOutDateTime),
+      status: "clocked-out",
+      updatedAt: serverTimestamp(),
+    };
+
+    if (notes) {
+      updateData.notes = notes;
+    }
+
+    await updateDoc(doc(firestore, "timeEntries", currentEntry.id), updateData);
+    console.log("Manual clock out successful:", currentEntry.id);
+    return currentEntry.id;
+  } catch (error) {
+    console.error("Error with manual clock out:", error);
+    throw error;
+  }
+};
+
 // Get current active time entry for a user
 export const getCurrentTimeEntry = async (userId, organizationID) => {
   try {
