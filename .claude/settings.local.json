@@ -71,7 +71,8 @@
       "WebFetch(domain:blog.pixieset.com)",
       "WebFetch(domain:api.imagequix-dev.com)",
       "Bash(cd:*)",
-      "Bash(timeout 30 npm start)"
+      "Bash(timeout 30 npm start)",
+      "Bash(firebase login:ci:*)"
     ],
     "deny": []
   }

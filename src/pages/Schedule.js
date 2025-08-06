@@ -571,8 +571,13 @@ const Schedule = () => {
   // Handle publishing all unpublished sessions in current view
   const handlePublishSessions = async () => {
     try {
-      // Get all unpublished session IDs from current sessions
-      const unpublishedSessionIds = sessions
+      // Get unpublished session IDs from current view only
+      const sessionsInView = filteredSessions.filter(session => {
+        const sessionDate = new Date(session.date);
+        return sessionDate >= dateRange.start && sessionDate <= dateRange.end;
+      });
+      
+      const unpublishedSessionIds = sessionsInView
         .filter(s => s.isPublished === false)
         .map(s => s.sessionId)
         .filter((id, index, self) => self.indexOf(id) === index); // Remove duplicates
@@ -841,6 +846,14 @@ const Schedule = () => {
 
   // Combine sessions and time off for calendar display
   const allCalendarEntries = [...filteredSessions, ...filteredTimeOff];
+
+  // Get unpublished sessions in current date range only
+  const unpublishedSessionsInView = filteredSessions.filter(session => {
+    const sessionDate = new Date(session.date);
+    return sessionDate >= dateRange.start && 
+           sessionDate <= dateRange.end && 
+           session.isPublished === false;
+  });
 
   // Sort team members based on saved order
   const sortTeamMembersByOrder = (members, order) => {
@@ -1123,9 +1136,9 @@ const Schedule = () => {
             </button>
           )}
           
-          {/* Publish Button - Only visible to admins/managers when unpublished sessions exist */}
+          {/* Publish Button - Only visible to admins/managers when unpublished sessions exist in current view */}
           {(userProfile?.role === 'admin' || userProfile?.role === 'manager') && 
-           sessions.some(s => s.isPublished === false) && (
+           unpublishedSessionsInView.length > 0 && (
             <button 
               className="schedule__publish-btn"
               onClick={handlePublishSessions}
@@ -1147,7 +1160,7 @@ const Schedule = () => {
               onMouseLeave={(e) => e.target.style.backgroundColor = '#28a745'}
             >
               <Check size={16} />
-              <span>Publish ({sessions.filter(s => s.isPublished === false).length})</span>
+              <span>Publish ({unpublishedSessionsInView.length})</span>
             </button>
           )}
         </div>

@@ -56,7 +56,8 @@ export const DataCacheProvider = ({ children }) => {
   });
 
   const [timeOffCache, setTimeOffCache] = useState({
-    data: [],
+    data: [],           // Processed calendar entries for display
+    requests: [],       // Raw time off requests for approval modal
     loading: true,
     lastUpdated: null,
     error: null
@@ -244,8 +245,8 @@ export const DataCacheProvider = ({ children }) => {
     // Convert to calendar entries immediately (like sessions)
     const calendarEntries = [];
     requests.forEach(request => {
-      // Only include approved, pending, and under_review requests
-      if (!['pending', 'under_review', 'approved'].includes(request.status)) return;
+      // Only include approved, pending, under_review, and partially_approved requests
+      if (!['pending', 'under_review', 'approved', 'partially_approved'].includes(request.status)) return;
       
       const startDate = request.startDate?.toDate ? request.startDate.toDate() : new Date(request.startDate);
       const endDate = request.endDate?.toDate ? request.endDate.toDate() : new Date(request.endDate);
@@ -255,9 +256,23 @@ export const DataCacheProvider = ({ children }) => {
       while (currentDate <= endDate) {
         const dateStr = formatLocalDate(currentDate);
         
+        // For partially approved requests, only show approved days
+        if (request.status === 'partially_approved' && request.dayStatuses) {
+          // Check if this specific day is approved
+          const dayStatus = request.dayStatuses[dateStr];
+          if (!dayStatus || dayStatus.status !== 'approved') {
+            // Skip this day if it's not approved
+            currentDate.setDate(currentDate.getDate() + 1);
+            continue;
+          }
+        }
+        
         // Use actual times for partial day, default times for full day
         const displayStartTime = request.isPartialDay && request.startTime ? request.startTime : '09:00';
         const displayEndTime = request.isPartialDay && request.endTime ? request.endTime : '17:00';
+        
+        // For partially approved requests, show as approved on calendar
+        const displayStatus = request.status === 'partially_approved' ? 'approved' : request.status;
         
         calendarEntries.push({
           id: `timeoff-${request.id}-${dateStr}`,
@@ -272,7 +287,7 @@ export const DataCacheProvider = ({ children }) => {
           photographerName: request.photographerName,
           sessionType: 'timeoff',
           sessionTypes: ['timeoff'],
-          status: request.status,
+          status: displayStatus,
           isTimeOff: true,
           isPartialDay: request.isPartialDay || false,
           reason: request.reason,
@@ -694,6 +709,7 @@ export const DataCacheProvider = ({ children }) => {
           
           setTimeOffCache({
             data: processedData,
+            requests: rawRequests,  // Store raw requests for approval modal
             loading: false,
             lastUpdated: new Date(),
             error: null
@@ -742,6 +758,7 @@ export const DataCacheProvider = ({ children }) => {
             
             setTimeOffCache({
               data: processedData,
+              requests: updatedRequests,  // Store raw requests for approval modal
               loading: false,
               lastUpdated: new Date(),
               error: null
@@ -782,6 +799,7 @@ export const DataCacheProvider = ({ children }) => {
       const processedData = processTimeOffData(cachedTimeOff);
       setTimeOffCache({
         data: processedData,
+        requests: cachedTimeOff,  // Store raw requests for approval modal
         loading: false,
         lastUpdated: new Date(),
         error: null
@@ -1137,7 +1155,9 @@ export const DataCacheProvider = ({ children }) => {
     sessions: sessionsCache.data,
     users: usersCache.data,
     teamMembers: usersCache.data, // Alias for backwards compatibility
-    timeOffRequests: timeOffCache.data || [],
+    timeOffRequests: timeOffCache.data || [],  // Calendar entries for display
+    timeOff: timeOffCache.data || [],           // Alias for calendar entries
+    timeOffRawRequests: timeOffCache.requests || [],  // Raw requests for approval modal
     dailyJobReports: dailyJobReportsCache.data || [],
     
     // Status

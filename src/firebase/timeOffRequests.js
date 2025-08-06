@@ -152,15 +152,8 @@ export const updateTimeOffRequest = async (requestId, updates) => {
       updatedAt: serverTimestamp()
     });
     
-    // Clear relevant caches
-    if (updates.organizationID) {
-      timeOffCacheService.clearTimeOffRequestsCache(updates.organizationID);
-      // Clear the dataCacheService cache used by DataCacheContext
-      localStorage.removeItem(`datacache_timeoff_${updates.organizationID}`);
-    }
-    if (updates.photographerId || updates.userId) {
-      timeOffCacheService.clearUserTimeOffRequestsCache(updates.photographerId || updates.userId);
-    }
+    // Real-time listener will automatically update data
+    // No need to clear caches anymore
     
     return { id: requestId, ...updates };
   } catch (error) {
@@ -183,18 +176,8 @@ export const approveTimeOffRequest = async (requestId, approverId, approverName)
     
     await updateDoc(docRef, updates);
     
-    // Get the request to clear relevant caches
-    const requestDoc = await getDoc(docRef);
-    if (requestDoc.exists()) {
-      const requestData = requestDoc.data();
-      timeOffCacheService.clearTimeOffRequestsCache(requestData.organizationID);
-      // Clear the dataCacheService cache used by DataCacheContext
-      localStorage.removeItem(`datacache_timeoff_${requestData.organizationID}`);
-      
-      if (requestData.photographerId) {
-        timeOffCacheService.clearUserTimeOffRequestsCache(requestData.photographerId);
-      }
-    }
+    // Real-time listener will automatically update data
+    // No need to clear caches anymore
     
     return { id: requestId, ...updates };
   } catch (error) {
@@ -218,18 +201,8 @@ export const denyTimeOffRequest = async (requestId, denierId, denierName, denial
     
     await updateDoc(docRef, updates);
     
-    // Get the request to clear relevant caches
-    const requestDoc = await getDoc(docRef);
-    if (requestDoc.exists()) {
-      const requestData = requestDoc.data();
-      timeOffCacheService.clearTimeOffRequestsCache(requestData.organizationID);
-      // Clear the dataCacheService cache used by DataCacheContext
-      localStorage.removeItem(`datacache_timeoff_${requestData.organizationID}`);
-      
-      if (requestData.photographerId) {
-        timeOffCacheService.clearUserTimeOffRequestsCache(requestData.photographerId);
-      }
-    }
+    // Real-time listener will automatically update data
+    // No need to clear caches anymore
     
     return { id: requestId, ...updates };
   } catch (error) {
@@ -252,18 +225,8 @@ export const markTimeOffRequestUnderReview = async (requestId, reviewerId, revie
     
     await updateDoc(docRef, updates);
     
-    // Get the request to clear relevant caches
-    const requestDoc = await getDoc(docRef);
-    if (requestDoc.exists()) {
-      const requestData = requestDoc.data();
-      timeOffCacheService.clearTimeOffRequestsCache(requestData.organizationID);
-      // Clear the dataCacheService cache used by DataCacheContext
-      localStorage.removeItem(`datacache_timeoff_${requestData.organizationID}`);
-      
-      if (requestData.photographerId) {
-        timeOffCacheService.clearUserTimeOffRequestsCache(requestData.photographerId);
-      }
-    }
+    // Real-time listener will automatically update data
+    // No need to clear caches anymore
     
     return { id: requestId, ...updates };
   } catch (error) {
@@ -284,18 +247,8 @@ export const cancelTimeOffRequest = async (requestId) => {
     
     await updateDoc(docRef, updates);
     
-    // Get the request to clear relevant caches
-    const requestDoc = await getDoc(docRef);
-    if (requestDoc.exists()) {
-      const requestData = requestDoc.data();
-      timeOffCacheService.clearTimeOffRequestsCache(requestData.organizationID);
-      // Clear the dataCacheService cache used by DataCacheContext
-      localStorage.removeItem(`datacache_timeoff_${requestData.organizationID}`);
-      
-      if (requestData.photographerId) {
-        timeOffCacheService.clearUserTimeOffRequestsCache(requestData.photographerId);
-      }
-    }
+    // Real-time listener will automatically update data
+    // No need to clear caches anymore
     
     return { id: requestId, ...updates };
   } catch (error) {
@@ -365,11 +318,8 @@ export const revertTimeOffRequestStatus = async (requestId, reverterId, reverter
     
     await updateDoc(docRef, updates);
     
-    // Clear relevant caches
-    timeOffCacheService.clearTimeOffRequestsCache(currentData.organizationID);
-    if (currentData.photographerId) {
-      timeOffCacheService.clearUserTimeOffRequestsCache(currentData.photographerId);
-    }
+    // Real-time listener will automatically update data
+    // No need to clear caches anymore
     
     return { id: requestId, ...updates };
   } catch (error) {
@@ -424,11 +374,34 @@ export const approveTimeOffRequestPartial = async (requestId, dayApprovals, appr
       };
     });
     
-    // Calculate overall status
-    const allDates = Object.keys(updatedDayStatuses);
-    const approvedCount = allDates.filter(date => updatedDayStatuses[date].status === 'approved').length;
-    const deniedCount = allDates.filter(date => updatedDayStatuses[date].status === 'denied').length;
-    const totalDays = Math.ceil((currentData.endDate.toDate() - currentData.startDate.toDate()) / (1000 * 60 * 60 * 24)) + 1;
+    // Generate all dates in the request range
+    const allDatesInRange = [];
+    let currentDate = new Date(currentData.startDate.toDate());
+    const endDate = new Date(currentData.endDate.toDate());
+    
+    while (currentDate <= endDate) {
+      allDatesInRange.push(currentDate.toISOString().split('T')[0]);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    // Count statuses for all days in range
+    let approvedCount = 0;
+    let deniedCount = 0;
+    let pendingCount = 0;
+    
+    allDatesInRange.forEach(dateStr => {
+      const dayStatus = updatedDayStatuses[dateStr];
+      if (dayStatus) {
+        if (dayStatus.status === 'approved') approvedCount++;
+        else if (dayStatus.status === 'denied') deniedCount++;
+        else pendingCount++;
+      } else {
+        pendingCount++; // No status means pending
+      }
+    });
+    
+    const totalDays = allDatesInRange.length;
+    const allDaysDecided = pendingCount === 0;
     
     let overallStatus = 'pending';
     let hasPartialApproval = false;
@@ -445,6 +418,7 @@ export const approveTimeOffRequestPartial = async (requestId, dayApprovals, appr
     const updates = {
       dayStatuses: updatedDayStatuses,
       hasPartialApproval,
+      allDaysDecided,
       status: overallStatus,
       lastReviewedBy: approverId,
       lastReviewerName: approverName,
@@ -465,13 +439,8 @@ export const approveTimeOffRequestPartial = async (requestId, dayApprovals, appr
     
     await updateDoc(docRef, updates);
     
-    // Clear relevant caches
-    timeOffCacheService.clearTimeOffRequestsCache(currentData.organizationID);
-    localStorage.removeItem(`datacache_timeoff_${currentData.organizationID}`);
-    
-    if (currentData.photographerId) {
-      timeOffCacheService.clearUserTimeOffRequestsCache(currentData.photographerId);
-    }
+    // Real-time listener will automatically update data
+    // No need to clear caches anymore
     
     return { id: requestId, ...updates };
   } catch (error) {

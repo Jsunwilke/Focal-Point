@@ -15,13 +15,12 @@ import {
   RotateCcw 
 } from 'lucide-react';
 import { 
-  getTimeOffRequests, 
   approveTimeOffRequest, 
   denyTimeOffRequest,
-  markTimeOffRequestUnderReview,
   revertTimeOffRequestStatus,
   approveTimeOffRequestPartial 
 } from '../../firebase/timeOffRequests';
+import { useDataCache } from '../../contexts/DataCacheContext';
 import Button from '../shared/Button';
 import TimeOffPartialApprovalModal from './TimeOffPartialApprovalModal';
 import '../shared/Modal.css';
@@ -56,53 +55,47 @@ const formatDateRangeWithDays = (startDate, endDate, isPartialDay = false) => {
 };
 
 const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onStatusChange }) => {
+  const { timeOffRawRequests, loading: dataLoading } = useDataCache();
   const [activeTab, setActiveTab] = useState('pending');
-  const [allRequests, setAllRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
   const [denialReason, setDenialReason] = useState('');
   const [showDenialDialog, setShowDenialDialog] = useState(null);
   const [showUndoConfirm, setShowUndoConfirm] = useState(null);
   const [showPartialApproval, setShowPartialApproval] = useState(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      loadRequests();
-    }
-  }, [isOpen]);
+  // Get sorted requests from context - real-time listener is the source of truth
+  const allRequests = React.useMemo(() => {
+    // Filter requests for this organization
+    const orgRequests = timeOffRawRequests.filter(r => r.organizationID === organization?.id);
+    
+    // Sort by date
+    return orgRequests.sort((a, b) => {
+      // For pending, under_review, and partially_approved, sort by created date
+      // For history, sort by updated date
+      if (a.status === 'pending' || a.status === 'under_review' || a.status === 'partially_approved') {
+        return b.createdAt?.seconds - a.createdAt?.seconds;
+      }
+      return b.updatedAt?.seconds - a.updatedAt?.seconds;
+    });
+  }, [timeOffRawRequests, organization?.id]);
 
-  const loadRequests = async () => {
-    setLoading(true);
-    try {
-      // Load all requests without filtering
-      const requests = await getTimeOffRequests(organization.id, {});
-      
-      // Sort by date
-      const sortedRequests = requests.sort((a, b) => {
-        // For pending and under_review, sort by created date
-        // For history, sort by updated date
-        if (a.status === 'pending' || a.status === 'under_review') {
-          return b.createdAt?.seconds - a.createdAt?.seconds;
-        }
-        return b.updatedAt?.seconds - a.updatedAt?.seconds;
-      });
-
-      setAllRequests(sortedRequests);
-    } catch (error) {
-      console.error('Error loading time off requests:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Use loading state from context
+  const loading = dataLoading?.timeOff || false;
 
   // Filter requests based on active tab
   const filteredRequests = allRequests.filter(request => {
     if (activeTab === 'pending') {
       return request.status === 'pending';
     } else if (activeTab === 'under_review') {
-      return request.status === 'under_review' || request.status === 'partially_approved';
+      // Show under_review and partially_approved only if NOT all days are decided
+      return request.status === 'under_review' || 
+             (request.status === 'partially_approved' && !request.allDaysDecided);
     } else if (activeTab === 'history') {
-      return request.status === 'approved' || request.status === 'denied' || request.status === 'cancelled';
+      // Show approved, denied, cancelled, and partially_approved with all days decided
+      return request.status === 'approved' || 
+             request.status === 'denied' || 
+             request.status === 'cancelled' ||
+             (request.status === 'partially_approved' && request.allDaysDecided);
     }
     return true;
   });
@@ -115,7 +108,7 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
         userProfile.id, 
         `${userProfile.firstName} ${userProfile.lastName}`
       );
-      await loadRequests();
+      // Data updates automatically via real-time listener
       onStatusChange?.();
     } catch (error) {
       console.error('Error approving request:', error);
@@ -140,7 +133,7 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
       );
       setShowDenialDialog(null);
       setDenialReason('');
-      await loadRequests();
+      // Data updates automatically via real-time listener
       onStatusChange?.();
     } catch (error) {
       console.error('Error denying request:', error);
@@ -149,22 +142,7 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
     }
   };
 
-  const handleUnderReview = async (request) => {
-    setProcessingId(request.id);
-    try {
-      await markTimeOffRequestUnderReview(
-        request.id,
-        userProfile.id,
-        `${userProfile.firstName} ${userProfile.lastName}`
-      );
-      await loadRequests();
-      onStatusChange?.();
-    } catch (error) {
-      console.error('Error marking request as under review:', error);
-    } finally {
-      setProcessingId(null);
-    }
-  };
+  // Removed handleUnderReview - direct approve/deny from pending is now supported
 
   const handleUndoStatus = async () => {
     if (!showUndoConfirm) return;
@@ -177,7 +155,7 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
         `${userProfile.firstName} ${userProfile.lastName}`
       );
       setShowUndoConfirm(null);
-      await loadRequests();
+      // Data updates automatically via real-time listener
       onStatusChange?.();
     } catch (error) {
       console.error('Error reverting time off request status:', error);
@@ -197,7 +175,7 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
         `${userProfile.firstName} ${userProfile.lastName}`
       );
       setShowPartialApproval(null);
-      await loadRequests();
+      // Data updates automatically via real-time listener
       onStatusChange?.();
     } catch (error) {
       console.error('Error processing partial approval:', error);
@@ -351,7 +329,7 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
             className={`approval-tab ${activeTab === 'under_review' ? 'active' : ''}`}
             onClick={() => setActiveTab('under_review')}
           >
-            Under Review ({allRequests.filter(r => r.status === 'under_review' || r.status === 'partially_approved').length})
+            Under Review ({allRequests.filter(r => r.status === 'under_review' || (r.status === 'partially_approved' && !r.allDaysDecided)).length})
           </button>
           <button
             className={`approval-tab ${activeTab === 'history' ? 'active' : ''}`}
@@ -470,16 +448,6 @@ const TimeOffApprovalModal = ({ isOpen, onClose, userProfile, organization, onSt
 
                   {(request.status === 'pending' || request.status === 'under_review') ? (
                     <div className="request-actions">
-                      {request.status === 'pending' && (
-                        <Button
-                          variant="info"
-                          size="small"
-                          onClick={() => handleUnderReview(request)}
-                          disabled={processingId === request.id}
-                        >
-                          Under Review
-                        </Button>
-                      )}
                       {isMultiDayRequest(request) && (
                         <Button
                           variant="primary"
