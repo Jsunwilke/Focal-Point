@@ -5,7 +5,6 @@ import { useToast } from "../contexts/ToastContext";
 import { useDataCache } from "../contexts/DataCacheContext";
 import secureLogger from "../utils/secureLogger";
 import {
-  getTeamMembers,
   updateSession,
   getSession,
   getSchools,

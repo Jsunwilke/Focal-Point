@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { useDataCache } from "../../contexts/DataCacheContext";
 import {
   updateUserProfile,
   updateUserPhotoWithCrop,
@@ -31,6 +32,7 @@ import "./ProfileSettingsModal.css";
 
 const ProfileSettingsModal = ({ isOpen, onClose }) => {
   const { userProfile, user, loadUserProfile, organization } = useAuth();
+  const { updateUserOptimistically } = useDataCache();
   const fileInputRef = useRef(null);
   const [formData, setFormData] = useState({
     firstName: "",
@@ -161,6 +163,13 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
       // Update user profile in Firestore with crop metadata
       await updateUserPhotoWithCrop(user.uid, photoData);
 
+      // Immediately update the cache to reflect photo changes
+      updateUserOptimistically(user.uid, {
+        photoURL: photoData.croppedURL,
+        originalPhotoURL: photoData.originalURL,
+        photoCropSettings: photoData.cropSettings,
+      });
+
       // Reload user profile to reflect changes
       await loadUserProfile();
     } catch (error) {
@@ -207,6 +216,13 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
 
       // Update user profile in Firestore
       await updateUserPhotoURL(user.uid, "");
+
+      // Immediately update the cache to reflect photo deletion
+      updateUserOptimistically(user.uid, {
+        photoURL: "",
+        originalPhotoURL: "",
+        photoCropSettings: null,
+      });
 
       // Reload user profile to reflect changes
       await loadUserProfile();
@@ -317,6 +333,13 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
 
       // Update user profile in Firestore
       await updateUserProfile(user.uid, updateData);
+
+      // Immediately update the cache to reflect changes
+      console.log('ProfileSettingsModal: Calling updateUserOptimistically with:', {
+        userId: user.uid,
+        updateData
+      });
+      updateUserOptimistically(user.uid, updateData);
 
       // Reload user profile to get fresh data
       await loadUserProfile();

@@ -4,7 +4,6 @@ import {
   getWorkflowsForUser,
   getWorkflowsForOrganization,
   getWorkflowTemplate,
-  getTeamMembers,
   getSession,
   getSessionsBatch,
   deleteWorkflowInstance
@@ -20,6 +19,7 @@ import {
 } from '../services/firestoreWrapper';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
+import { useDataCache } from './DataCacheContext';
 import workflowCacheService from '../services/workflowCacheService';
 import { readCounter } from '../services/readCounter';
 
@@ -37,13 +37,13 @@ export const WorkflowProvider = ({ children }) => {
   const [userWorkflows, setUserWorkflows] = useState([]);
   const [organizationWorkflows, setOrganizationWorkflows] = useState([]);
   const [workflowTemplates, setWorkflowTemplates] = useState({});
-  const [teamMembers, setTeamMembers] = useState([]);
   const [sessionData, setSessionData] = useState({});
   const [loading, setLoading] = useState(false);
   const [lastCheck, setLastCheck] = useState(null);
   
   const { showToast } = useToast();
   const { userProfile, organization } = useAuth();
+  const { teamMembers } = useDataCache();
   
   // Use ref to store listener unsubscribe function
   const listenerUnsubscribeRef = useRef(null);
@@ -55,17 +55,7 @@ export const WorkflowProvider = ({ children }) => {
   // Periodic refresh interval
   const refreshIntervalRef = useRef(null);
 
-  // Load team members
-  const loadTeamMembers = useCallback(async () => {
-    if (!organization?.id) return;
-    
-    try {
-      const members = await getTeamMembers(organization.id);
-      setTeamMembers(members.filter(m => m.isActive));
-    } catch (error) {
-      console.error('Error loading team members:', error);
-    }
-  }, [organization?.id]);
+  // Team members now come from DataCacheContext
 
   // Load user workflows with caching
   const loadUserWorkflows = useCallback(async () => {
@@ -315,14 +305,13 @@ export const WorkflowProvider = ({ children }) => {
     setLoading(true);
     try {
       await Promise.all([
-        loadTeamMembers(),
         loadUserWorkflows(),
         loadOrganizationWorkflows()
       ]);
     } finally {
       setLoading(false);
     }
-  }, [loadTeamMembers, loadUserWorkflows, loadOrganizationWorkflows]);
+  }, [loadUserWorkflows, loadOrganizationWorkflows]);
 
   // Delete workflow
   const deleteWorkflow = useCallback(async (workflowId) => {
@@ -434,25 +423,10 @@ export const WorkflowProvider = ({ children }) => {
       // Initial load from cache
       loadUserWorkflows();
       loadOrganizationWorkflows();
-      loadTeamMembers();
     }
   }, [userProfile?.id, organization?.id]);
 
-  // Set up periodic refresh for data freshness
-  useEffect(() => {
-    if (!userProfile?.id || !organization?.id) return;
-
-    // Set up periodic refresh every 60 seconds
-    refreshIntervalRef.current = setInterval(() => {
-      loadUserWorkflows();
-    }, 60000); // 60 seconds
-
-    return () => {
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-      }
-    };
-  }, [userProfile?.id, organization?.id]);
+  // Removed periodic refresh - real-time listeners handle updates
 
   // Set up real-time listener for workflows (only for immediate updates)
   useEffect(() => {

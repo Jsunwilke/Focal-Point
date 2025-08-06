@@ -1,6 +1,7 @@
 // src/pages/Dashboard.js
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { useDataCache } from "../contexts/DataCacheContext";
 import TimeTrackingWidget from "../components/dashboard/TimeTrackingWidget";
 import PTOBalanceWidget from "../components/dashboard/PTOBalanceWidget";
 import HoursTrackingWidget from "../components/dashboard/HoursTrackingWidget";
@@ -8,33 +9,16 @@ import UpcomingSessionsWidget from "../components/dashboard/UpcomingSessionsWidg
 import ReadCounterWidget from "../components/dashboard/ReadCounterWidget";
 import SessionDetailsModal from "../components/sessions/SessionDetailsModal";
 import EditSessionModal from "../components/sessions/EditSessionModal";
-import { getTeamMembers } from "../firebase/firestore";
 import "./Dashboard.css";
 
 const Dashboard = () => {
   const { userProfile, organization } = useAuth();
+  const { teamMembers } = useDataCache();
   
   // Session modal state
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
-  const [teamMembers, setTeamMembers] = useState([]);
-
-  // Load team members for the session modal
-  useEffect(() => {
-    const loadTeamMembers = async () => {
-      if (organization?.id) {
-        try {
-          const members = await getTeamMembers(organization.id);
-          setTeamMembers(members);
-        } catch (error) {
-          console.error('Error loading team members:', error);
-        }
-      }
-    };
-
-    loadTeamMembers();
-  }, [organization?.id]);
 
   // Handle session click to open details modal
   const handleSessionClick = (session) => {

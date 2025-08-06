@@ -2,10 +2,10 @@
 class DataCacheService {
   constructor() {
     this.CACHE_VERSION = '1.0'; // Version for cache compatibility
-    this.SESSIONS_CACHE_DURATION = 4 * 60 * 60 * 1000; // 4 hours - employees come and go frequently
-    this.USERS_CACHE_DURATION = 2 * 60 * 60 * 1000; // 2 hours - user data changes less often
-    this.TIMEOFF_CACHE_DURATION = 4 * 60 * 60 * 1000; // 4 hours - match sessions for consistent loading
-    this.DAILYJOB_CACHE_DURATION = 4 * 60 * 60 * 1000; // 4 hours - match sessions for consistent loading
+    this.SESSIONS_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours - with real-time listeners for updates
+    this.USERS_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 1 week - user data rarely changes
+    this.TIMEOFF_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours - match sessions for consistent loading
+    this.DAILYJOB_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours - match sessions for consistent loading
   }
 
   // Helper to serialize timestamps and dates

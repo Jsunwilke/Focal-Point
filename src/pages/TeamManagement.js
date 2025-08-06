@@ -14,8 +14,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
+import { useDataCache } from "../contexts/DataCacheContext";
 import {
-  getTeamMembers,
   inviteUser,
   updateUserRole,
 } from "../firebase/firestore";
@@ -28,19 +28,14 @@ import "./TeamManagement.css";
 const TeamManagement = () => {
   const { userProfile, organization } = useAuth();
   const { showToast } = useToast();
-  const [teamMembers, setTeamMembers] = useState([]);
+  const { teamMembers, loading: { users: loading }, refreshUsers } = useDataCache();
   const [searchTerm, setSearchTerm] = useState("");
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showInviteSuccess, setShowInviteSuccess] = useState(false);
   const [invitedUserData, setInvitedUserData] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedTeamMember, setSelectedTeamMember] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    loadTeamMembers();
-  }, [organization]);
 
   // Filtered and sorted team members using useMemo for performance
   const filteredAndSortedMembers = useMemo(() => {
@@ -82,29 +77,11 @@ const TeamManagement = () => {
     });
   }, [teamMembers, searchTerm]);
 
-  const loadTeamMembers = async () => {
-    if (!organization?.id) return;
-
-    try {
-      setLoading(true);
-      const members = await getTeamMembers(organization.id);
-      setTeamMembers(members);
-    } catch (err) {
-      setError("Failed to load team members");
-      console.error("Error loading team:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const refreshTeamMembers = async () => {
     if (!organization?.id) return;
     
-    // Clear cache first
-    organizationCacheService.clearTeamMembersCache(organization.id);
-    
-    // Reload team members
-    await loadTeamMembers();
+    // Use DataCacheContext refresh
+    await refreshUsers();
     showToast("Team members refreshed", "success");
   };
 
@@ -117,7 +94,7 @@ const TeamManagement = () => {
       setShowInviteModal(false);
       setShowInviteSuccess(true);
 
-      await loadTeamMembers(); // Reload the team
+      await refreshUsers(); // Reload the team
     } catch (err) {
       setError("Failed to send invitation");
       console.error("Error inviting user:", err);
@@ -147,7 +124,7 @@ const TeamManagement = () => {
   };
 
   const handleTeamMemberUpdate = async () => {
-    await loadTeamMembers(); // Refresh the team members list
+    await refreshUsers(); // Refresh the team members list
   };
 
   const getInvitationLink = (email) => {

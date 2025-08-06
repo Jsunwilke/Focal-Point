@@ -31,7 +31,6 @@ import {
   deleteDailyJobReport,
   deleteDailyJobReportsBatch,
   getSchools,
-  getTeamMembers,
 } from "../firebase/firestore";
 import { dailyJobReportsCacheService } from "../services/dailyJobReportsCacheService";
 import { readCounter } from "../services/readCounter";
@@ -83,7 +82,7 @@ const parseDateField = (dateField) => {
 const DailyReports = () => {
   const { userProfile, organization } = useAuth();
   const { showToast } = useToast();
-  const { dailyJobReports: cachedReports, loading: { dailyJobReports: cacheLoading } } = useDataCache();
+  const { dailyJobReports: cachedReports, teamMembers, loading: { dailyJobReports: cacheLoading } } = useDataCache();
   
   // Component instance tracking
   const componentId = useMemo(() => `DailyReports-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, []);
@@ -270,15 +269,13 @@ const DailyReports = () => {
       try {
         setLoading(true);
 
-        // Load schools and photographers
-        const [schoolsData, photographersData] = await Promise.all([
-          getSchools(organization.id),
-          getTeamMembers(organization.id),
-        ]);
-
+        // Load schools
+        const schoolsData = await getSchools(organization.id);
         setSchools(schoolsData.map((s) => s.value || s.name));
+        
+        // Use teamMembers from DataCacheContext
         setPhotographers(
-          photographersData.map((p) => p.firstName).filter(Boolean)
+          teamMembers.map((p) => p.firstName).filter(Boolean)
         );
 
         // Load all reports with cache-first approach

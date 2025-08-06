@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { 
@@ -69,6 +69,10 @@ export const DataCacheProvider = ({ children }) => {
     error: null
   });
 
+  // Ref to access current state without causing re-renders
+  const usersCacheRef = useRef(usersCache);
+  usersCacheRef.current = usersCache;
+
   // Listener cleanup functions
   const [listeners, setListeners] = useState({
     sessions: null,
@@ -80,6 +84,9 @@ export const DataCacheProvider = ({ children }) => {
   // Process sessions data for calendar format
   const processSessionsData = useCallback((snapshotOrArray, userRole) => {
     const sessionsData = [];
+    
+    // Use ref to access current users state
+    const users = usersCacheRef.current.data || [];
     
     // Handle both snapshot and array formats
     if (Array.isArray(snapshotOrArray)) {
@@ -131,26 +138,34 @@ export const DataCacheProvider = ({ children }) => {
 
         // For sessions with multiple photographers, create separate entries for each
         if (session.photographers && Array.isArray(session.photographers) && session.photographers.length > 0) {
-          return session.photographers.map((photographer) => ({
-            id: `${session.id}-${photographer.id}`,
-            sessionId: session.id,
-            title: session.title || `${session.sessionType || 'Session'} at ${session.schoolName || 'School'}`,
-            date: sessionDate,
-            startTime: session.startTime,
-            endTime: session.endTime,
-            photographerId: photographer.id,
-            photographerName: photographer.name,
-            sessionType: session.sessionType || "session",
-            sessionTypes: session.sessionTypes || [session.sessionType || "session"],
-            customSessionType: session.customSessionType,
-            status: session.status || "scheduled",
-            isPublished: session.isPublished !== false,
-            schoolId: session.schoolId,
-            schoolName: session.schoolName || session.location || "",
-            location: session.location || session.schoolName || "",
-            notes: session.notes,
-            photographerNotes: photographer.notes || '',
-          }));
+          return session.photographers.map((photographer) => {
+            // Dynamically resolve photographer name from current users
+            const currentUser = users.find(u => u.id === photographer.id);
+            const resolvedName = currentUser?.displayName || 
+                                `${currentUser?.firstName} ${currentUser?.lastName}` || 
+                                photographer.name;
+            
+            return {
+              id: `${session.id}-${photographer.id}`,
+              sessionId: session.id,
+              title: session.title || `${session.sessionType || 'Session'} at ${session.schoolName || 'School'}`,
+              date: sessionDate,
+              startTime: session.startTime,
+              endTime: session.endTime,
+              photographerId: photographer.id,
+              photographerName: resolvedName,
+              sessionType: session.sessionType || "session",
+              sessionTypes: session.sessionTypes || [session.sessionType || "session"],
+              customSessionType: session.customSessionType,
+              status: session.status || "scheduled",
+              isPublished: session.isPublished !== false,
+              schoolId: session.schoolId,
+              schoolName: session.schoolName || session.location || "",
+              location: session.location || session.schoolName || "",
+              notes: session.notes,
+              photographerNotes: photographer.notes || '',
+            };
+          });
         } else {
           // Session without photographers - create a single entry
           return [{
@@ -452,7 +467,7 @@ export const DataCacheProvider = ({ children }) => {
   }, [organization?.id, userProfile, processSessionsData, setupSessionsListener]);
 
   // Set up real-time listener for users
-  const setupUsersListener = useCallback(() => {
+  const setupUsersListener = useCallback((existingCachedUsers = null) => {
     if (!organization?.id) return;
 
     const usersQuery = query(
@@ -474,6 +489,52 @@ export const DataCacheProvider = ({ children }) => {
             rawUsers.push({ id: doc.id, ...doc.data() });
           });
 
+          // Check for differences between cached and live data
+          if (existingCachedUsers && existingCachedUsers.length > 0) {
+            // Compare cached data with live data to detect changes
+            const changesDetected = [];
+            
+            rawUsers.forEach((liveUser) => {
+              const cachedUser = existingCachedUsers.find(u => u.id === liveUser.id);
+              if (cachedUser) {
+                // Check if user data has changed
+                const hasChanged = JSON.stringify(cachedUser) !== JSON.stringify(liveUser);
+                if (hasChanged) {
+                  changesDetected.push({
+                    type: 'modified',
+                    id: liveUser.id,
+                    data: liveUser
+                  });
+                  secureLogger.debug("Detected user change during initial sync:", liveUser.id, {
+                    cached: cachedUser.displayName || cachedUser.firstName,
+                    live: liveUser.displayName || liveUser.firstName
+                  });
+                }
+              } else {
+                // New user not in cache
+                changesDetected.push({
+                  type: 'added',
+                  id: liveUser.id,
+                  data: liveUser
+                });
+              }
+            });
+            
+            // Check for removed users
+            existingCachedUsers.forEach((cachedUser) => {
+              if (!rawUsers.find(u => u.id === cachedUser.id)) {
+                changesDetected.push({
+                  type: 'removed',
+                  id: cachedUser.id
+                });
+              }
+            });
+            
+            if (changesDetected.length > 0) {
+              secureLogger.debug("Changes detected between cache and live data:", changesDetected.length, "changes");
+            }
+          }
+
           const processedData = processUsersData(rawUsers);
           
           setUsersCache({
@@ -483,7 +544,7 @@ export const DataCacheProvider = ({ children }) => {
             error: null
           });
           
-          // Update cache
+          // Update cache with fresh data
           dataCacheService.setCachedUsers(organization.id, rawUsers);
           dataCacheService.setLastSyncTime(organization.id, 'users');
           
@@ -499,9 +560,9 @@ export const DataCacheProvider = ({ children }) => {
           const changes = snapshot.docChanges();
           
           if (changes.length > 0) {
-            // Get current cached users
-            const cachedUsers = dataCacheService.getCachedUsers(organization.id) || [];
-            let updatedUsers = [...cachedUsers];
+            // Use ref to get current state without causing re-renders
+            const currentUsers = usersCacheRef.current.data || [];
+            let updatedUsers = [...currentUsers];
             
             changes.forEach((change) => {
               const docData = { id: change.doc.id, ...change.doc.data() };
@@ -573,15 +634,16 @@ export const DataCacheProvider = ({ children }) => {
       });
       readCounter.recordCacheHit('users', 'DataCacheContext', cachedUsers.length);
       
-      // Delay real-time sync - users don't change as frequently
+      // Delay real-time sync slightly to avoid immediate reads
+      // Pass the cached users so the listener can detect changes
       syncTimeout = setTimeout(() => {
-        unsubscribe = setupUsersListener();
-      }, 10000); // 10 second delay for users
+        unsubscribe = setupUsersListener(cachedUsers);
+      }, 5000); // 5 second delay to match sessions
     } else {
       // No cache - need immediate sync
       setUsersCache(prev => ({ ...prev, loading: true, error: null }));
       readCounter.recordCacheMiss('users', 'DataCacheContext');
-      unsubscribe = setupUsersListener();
+      unsubscribe = setupUsersListener(null);
     }
 
     // Store cleanup function
@@ -983,6 +1045,93 @@ export const DataCacheProvider = ({ children }) => {
     return updatedSessions.find(s => s.id === sessionId);
   }, [organization?.id, userProfile?.role, processSessionsData]);
 
+  // Optimistic update for users
+  const updateUserOptimistically = useCallback((userId, updateData) => {
+    console.log('updateUserOptimistically called:', {
+      userId,
+      updateData,
+      organizationId: organization?.id,
+      hasOrganization: !!organization
+    });
+    
+    // Use ref to get current state
+    const currentUsers = usersCacheRef.current.data || [];
+    console.log('Current users count from React state:', currentUsers.length);
+    
+    // Update the user in the cached data
+    const updatedUsers = currentUsers.map(user => {
+      if (user.id === userId) {
+        console.log('Found user to update:', {
+          oldDisplayName: user.displayName,
+          newDisplayName: updateData.displayName,
+          oldFirstName: user.firstName,
+          newFirstName: updateData.firstName
+        });
+        return {
+          ...user,
+          ...updateData,
+          // Preserve id and other critical fields
+          id: user.id,
+          organizationID: user.organizationID,
+          // Update timestamp
+          updatedAt: new Date()
+        };
+      }
+      return user;
+    });
+    
+    // Update cache storage - clear old cache first to ensure fresh data
+    if (organization?.id) {
+      dataCacheService.setCachedUsers(organization.id, updatedUsers);
+      console.log('localStorage cache updated for organization:', organization.id);
+    } else {
+      console.warn('No organization ID - cannot update localStorage cache');
+    }
+    
+    // Process and update UI immediately
+    const processedData = processUsersData(updatedUsers);
+    console.log('Processed users data:', {
+      count: processedData.length,
+      updatedUser: processedData.find(u => u.id === userId)
+    });
+    
+    // Force new array reference to ensure React detects the change
+    setUsersCache(prevCache => {
+      console.log('Previous cache had', prevCache.data?.length, 'users');
+      return {
+        data: [...processedData],  // Create new array reference
+        loading: false,
+        lastUpdated: new Date(),
+        error: null,
+        version: Date.now() // Add version to force re-render
+      };
+    });
+    
+    console.log('Users cache updated', {
+      newDataReference: processedData,
+      firstUser: processedData[0]
+    });
+    
+    // Also reprocess sessions to update photographer names
+    // Use current sessions from React state
+    if (sessionsCache.data && sessionsCache.data.length > 0) {
+      // Get the raw sessions data (before calendar processing)
+      const cachedSessions = dataCacheService.getCachedSessions(organization?.id);
+      if (cachedSessions) {
+        const reprocessedSessions = processSessionsData(cachedSessions, userProfile?.role);
+        setSessionsCache(prev => ({
+          ...prev,
+          data: reprocessedSessions
+        }));
+      }
+    }
+    
+    secureLogger.debug("User cache updated optimistically", { userId, displayName: updateData.displayName });
+    
+    // Return the updated user for the caller
+    return updatedUsers.find(u => u.id === userId);
+  }, [organization?.id, processUsersData, processSessionsData, userProfile?.role, sessionsCache.data]);
+
   const value = {
     // Data
     sessions: sessionsCache.data,
@@ -1022,6 +1171,7 @@ export const DataCacheProvider = ({ children }) => {
     
     // Optimistic updates
     updateSessionOptimistically,
+    updateUserOptimistically,
     
     // Refresh functions - invalidate cache to trigger listener updates
     refreshSessions: () => {

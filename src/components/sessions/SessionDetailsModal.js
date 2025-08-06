@@ -607,6 +607,26 @@ const SessionDetailsModal = ({
                 >
                   {allAssignedPhotographers.map((photographer, index) => {
                     const isCurrentUser = photographer.id === userProfile?.id;
+                    // Get current name from teamMembers, fallback to stored name
+                    const currentMember = teamMembers.find(m => m.id === photographer.id);
+                    const displayName = currentMember?.displayName || 
+                                       `${currentMember?.firstName} ${currentMember?.lastName}` || 
+                                       photographer.name;
+                    
+                    // Debug logging
+                    console.log('SessionDetailsModal photographer display:', {
+                      photographerId: photographer.id,
+                      storedName: photographer.name,
+                      currentMember: currentMember ? {
+                        id: currentMember.id,
+                        displayName: currentMember.displayName,
+                        firstName: currentMember.firstName,
+                        lastName: currentMember.lastName
+                      } : null,
+                      resolvedDisplayName: displayName,
+                      teamMembersCount: teamMembers.length
+                    });
+                    
                     return (
                       <span
                         key={index}
@@ -620,7 +640,7 @@ const SessionDetailsModal = ({
                           fontWeight: isCurrentUser ? "600" : "500",
                         }}
                       >
-                        {photographer.name}
+                        {displayName}
                         {isCurrentUser && " (You)"}
                       </span>
                     );
@@ -684,7 +704,8 @@ const SessionDetailsModal = ({
                   >
                     <User size={16} />
                     NOTES FOR{" "}
-                    {currentPhotographer?.firstName?.toUpperCase() || "YOU"}
+                    {currentPhotographer?.displayName?.toUpperCase() || 
+                     currentPhotographer?.firstName?.toUpperCase() || "YOU"}
                   </div>
                   <div
                     style={{

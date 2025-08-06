@@ -157,6 +157,13 @@ const WeekView = ({
 
   // Get user initials for avatar
   const getUserInitials = (member) => {
+    if (member.displayName) {
+      const parts = member.displayName.trim().split(' ');
+      if (parts.length >= 2) {
+        return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+      }
+      return member.displayName[0]?.toUpperCase() || "U";
+    }
     if (member.firstName && member.lastName) {
       return `${member.firstName[0]}${member.lastName[0]}`.toUpperCase();
     }
@@ -191,7 +198,7 @@ const WeekView = ({
       return (
         <img
           src={member.photoURL}
-          alt={`${member.firstName} ${member.lastName}`}
+          alt={member.displayName || `${member.firstName} ${member.lastName}`}
           style={{
             width: "2rem",
             height: "2rem",
@@ -1344,7 +1351,7 @@ const WeekView = ({
                     color: "var(--text-primary, #333)",
                   }}
                 >
-                  {member.firstName} {member.lastName}
+                  {member.displayName || `${member.firstName} ${member.lastName}`}
                 </div>
                 <div
                   className="photographer-stats"
