@@ -13,6 +13,8 @@ import {
   getCurrentPayPeriod,
   getPreviousPayPeriod 
 } from '../utils/payPeriods';
+import dataCacheService from '../services/dataCacheService';
+import { readCounter } from '../services/readCounter';
 
 /**
  * Get comprehensive payroll data for a specific pay period
@@ -27,8 +29,18 @@ export const getPayrollData = async (organizationID, startDate, endDate, userIds
     // Get all time entries for the period
     const timeEntries = await getAllTimeEntries(organizationID, startDate, endDate);
     
-    // Get all team members
-    const teamMembers = await getTeamMembers(organizationID);
+    // Get all team members - check cache first
+    let teamMembers = [];
+    const cachedUsers = dataCacheService.getCachedUsers(organizationID);
+    if (cachedUsers && cachedUsers.length > 0) {
+      console.log('[PayrollQueries] Using cached users:', cachedUsers.length, 'users');
+      readCounter.recordCacheHit('users', 'PayrollQueries', cachedUsers.length);
+      teamMembers = cachedUsers;
+    } else {
+      console.log('[PayrollQueries] No cached users, fetching from Firebase');
+      readCounter.recordCacheMiss('users', 'PayrollQueries');
+      teamMembers = await getTeamMembers(organizationID);
+    }
     
     // Filter by specific users if provided
     const filteredEntries = userIds 

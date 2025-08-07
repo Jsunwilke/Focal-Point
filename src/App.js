@@ -29,7 +29,6 @@ import TemplatesList from "./pages/TemplatesList";
 import TemplateBuilder from "./pages/TemplateBuilder";
 import WorkflowDashboard from "./components/workflow/WorkflowDashboard";
 import WorkflowSettings from "./pages/WorkflowSettings";
-import Workflow2 from "./pages/Workflow2";
 import Tracking from "./pages/Tracking";
 import Chat from "./pages/Chat";
 import Proofing from "./pages/Proofing";
@@ -129,7 +128,6 @@ const AppContent = () => {
                       <Route path="/mileage" element={<MileageTracking />} />
                       <Route path="/workflows" element={<WorkflowDashboard />} />
                       <Route path="/workflows/settings" element={<WorkflowSettings />} />
-                      <Route path="/workflows2" element={<Workflow2 />} />
                       <Route path="/team" element={<TeamManagement />} />
                       <Route path="/schools" element={<SchoolManagement />} />
                       <Route path="/sports" element={<Sports />} />

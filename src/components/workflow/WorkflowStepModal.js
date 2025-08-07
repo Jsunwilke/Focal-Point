@@ -5,10 +5,10 @@ import { X, Clock, User, CheckCircle, FileText, Upload, Save, MessageSquare } fr
 import { 
   updateWorkflowStep, 
   completeWorkflowStep, 
-  assignWorkflowStep,
-  getTeamMembers 
+  assignWorkflowStep
 } from '../../firebase/firestore';
 import { useToast } from '../../contexts/ToastContext';
+import { useDataCache } from '../../contexts/DataCacheContext';
 import QuestionnaireResponseDisplay from '../workflow/QuestionnaireResponseDisplay';
 
 const WorkflowStepModal = ({
@@ -22,7 +22,6 @@ const WorkflowStepModal = ({
   onStepUpdated
 }) => {
   const [loading, setLoading] = useState(false);
-  const [teamMembers, setTeamMembers] = useState([]);
   const [activeTab, setActiveTab] = useState('details');
   const [formData, setFormData] = useState({
     notes: '',
@@ -30,24 +29,16 @@ const WorkflowStepModal = ({
     assignedTo: ''
   });
   const { showToast } = useToast();
+  const { users } = useDataCache();
+  
+  // Get team members from cache
+  const teamMembers = (users || []).filter(m => m.isActive);
 
   // Get step and template data
   const step = template?.steps?.find(s => s.id === stepId);
   const stepProgress = workflow?.stepProgress?.[stepId];
 
-  useEffect(() => {
-    const loadTeamMembers = async () => {
-      if (isOpen && organizationID) {
-        try {
-          const members = await getTeamMembers(organizationID);
-          setTeamMembers(members.filter(m => m.isActive));
-        } catch (error) {
-          console.error('Error loading team members:', error);
-        }
-      }
-    };
-    loadTeamMembers();
-  }, [isOpen, organizationID]);
+  // Team members are now loaded from DataCacheContext
 
   useEffect(() => {
     if (isOpen && stepProgress) {

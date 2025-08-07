@@ -14,11 +14,22 @@ import {
 import { updateSession, getTeamMembers } from '../firebase/firestore';
 import secureLogger from '../utils/secureLogger';
 import { readCounter } from './readCounter';
+import dataCacheService from './dataCacheService';
 
 // User resolution functions
 export const getUsersForOrganization = async (organizationID) => {
   try {
-    // Use the centralized getTeamMembers function which has built-in caching
+    // First check if we have cached users
+    const cachedUsers = dataCacheService.getCachedUsers(organizationID);
+    if (cachedUsers && cachedUsers.length > 0) {
+      console.log('[TrackingService] Using cached users:', cachedUsers.length, 'users');
+      readCounter.recordCacheHit('users', 'TrackingService', cachedUsers.length);
+      return cachedUsers;
+    }
+    
+    // Fall back to direct query if no cache
+    console.log('[TrackingService] No cached users, fetching from Firebase');
+    readCounter.recordCacheMiss('users', 'TrackingService');
     const users = await getTeamMembers(organizationID);
     return users;
   } catch (error) {

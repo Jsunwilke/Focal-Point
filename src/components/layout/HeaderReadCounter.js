@@ -167,10 +167,10 @@ const HeaderReadCounter = () => {
               </div>
 
               <div className="header-read-counter__detail-section">
-                <h5>Top Collections (Session)</h5>
+                <h5>Top 10 Collections (Session)</h5>
                 {Object.entries(stats.session.byCollection)
                   .sort(([,a], [,b]) => b - a)
-                  .slice(0, 3)
+                  .slice(0, 10)
                   .map(([collection, count]) => (
                     <div key={collection} className="header-read-counter__collection">
                       <span className="header-read-counter__collection-name">{collection}</span>

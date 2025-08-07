@@ -258,11 +258,10 @@ export const updateOrganization = async (organizationID, data) => {
 };
 
 // Get team members for an organization (including pending invitations)
+// This function should primarily be used by DataCacheContext
+// Other components should use useDataCache() hook to get cached users
 export const getTeamMembers = async (organizationID) => {
   try {
-    // NO LONGER USING CACHE FOR USER PROFILES - Always fetch fresh data
-    // This ensures changes to user profiles are immediately visible
-    
     const q = query(
       collection(firestore, "users"),
       where("organizationID", "==", organizationID)

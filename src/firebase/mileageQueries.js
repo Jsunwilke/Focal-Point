@@ -13,6 +13,7 @@ import {
 // Removed mileageCacheService - filtering always runs fresh from daily reports cache
 import { dailyJobReportsCacheService } from '../services/dailyJobReportsCacheService';
 import { readCounter } from '../services/readCounter';
+import dataCacheService from '../services/dataCacheService';
 
 // Helper function to format date to YYYY-MM-DD
 const formatDate = (date) => {
@@ -353,8 +354,18 @@ export const getMileageData = async (organizationID, startDate, endDate, userIds
       }
     }
     
-    // Get all team members to get their names and mileage rates
-    const teamMembers = await getTeamMembers(organizationID);
+    // Get all team members to get their names and mileage rates - check cache first
+    let teamMembers = [];
+    const cachedUsers = dataCacheService.getCachedUsers(organizationID);
+    if (cachedUsers && cachedUsers.length > 0) {
+      console.log('[MileageQueries] Using cached users:', cachedUsers.length, 'users');
+      readCounter.recordCacheHit('users', 'MileageQueries', cachedUsers.length);
+      teamMembers = cachedUsers;
+    } else {
+      console.log('[MileageQueries] No cached users, fetching from Firebase');
+      readCounter.recordCacheMiss('users', 'MileageQueries');
+      teamMembers = await getTeamMembers(organizationID);
+    }
     
     // Filter by specific users if provided
     const filteredReports = userIds 

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import {
   getCurrentTimeEntry,
   clockIn,
@@ -27,7 +28,7 @@ import {
   formatDuration,
   deleteTimeEntry
 } from '../firebase/firestore';
-import { getSessions, getTeamMembers } from '../firebase/firestore';
+import { getSessions } from '../firebase/firestore';
 import SessionStatistics from '../components/stats/SessionStatistics';
 import SchoolStatistics from '../components/stats/SchoolStatistics';
 import ManualTimeEntryModal from '../components/shared/ManualTimeEntryModal';
@@ -38,11 +39,13 @@ import './TimeTracking.css';
 const TimeTracking = () => {
   const { user, organization, userProfile } = useAuth();
   const { addToast } = useToast();
+  const { users } = useDataCache();
   
   const [currentEntry, setCurrentEntry] = useState(null);
   const [timeEntries, setTimeEntries] = useState([]);
   const [sessions, setSessions] = useState([]);
-  const [teamMembers, setTeamMembers] = useState([]);
+  // Team members now come from DataCacheContext
+  const teamMembers = users || [];
   const [selectedSession, setSelectedSession] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
@@ -64,9 +67,7 @@ const TimeTracking = () => {
     if (user && organization) {
       loadTimeData();
       loadSessions();
-      if (isAdmin) {
-        loadTeamMembers();
-      }
+      // Team members are now loaded automatically by DataCacheContext
     }
   }, [user, organization, dateRange, selectedUser, view, selectedPayPeriod, customDates]);
 
@@ -159,14 +160,7 @@ const TimeTracking = () => {
     }
   };
 
-  const loadTeamMembers = async () => {
-    try {
-      const members = await getTeamMembers(organization.id);
-      setTeamMembers(members);
-    } catch (error) {
-      console.error('Error loading team members:', error);
-    }
-  };
+  // Team members loading is now handled by DataCacheContext
 
   const handleClockIn = async () => {
     setLoading(true);

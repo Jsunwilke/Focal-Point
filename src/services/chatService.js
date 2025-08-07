@@ -20,6 +20,7 @@ import {
   firestore
 } from '../services/firestoreWrapper';
 import { getTeamMembers } from '../firebase/firestore';
+import dataCacheService from './dataCacheService';
 
 class ChatService {
   // Create a new conversation
@@ -614,7 +615,15 @@ class ChatService {
   // Get users in organization for employee selector
   async getOrganizationUsers(organizationId) {
     try {
-      // Use the cached getTeamMembers function instead of direct query
+      // First check if we have cached users
+      const cachedUsers = dataCacheService.getCachedUsers(organizationId);
+      if (cachedUsers && cachedUsers.length > 0) {
+        console.log('[ChatService] Using cached users:', cachedUsers.length, 'users');
+        return cachedUsers;
+      }
+      
+      // Fall back to direct query if no cache
+      console.log('[ChatService] No cached users, fetching from Firebase');
       const users = await getTeamMembers(organizationId);
       return users;
     } catch (error) {

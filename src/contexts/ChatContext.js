@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
+import { useDataCache } from './DataCacheContext';
 import chatService from '../services/chatService';
 import chatCacheService from '../services/chatCacheService';
 import { readCounter } from '../services/readCounter';
@@ -18,6 +19,7 @@ export const useChat = () => {
 export const ChatProvider = ({ children }) => {
   const { userProfile } = useAuth();
   const { showToast } = useToast();
+  const { users: cachedUsers } = useDataCache();
   
   // State
   const [conversations, setConversations] = useState([]);
@@ -38,19 +40,21 @@ export const ChatProvider = ({ children }) => {
   const [conversationsUnsubscribe, setConversationsUnsubscribe] = useState(null);
   const [messagesUnsubscribe, setMessagesUnsubscribe] = useState(null);
 
-  // Load organization users on mount
+  // Use cached users from DataCacheContext
   useEffect(() => {
-    const loadOrganizationUsers = async () => {
-      if (userProfile?.organizationID) {
+    if (cachedUsers && cachedUsers.length > 0 && userProfile?.id) {
+      console.log('[ChatContext] Using cached users from DataCacheContext:', cachedUsers.length);
+      
+      // Filter out current user and any users without IDs
+      const validUsers = cachedUsers.filter(user => user.id && user.id !== userProfile.id);
+      setOrganizationUsers(validUsers);
+    } else if (userProfile?.organizationID && !cachedUsers) {
+      // Only fetch if we don't have cached users
+      console.log('[ChatContext] No cached users available, fetching from service');
+      const loadOrganizationUsers = async () => {
         try {
           const users = await chatService.getOrganizationUsers(userProfile.organizationID);
           console.log('[ChatContext] Loaded organization users:', users);
-          
-          // Log any users without IDs
-          const usersWithoutIds = users.filter(user => !user.id);
-          if (usersWithoutIds.length > 0) {
-            console.error('[ChatContext] Users without IDs:', usersWithoutIds);
-          }
           
           // Filter out current user and any users without IDs
           const validUsers = users.filter(user => user.id && user.id !== userProfile.id);
@@ -59,11 +63,11 @@ export const ChatProvider = ({ children }) => {
           console.error('Error loading organization users:', error);
           showToast('Failed to load team members', 'error');
         }
-      }
-    };
-
-    loadOrganizationUsers();
-  }, [userProfile, showToast]);
+      };
+      
+      loadOrganizationUsers();
+    }
+  }, [cachedUsers, userProfile, showToast]);
 
   // Force refresh conversations (bypasses cache)
   const forceRefreshConversations = useCallback(async () => {

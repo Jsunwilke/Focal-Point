@@ -17,7 +17,7 @@ import {
   getAssigneeRules,
   getWorkflowGroups
 } from '../../utils/workflowTemplates';
-import { getTeamMembers } from '../../firebase/firestore';
+import { useDataCache } from '../../contexts/DataCacheContext';
 
 const StepEditor = ({
   isOpen,
@@ -49,25 +49,18 @@ const StepEditor = ({
   });
 
   const [errors, setErrors] = useState({});
-  const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(false);
+  
+  // Get team members from cache
+  const { users } = useDataCache();
+  const teamMembers = (users || []).filter(m => m.isActive);
 
   const stepTypes = getStepTypes();
   const assigneeRules = getAssigneeRules();
   const workflowGroups = getWorkflowGroups();
 
+  // Team members are now loaded from DataCacheContext
   useEffect(() => {
-    const loadTeamMembers = async () => {
-      if (organizationID) {
-        try {
-          const members = await getTeamMembers(organizationID);
-          setTeamMembers(members.filter(m => m.isActive));
-        } catch (error) {
-          console.error('Error loading team members:', error);
-        }
-      }
-    };
-    loadTeamMembers();
   }, [organizationID]);
 
   if (!isOpen) return null;

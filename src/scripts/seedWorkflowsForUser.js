@@ -225,7 +225,6 @@ async function seedWorkflowsForUser() {
 
     console.log('\n✅ User-specific seed completed successfully!');
     console.log(`Created workflows for user: ${USER_ID}`);
-    console.log('You can now test the Workflow2 interface.');
     
   } catch (error) {
     console.error('Error seeding database:', error);

@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { X, Calendar, Search, School } from 'lucide-react';
-import { getSessionsForSchool, getTeamMembers, createSession } from '../../firebase/firestore';
+import { getSessionsForSchool, createSession } from '../../firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
+import { useDataCache } from '../../contexts/DataCacheContext';
 import SchoolSessionsList from './SchoolSessionsList';
 import SessionDetailsModal from '../sessions/SessionDetailsModal';
 import '../shared/Modal.css';
@@ -11,8 +12,10 @@ import './SchoolSessionsModal.css';
 
 const SchoolSessionsModal = ({ school, onClose }) => {
   const { organization, userProfile } = useAuth();
+  const { users } = useDataCache();
   const [sessions, setSessions] = useState([]);
-  const [teamMembers, setTeamMembers] = useState([]);
+  // Get team members from cache
+  const teamMembers = users || [];
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -30,14 +33,9 @@ const SchoolSessionsModal = ({ school, onClose }) => {
         setLoading(true);
         setError('');
 
-        // Load sessions and team members in parallel
-        const [sessionsData, teamData] = await Promise.all([
-          getSessionsForSchool(school.id, organization.id),
-          getTeamMembers(organization.id)
-        ]);
-
+        // Load sessions (team members come from cache)
+        const sessionsData = await getSessionsForSchool(school.id, organization.id);
         setSessions(sessionsData);
-        setTeamMembers(teamData);
       } catch (err) {
         console.error('Error loading school sessions:', err);
         setError('Failed to load sessions. Please try again.');

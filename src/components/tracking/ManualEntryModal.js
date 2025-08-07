@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useDataCache } from '../../contexts/DataCacheContext';
 import { addSDCardRecord, addJobBoxRecord, SD_CARD_STATUSES, JOB_BOX_STATUSES } from '../../services/trackingService';
-import { getSchools, getTeamMembers } from '../../firebase/firestore';
+import { getSchools } from '../../firebase/firestore';
 import NotificationModal from '../shared/NotificationModal';
 import { sanitizeFormData, validateInput, defaultRateLimiter } from '../../utils/inputSanitizer';
 import '../shared/NotificationModal.css';
@@ -19,14 +20,17 @@ const ManualEntryModal = ({ type, organizationID, onClose, onSave }) => {
   });
   const [loading, setLoading] = useState(false);
   const [schools, setSchools] = useState([]);
-  const [users, setUsers] = useState([]);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [notificationData, setNotificationData] = useState(null);
   const { userProfile } = useAuth();
+  const { users: cachedUsers } = useDataCache();
+  
+  // Get users from cache
+  const users = cachedUsers || [];
 
   useEffect(() => {
     loadSchools();
-    loadUsers();
+    // Users are now loaded from DataCacheContext
   }, [organizationID]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadSchools = async () => {
@@ -43,19 +47,7 @@ const ManualEntryModal = ({ type, organizationID, onClose, onSave }) => {
     }
   };
 
-  const loadUsers = async () => {
-    try {
-      const usersList = await getTeamMembers(organizationID);
-      setUsers(usersList);
-    } catch (error) {
-      setNotificationData({
-        type: 'error',
-        title: 'Error',
-        message: 'Unable to load users. Please try again.'
-      });
-      setShowNotificationModal(true);
-    }
-  };
+  // Users loading is now handled by DataCacheContext
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

@@ -39,6 +39,16 @@ const formatLocalDate = (date) => {
 export const DataCacheProvider = ({ children }) => {
   const { userProfile, organization } = useAuth();
   const { showToast } = useToast();
+  
+  // Store organization ID in state to use as stable dependency
+  const [currentOrgId, setCurrentOrgId] = useState(organization?.id);
+  
+  // Update org ID only when it actually changes
+  useEffect(() => {
+    if (organization?.id !== currentOrgId) {
+      setCurrentOrgId(organization?.id);
+    }
+  }, [organization?.id, currentOrgId]);
 
   // Cache state
   const [sessionsCache, setSessionsCache] = useState({
@@ -73,6 +83,14 @@ export const DataCacheProvider = ({ children }) => {
   // Ref to access current state without causing re-renders
   const usersCacheRef = useRef(usersCache);
   usersCacheRef.current = usersCache;
+
+  // Refs to track if listeners are active (persist across renders)
+  const listenersActiveRef = useRef({
+    sessions: false,
+    users: false,
+    timeOff: false,
+    dailyJobReports: false
+  });
 
   // Listener cleanup functions
   const [listeners, setListeners] = useState({
@@ -482,12 +500,12 @@ export const DataCacheProvider = ({ children }) => {
   }, [organization?.id, userProfile, processSessionsData, setupSessionsListener]);
 
   // Set up real-time listener for users
-  const setupUsersListener = useCallback((existingCachedUsers = null) => {
-    if (!organization?.id) return;
+  const setupUsersListener = useCallback((orgId, existingCachedUsers = null) => {
+    if (!orgId) return;
 
     const usersQuery = query(
       collection(firestore, "users"),
-      where("organizationID", "==", organization.id)
+      where("organizationID", "==", orgId)
       // Removed orderBy - sorting is done client-side in processUsersData
     );
 
@@ -505,9 +523,9 @@ export const DataCacheProvider = ({ children }) => {
           });
 
           // Check for differences between cached and live data
+          let changesDetected = [];
           if (existingCachedUsers && existingCachedUsers.length > 0) {
             // Compare cached data with live data to detect changes
-            const changesDetected = [];
             
             rawUsers.forEach((liveUser) => {
               const cachedUser = existingCachedUsers.find(u => u.id === liveUser.id);
@@ -560,13 +578,29 @@ export const DataCacheProvider = ({ children }) => {
           });
           
           // Update cache with fresh data
-          dataCacheService.setCachedUsers(organization.id, rawUsers);
-          dataCacheService.setLastSyncTime(organization.id, 'users');
+          dataCacheService.setCachedUsers(orgId, rawUsers);
+          dataCacheService.setLastSyncTime(orgId, 'users');
           
           // Track initial load reads
           if (!snapshot.metadata.fromCache) {
-            readCounter.recordRead('onSnapshot-initial', 'users', 'DataCacheContext', snapshot.size);
-            secureLogger.debug("Users initial load:", snapshot.size, "documents");
+            // If we had cached data and are comparing, only count actual changes
+            if (existingCachedUsers && existingCachedUsers.length > 0) {
+              if (changesDetected.length > 0) {
+                console.log('📊 USERS LISTENER: Initial sync detected', changesDetected.length, 'changes from cached data');
+                readCounter.recordRead('onSnapshot-sync', 'users', 'DataCacheContext', changesDetected.length);
+                secureLogger.debug("Users sync with cache:", changesDetected.length, "changes detected");
+              } else {
+                console.log('📊 USERS LISTENER: Initial sync - no changes from cached data (0 reads)');
+                // No changes detected, data came from Firestore's cache
+              }
+            } else {
+              // No cached data, this is a full fresh load
+              console.log('📊 USERS LISTENER: Initial load fetched', snapshot.size, 'users from Firebase (no cache)');
+              readCounter.recordRead('onSnapshot-initial', 'users', 'DataCacheContext', snapshot.size);
+              secureLogger.debug("Users initial load:", snapshot.size, "documents");
+            }
+          } else {
+            console.log('📊 USERS LISTENER: Initial load from Firestore cache (no Firebase reads)');
           }
           
           isInitialLoad = false;
@@ -575,9 +609,9 @@ export const DataCacheProvider = ({ children }) => {
           const changes = snapshot.docChanges();
           
           if (changes.length > 0) {
-            // Use ref to get current state without causing re-renders
-            const currentUsers = usersCacheRef.current.data || [];
-            let updatedUsers = [...currentUsers];
+            // Get current cached users (raw data, not processed)
+            const cachedUsers = dataCacheService.getCachedUsers(orgId) || [];
+            let updatedUsers = [...cachedUsers];
             
             changes.forEach((change) => {
               const docData = { id: change.doc.id, ...change.doc.data() };
@@ -608,8 +642,8 @@ export const DataCacheProvider = ({ children }) => {
             });
             
             // Update cache
-            dataCacheService.setCachedUsers(organization.id, updatedUsers);
-            dataCacheService.setLastSyncTime(organization.id, 'users');
+            dataCacheService.setCachedUsers(orgId, updatedUsers);
+            dataCacheService.setLastSyncTime(orgId, 'users');
             
             // Track only changed documents
             readCounter.recordRead('onSnapshot-changes', 'users', 'DataCacheContext', changes.length);
@@ -628,17 +662,37 @@ export const DataCacheProvider = ({ children }) => {
     );
 
     return unsubscribe;
-  }, [organization?.id, processUsersData]);
+  }, [processUsersData]);
+
+  // Store stable organization ID to prevent listener recreation
+  const [stableOrgId, setStableOrgId] = useState(null);
+  
+  // Update stable org ID only when it actually changes
+  useEffect(() => {
+    if (organization?.id && organization.id !== stableOrgId) {
+      console.log('🔄 ORG ID: Updating stable org ID from', stableOrgId, 'to', organization.id);
+      setStableOrgId(organization.id);
+    }
+  }, [organization?.id, stableOrgId]);
 
   // Set up users real-time listener with cache-first loading
   useEffect(() => {
-    if (!organization?.id) return;
+    if (!stableOrgId) return;
+
+    // Skip if listener is already active
+    if (listenersActiveRef.current.users) {
+      console.log('🔵 USERS LISTENER: Already active, skipping setup');
+      secureLogger.debug('Users listener already active, skipping setup');
+      return;
+    }
+    
+    console.log('🟡 USERS LISTENER: Creating new listener for organization:', stableOrgId);
 
     let unsubscribe = null;
     let syncTimeout = null;
 
     // Load from cache first for instant display
-    const cachedUsers = dataCacheService.getCachedUsers(organization.id);
+    const cachedUsers = dataCacheService.getCachedUsers(stableOrgId);
     if (cachedUsers) {
       const processedData = processUsersData(cachedUsers);
       setUsersCache({
@@ -652,13 +706,21 @@ export const DataCacheProvider = ({ children }) => {
       // Delay real-time sync slightly to avoid immediate reads
       // Pass the cached users so the listener can detect changes
       syncTimeout = setTimeout(() => {
-        unsubscribe = setupUsersListener(cachedUsers);
+        if (!listenersActiveRef.current.users) {
+          console.log('🟢 USERS LISTENER: Setting up after 5s delay');
+          unsubscribe = setupUsersListener(stableOrgId, cachedUsers);
+          listenersActiveRef.current.users = true;
+        } else {
+          console.log('🔵 USERS LISTENER: Already active during timeout, skipping');
+        }
       }, 5000); // 5 second delay to match sessions
     } else {
       // No cache - need immediate sync
+      console.log('🔴 USERS LISTENER: No cache, setting up immediately');
       setUsersCache(prev => ({ ...prev, loading: true, error: null }));
       readCounter.recordCacheMiss('users', 'DataCacheContext');
       unsubscribe = setupUsersListener(null);
+      listenersActiveRef.current.users = true;
     }
 
     // Store cleanup function
@@ -667,14 +729,16 @@ export const DataCacheProvider = ({ children }) => {
       users: () => {
         if (syncTimeout) clearTimeout(syncTimeout);
         if (unsubscribe) unsubscribe();
+        listenersActiveRef.current.users = false;
       }
     }));
 
+    // Don't cleanup on navigation, only on organization change or unmount
     return () => {
+      // Only cleanup if organization is changing or component is unmounting
       if (syncTimeout) clearTimeout(syncTimeout);
-      if (unsubscribe) unsubscribe();
     };
-  }, [organization?.id, processUsersData, setupUsersListener]);
+  }, [stableOrgId, processUsersData, setupUsersListener]); // Use stable org ID to prevent unnecessary re-runs
 
   // Set up real-time listener for time-off requests
   const setupTimeOffListener = useCallback(() => {
@@ -986,16 +1050,26 @@ export const DataCacheProvider = ({ children }) => {
     };
   }, [organization?.id, processDailyJobReportsData, setupDailyJobReportsListener]);
 
-  // Cleanup all listeners on unmount
+  // Cleanup all listeners on unmount ONLY
   useEffect(() => {
     return () => {
+      console.log('🔴 DATACACHE UNMOUNTING: Cleaning up all listeners');
+      // Reset the active flags
+      listenersActiveRef.current = {
+        sessions: false,
+        users: false,
+        timeOff: false,
+        dailyJobReports: false
+      };
+      // Call cleanup functions
       Object.values(listeners).forEach(unsubscribe => {
         if (unsubscribe) {
           unsubscribe();
         }
       });
     };
-  }, [listeners]);
+    // Empty dependency array - only run on unmount
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cache manipulation functions
   const invalidateCache = useCallback((cacheType) => {
@@ -1099,9 +1173,9 @@ export const DataCacheProvider = ({ children }) => {
     });
     
     // Update cache storage - clear old cache first to ensure fresh data
-    if (organization?.id) {
-      dataCacheService.setCachedUsers(organization.id, updatedUsers);
-      console.log('localStorage cache updated for organization:', organization.id);
+    if (stableOrgId) {
+      dataCacheService.setCachedUsers(stableOrgId, updatedUsers);
+      console.log('localStorage cache updated for organization:', stableOrgId);
     } else {
       console.warn('No organization ID - cannot update localStorage cache');
     }

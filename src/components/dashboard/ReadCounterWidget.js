@@ -59,7 +59,7 @@ const ReadCounterWidget = () => {
   const getTopCollections = (byCollection) => {
     return Object.entries(byCollection)
       .sort(([,a], [,b]) => b - a)
-      .slice(0, 3);
+      .slice(0, 10);
   };
 
   const handleReset = () => {
@@ -184,7 +184,7 @@ const ReadCounterWidget = () => {
 
           {/* Top Collections */}
           <div className="read-counter-widget__section">
-            <h4>Top Collections (Session)</h4>
+            <h4>Top 10 Collections (Session)</h4>
             <div className="read-counter-widget__collections">
               {getTopCollections(stats.session.byCollection).map(([collection, count]) => (
                 <div key={collection} className="read-counter-widget__collection">
