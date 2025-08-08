@@ -9,6 +9,46 @@
   overflow: hidden;
 }
 
+/* Unassigned Section */
+.day-view__unassigned-section {
+  background: #f8f9fa;
+  margin-bottom: 0;
+}
+
+.day-view__body--unassigned {
+  display: flex;
+  height: auto;
+  min-height: 90px;
+}
+
+.day-view__employees--unassigned {
+  width: 200px;
+  min-width: 200px;
+  background: #f8f9fa;
+  border-right: 2px solid #dc3545;
+  overflow: hidden;
+}
+
+.day-view__timeline-container--unassigned {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  position: relative;
+  background: #ffffff;
+  /* Hide scrollbar but keep functionality */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.day-view__timeline-container--unassigned::-webkit-scrollbar {
+  display: none;
+}
+
+.day-view__row--unassigned {
+  background: #ffffff;
+  border-bottom: 1px solid #adb5bd;
+}
+
 /* Header Section */
 .day-view__header {
   display: flex;
@@ -18,6 +58,12 @@
   position: sticky;
   top: 0;
   z-index: 10;
+  margin-top: 0;
+}
+
+/* Remove gap when header follows unassigned section */
+.day-view__unassigned-section + .day-view__header {
+  margin-top: -80px; /* Strong negative margin to eliminate the gap */
 }
 
 .day-view__corner {
@@ -105,6 +151,10 @@
 
 .day-view__employee:hover {
   background: #f8f9fa !important;
+}
+
+.day-view__employee--unassigned {
+  cursor: default !important;
 }
 
 .day-view__employee-avatar-container {

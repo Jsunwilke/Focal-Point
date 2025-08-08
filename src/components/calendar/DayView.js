@@ -29,13 +29,15 @@ const DayView = ({
   const timelineRef = useRef(null);
   const employeesRef = useRef(null);
   const timelineContainerRef = useRef(null);
+  const unassignedTimelineRef = useRef(null);
+  const headerTimelineRef = useRef(null);
 
   // Configuration
   const START_HOUR = 6; // 6 AM
   const END_HOUR = 22; // 10 PM
   const TOTAL_HOURS = END_HOUR - START_HOUR;
   const HOUR_WIDTH = 100; // pixels per hour
-  const TIMELINE_WIDTH = TOTAL_HOURS * HOUR_WIDTH;
+  const TIMELINE_WIDTH = (TOTAL_HOURS + 1) * HOUR_WIDTH; // Add extra hour for space after END_HOUR
   const PIXELS_PER_MINUTE = HOUR_WIDTH / 60;
   const BASE_SESSION_HEIGHT = 75; // Base height for session cards without notes
   const SESSION_WITH_NOTES_HEIGHT = 95; // Height for session cards with notes
@@ -64,15 +66,51 @@ const DayView = ({
         employeesRef.current.scrollTop = timelineContainerRef.current.scrollTop;
       }
     };
+    
+    // Synchronize horizontal scrolling for unassigned section
+    const handleUnassignedScroll = () => {
+      if (unassignedTimelineRef.current && timelineContainerRef.current) {
+        timelineContainerRef.current.scrollLeft = unassignedTimelineRef.current.scrollLeft;
+      }
+    };
+    
+    const handleMainTimelineHorizontalScroll = () => {
+      if (unassignedTimelineRef.current && timelineContainerRef.current) {
+        unassignedTimelineRef.current.scrollLeft = timelineContainerRef.current.scrollLeft;
+      }
+      // Also sync the header timeline
+      if (headerTimelineRef.current && timelineContainerRef.current) {
+        headerTimelineRef.current.scrollLeft = timelineContainerRef.current.scrollLeft;
+      }
+    };
+    
+    // Synchronize header timeline horizontal scrolling
+    const handleHeaderTimelineScroll = () => {
+      if (headerTimelineRef.current && timelineContainerRef.current) {
+        timelineContainerRef.current.scrollLeft = headerTimelineRef.current.scrollLeft;
+      }
+      if (headerTimelineRef.current && unassignedTimelineRef.current) {
+        unassignedTimelineRef.current.scrollLeft = headerTimelineRef.current.scrollLeft;
+      }
+    };
 
     const employeesEl = employeesRef.current;
     const timelineEl = timelineContainerRef.current;
+    const unassignedTimelineEl = unassignedTimelineRef.current;
+    const headerTimelineEl = headerTimelineRef.current;
 
     if (employeesEl) {
       employeesEl.addEventListener('scroll', handleEmployeeScroll);
     }
     if (timelineEl) {
       timelineEl.addEventListener('scroll', handleTimelineScroll);
+      timelineEl.addEventListener('scroll', handleMainTimelineHorizontalScroll);
+    }
+    if (unassignedTimelineEl) {
+      unassignedTimelineEl.addEventListener('scroll', handleUnassignedScroll);
+    }
+    if (headerTimelineEl) {
+      headerTimelineEl.addEventListener('scroll', handleHeaderTimelineScroll);
     }
 
     return () => {
@@ -81,6 +119,13 @@ const DayView = ({
       }
       if (timelineEl) {
         timelineEl.removeEventListener('scroll', handleTimelineScroll);
+        timelineEl.removeEventListener('scroll', handleMainTimelineHorizontalScroll);
+      }
+      if (unassignedTimelineEl) {
+        unassignedTimelineEl.removeEventListener('scroll', handleUnassignedScroll);
+      }
+      if (headerTimelineEl) {
+        headerTimelineEl.removeEventListener('scroll', handleHeaderTimelineScroll);
       }
     };
   }, []);
@@ -488,6 +533,50 @@ const DayView = ({
     
     onAddSession(photographerId, currentDate);
   };
+  
+  // Handle row click (for unassigned section)
+  const handleRowClick = (e, photographerId) => {
+    handleTimelineClick(e, photographerId);
+  };
+  
+  // Handle row mouse move (for hover add button)
+  const handleRowMouseMove = (e, photographerId) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    
+    // Calculate time from mouse position
+    const minutesFromStart = x / PIXELS_PER_MINUTE;
+    const totalMinutes = START_HOUR * 60 + minutesFromStart;
+    const hoverHour = Math.floor(totalMinutes / 60);
+    const hoverMinute = Math.round((totalMinutes % 60) / 30) * 30;
+    
+    setHoveredTimeSlot({
+      photographerId,
+      x: x,
+      time: `${hoverHour}:${hoverMinute.toString().padStart(2, '0')}`
+    });
+  };
+  
+  // Handle row mouse leave
+  const handleRowMouseLeave = () => {
+    setHoveredTimeSlot(null);
+  };
+  
+  // Handle add button click
+  const handleAddClick = (photographerId, time) => {
+    if (!onAddSession) return;
+    onAddSession(photographerId, currentDate);
+  };
+  
+  // Simple drag over handler (for unassigned section)
+  const handleDragOver = (e, photographerId) => {
+    handleSessionDragOver(e);
+  };
+  
+  // Simple drop handler (for unassigned section)
+  const handleDrop = (e, photographerId) => {
+    handleSessionDrop(e, photographerId);
+  };
 
   // Handle session drag start
   const handleSessionDragStart = (e, session) => {
@@ -632,14 +721,248 @@ const DayView = ({
     setDragOverEmployee(null);
   };
 
-  // Include unassigned row at the top if admin
-  const allRows = isAdmin 
-    ? [{ id: 'unassigned', firstName: 'Unassigned', lastName: 'Sessions', isUnassigned: true }, ...teamMembers]
-    : teamMembers;
+  // Check if there are any unassigned sessions for the current day
+  const unassignedSessionsForDay = getSessionsForPhotographer('unassigned');
+  const showUnassignedSection = unassignedSessionsForDay.length > 0;
+  
+  // Create unassigned member object
+  const unassignedMember = {
+    id: 'unassigned',
+    firstName: 'Unassigned',
+    lastName: 'Sessions',
+    isUnassigned: true
+  };
+  
+  // Team members list without unassigned
+  const allRows = teamMembers;
 
   return (
     <div className="day-view">
-      {/* Header with time labels */}
+      {/* Unassigned Section - Only show if there are unassigned sessions for this day */}
+      {showUnassignedSection && (
+        <div className="day-view__unassigned-section">
+          {/* Unassigned Body (no header needed) */}
+          <div className="day-view__body day-view__body--unassigned">
+            {/* Unassigned employee cell */}
+            <div className="day-view__employees day-view__employees--unassigned">
+              <div
+                className="day-view__employee day-view__employee--unassigned"
+                style={{
+                  height: `${calculateRowHeight(calculateSessionLayout(getSessionsForPhotographer('unassigned')))}px`,
+                  minHeight: `${BASE_ROW_HEIGHT}px`,
+                  borderRight: '2px solid #dc3545',
+                  backgroundColor: '#fff8e1',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px',
+                  boxSizing: 'border-box'
+                }}
+              >
+                {/* Avatar */}
+                <div className="day-view__employee-avatar-container">
+                  {getUserAvatar(unassignedMember)}
+                </div>
+                
+                {/* Name and Stats */}
+                <div className="day-view__employee-info" style={{ flex: 1 }}>
+                  <div 
+                    className="day-view__employee-name"
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "500",
+                      color: "#333",
+                      lineHeight: "1.2"
+                    }}
+                  >
+                    {unassignedMember.firstName} {unassignedMember.lastName}
+                  </div>
+                  <div 
+                    className="day-view__employee-stats"
+                    style={{
+                      fontSize: "12px",
+                      color: "#6c757d",
+                      marginTop: "2px"
+                    }}
+                  >
+                    Needs Assignment
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Unassigned timeline */}
+            <div className="day-view__timeline-container day-view__timeline-container--unassigned" ref={unassignedTimelineRef}>
+              <div 
+                className="day-view__timeline" 
+                style={{ width: `${TIMELINE_WIDTH}px` }}
+              >
+                {/* Grid lines */}
+                <div className="day-view__grid">
+                  {hourLabels.map((hour) => (
+                    <div
+                      key={`unassigned-grid-${hour}`}
+                      className="day-view__grid-line"
+                      style={{ left: `${(hour - START_HOUR) * HOUR_WIDTH}px` }}
+                    />
+                  ))}
+                  {/* Half-hour lines */}
+                  {hourLabels.slice(0, -1).map((hour) => (
+                    <div
+                      key={`unassigned-grid-half-${hour}`}
+                      className="day-view__grid-line day-view__grid-line--half"
+                      style={{ left: `${(hour - START_HOUR) * HOUR_WIDTH + HOUR_WIDTH / 2}px` }}
+                    />
+                  ))}
+                </div>
+                
+                {/* Unassigned row */}
+                <div
+                  className="day-view__row day-view__row--unassigned"
+                  style={{
+                    height: `${calculateRowHeight(calculateSessionLayout(getSessionsForPhotographer('unassigned')))}px`,
+                    minHeight: `${BASE_ROW_HEIGHT}px`
+                  }}
+                  onDragOver={(e) => handleDragOver(e, 'unassigned')}
+                  onDrop={(e) => handleDrop(e, 'unassigned')}
+                  onClick={(e) => handleRowClick(e, 'unassigned')}
+                  onMouseMove={(e) => handleRowMouseMove(e, 'unassigned')}
+                  onMouseLeave={handleRowMouseLeave}
+                >
+                  {/* Add button on hover */}
+                  {hoveredTimeSlot?.photographerId === 'unassigned' && isAdmin && (
+                    <button 
+                      className="day-view__add-btn"
+                      style={{ left: `${hoveredTimeSlot.x - 12}px` }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddClick('unassigned', hoveredTimeSlot.time);
+                      }}
+                    >
+                      <Plus size={14} />
+                    </button>
+                  )}
+                  
+                  {/* Unassigned sessions */}
+                  {(() => {
+                    const unassignedSessionsForRow = getSessionsForPhotographer('unassigned');
+                    if (unassignedSessionsForRow.length === 0) return null;
+                    
+                    const { layoutMap, laneHeights } = calculateSessionLayout(unassignedSessionsForRow);
+                    
+                    return unassignedSessionsForRow.map((session) => {
+                      const sessionLayoutInfo = layoutMap.get(session);
+                      const sessionStyle = getSessionStyle(session, sessionLayoutInfo, laneHeights);
+                      
+                      // Calculate session color
+                      let sessionColor = "#666";
+                      if (!session.isTimeOff) {
+                        const globalSessionOrder = getGlobalSessionOrderForDay();
+                        const globalOrderIndex = globalSessionOrder.findIndex(
+                          globalSession => globalSession.id === session.id || 
+                          (globalSession.sessionId && globalSession.sessionId === session.sessionId)
+                        );
+                        
+                        const validOrderIndex = globalOrderIndex >= 0 ? globalOrderIndex : 0;
+                        const calculatedColor = getSessionColorByOrder(validOrderIndex);
+                        sessionColor = session.sessionColor || calculatedColor;
+                      }
+                      
+                      // Calculate duration
+                      const duration = calculateDurationMinutes(session.startTime, session.endTime);
+                      const durationHours = Math.floor(duration / 60);
+                      const durationMins = duration % 60;
+                      const durationText = durationHours > 0 
+                        ? (durationMins > 0 ? `${durationHours}h ${durationMins}m` : `${durationHours}h`)
+                        : `${durationMins}m`;
+                      
+                      // Format time display
+                      const formatTimeShort = (time) => {
+                        if (!time) return "";
+                        const [hours, minutes] = time.split(":");
+                        const hour = parseInt(hours);
+                        const ampm = hour >= 12 ? "PM" : "AM";
+                        const hour12 = hour % 12 || 12;
+                        return `${hour12}:${minutes} ${ampm}`;
+                      };
+                      
+                      // Apply session styles
+                      const finalSessionStyle = {
+                        ...sessionStyle,
+                        backgroundColor: sessionColor,
+                        color: "white",
+                        ...(session.isPublished === false && !session.isTimeOff ? {
+                          border: `2px dashed ${sessionColor}`,
+                          backgroundColor: sessionColor + "40",
+                          color: sessionColor
+                        } : {})
+                      };
+                      
+                      return (
+                        <div
+                          key={session.id}
+                          className="day-view__session"
+                          style={finalSessionStyle}
+                          draggable={isAdmin && !session.isTimeOff}
+                          onDragStart={(e) => !session.isTimeOff && handleSessionDragStart(e, session)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (session.isTimeOff && onTimeOffClick) {
+                              onTimeOffClick(session);
+                            } else if (onSessionClick) {
+                              onSessionClick(session);
+                            }
+                          }}
+                          title={`${session.title || session.schoolName || 'Session'} - ${session.startTime} to ${session.endTime}`}
+                        >
+                          {/* Session content - same as regular sessions */}
+                          <div style={{ fontSize: "12px", fontWeight: "500", marginBottom: "4px", opacity: 0.9, lineHeight: "1.3", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {formatTimeShort(session.startTime)} - {formatTimeShort(session.endTime)}
+                            {duration > 0 && ` (${durationText})`}
+                          </div>
+                          <div style={{ fontSize: "13px", fontWeight: "600", lineHeight: "1.3", color: session.isTimeOff ? "#333" : (session.isPublished === false ? "#333" : "white"), marginBottom: "3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {session.isTimeOff ? (session.reason || 'Time Off') : (session.schoolName || 'School')}
+                          </div>
+                          {(session.sessionTypes || session.sessionType) && !session.isTimeOff && (
+                            <div style={{ display: 'flex', gap: '2px', flexWrap: 'nowrap', marginTop: '2px', overflow: 'hidden' }}>
+                              {(() => {
+                                const sessionTypes = normalizeSessionTypes(session.sessionTypes || session.sessionType);
+                                const colors = getSessionTypeColors(sessionTypes, organization);
+                                const names = getSessionTypeNames(sessionTypes, organization);
+                                
+                                return sessionTypes.map((type, index) => {
+                                  let displayName = names[index];
+                                  if (type === 'other' && session.customSessionType) {
+                                    displayName = session.customSessionType;
+                                  }
+                                  
+                                  return (
+                                    <div key={`${type}-${index}`} style={{ fontSize: "9px", backgroundColor: colors[index], color: "white", padding: "2px 5px", borderRadius: "6px", textTransform: "capitalize", fontWeight: "500", display: "inline-block", lineHeight: "1.2" }}>
+                                      {displayName}
+                                    </div>
+                                  );
+                                });
+                              })()}
+                            </div>
+                          )}
+                          {(session.notes || session.photographerNotes) && (
+                            <div style={{ fontSize: "11px", opacity: 0.8, fontStyle: "italic", marginTop: "4px", borderTop: "1px solid rgba(255,255,255,0.2)", paddingTop: "3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {session.photographerNotes && !session.notes && "📝 "}
+                              {session.notes || (session.photographerNotes ? "Has photographer notes" : "")}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Main Header with time labels */}
       <div className="day-view__header">
         <div className="day-view__corner">
           {/* Empty corner above employee names */}
@@ -651,16 +974,18 @@ const DayView = ({
             })}
           </div>
         </div>
-        <div className="day-view__timeline-header">
-          {hourLabels.map((hour) => (
-            <div 
-              key={hour} 
-              className="day-view__hour-label"
-              style={{ width: `${HOUR_WIDTH}px` }}
-            >
-              {formatHour(hour)}
-            </div>
-          ))}
+        <div className="day-view__timeline-header" ref={headerTimelineRef}>
+          <div style={{ display: 'flex', width: `${TIMELINE_WIDTH}px` }}>
+            {hourLabels.map((hour) => (
+              <div 
+                key={hour} 
+                className="day-view__hour-label"
+                style={{ width: `${HOUR_WIDTH}px` }}
+              >
+                {formatHour(hour)}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

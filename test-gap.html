@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        /* Recreate the exact structure to find the gap */
+        .day-view {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .day-view__unassigned-section {
+            background: #f8f9fa;
+            margin-bottom: 0;
+        }
+        
+        .day-view__body--unassigned {
+            display: flex;
+            height: auto;
+            min-height: 90px;
+        }
+        
+        .day-view__header {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e1e5e9;
+            min-height: 50px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            margin-top: 0;
+        }
+        
+        /* Test different scenarios */
+        .test1 { background: red !important; }
+        .test2 { background: blue !important; }
+        .test3 { background: green !important; }
+    </style>
+</head>
+<body>
+    <div class="day-view">
+        <div class="day-view__unassigned-section test1">
+            <div class="day-view__body--unassigned">
+                Unassigned Section
+            </div>
+        </div>
+        <div class="day-view__header test2">
+            Header Section
+        </div>
+    </div>
+    
+    <script>
+        // Check computed styles
+        const unassigned = document.querySelector('.day-view__unassigned-section');
+        const header = document.querySelector('.day-view__header');
+        const dayView = document.querySelector('.day-view');
+        
+        console.log('Unassigned margin-bottom:', getComputedStyle(unassigned).marginBottom);
+        console.log('Header margin-top:', getComputedStyle(header).marginTop);
+        console.log('Day-view gap:', getComputedStyle(dayView).gap);
+        console.log('Day-view row-gap:', getComputedStyle(dayView).rowGap);
+        
+        // Check actual positions
+        const unassignedRect = unassigned.getBoundingClientRect();
+        const headerRect = header.getBoundingClientRect();
+        console.log('Gap between elements:', headerRect.top - unassignedRect.bottom, 'px');
+    </script>
+</body>
+</html>

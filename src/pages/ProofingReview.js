@@ -1,7 +1,7 @@
 // src/pages/ProofingReview.js
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { Check, X, ChevronLeft, ChevronRight, Lock, Calendar, AlertCircle } from "lucide-react";
+import { Check, X, ChevronLeft, ChevronRight, Lock, Calendar, AlertCircle, CheckCircle } from "lucide-react";
 import { getGalleryById, getProofsByGalleryId, updateProofStatus, logActivity, verifyPassword } from "../services/proofingService";
 import ProofReviewModal from "../components/proofing/ProofReviewModal";
 import PasswordPrompt from "../components/proofing/PasswordPrompt";
@@ -42,21 +42,40 @@ const ProofingReview = () => {
         }
 
         // Load proofs
-        const proofsData = await getProofsByGalleryId(id);
-        setProofs(proofsData);
+        try {
+          const proofsData = await getProofsByGalleryId(id);
+          setProofs(proofsData || []);
+        } catch (proofError) {
+          console.error("Error loading proofs:", proofError);
+          // Don't fail completely if proofs can't load, show gallery with error message
+          setError("Gallery loaded but images could not be retrieved. Please refresh the page.");
+          setProofs([]);
+        }
         
         setLoading(false);
       } catch (err) {
         console.error("Error loading gallery:", err);
-        setError("Failed to load gallery");
+        let errorMessage = "Failed to load gallery";
+        
+        // Provide more specific error messages
+        if (err.code === 'permission-denied') {
+          errorMessage = "You don't have permission to view this gallery";
+        } else if (err.code === 'not-found') {
+          errorMessage = "Gallery not found";
+        } else if (err.message?.includes('index')) {
+          errorMessage = "Gallery configuration error. Please contact support.";
+        } else if (err.message?.includes('network')) {
+          errorMessage = "Network error. Please check your connection and try again.";
+        }
+        
+        setError(errorMessage);
         setLoading(false);
       }
     };
 
-    if (passwordVerified || !passwordRequired) {
-      loadGallery();
-    }
-  }, [id, passwordVerified, passwordRequired]);
+    // Always load gallery on mount or when ID changes
+    loadGallery();
+  }, [id]); // Only depend on ID, handle password state inside loadGallery
 
   // Handle password verification
   const handlePasswordSubmit = async (password) => {
@@ -195,12 +214,15 @@ const ProofingReview = () => {
     );
   }
 
-  if (error) {
+  if (error && !gallery) {
     return (
       <div className="proofing-review-page">
         <div className="error-container">
           <h2>Error</h2>
           <p>{error}</p>
+          <button onClick={() => window.location.reload()} className="btn-primary">
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -213,6 +235,21 @@ const ProofingReview = () => {
           onSubmit={handlePasswordSubmit}
           galleryName={gallery?.name}
         />
+      </div>
+    );
+  }
+
+  // Fallback for when gallery is null after loading
+  if (!loading && !gallery) {
+    return (
+      <div className="proofing-review-page">
+        <div className="error-container">
+          <h2>Gallery Not Found</h2>
+          <p>The gallery could not be loaded. It may have been deleted or the link may be invalid.</p>
+          <button onClick={() => window.location.reload()} className="btn-primary">
+            Try Again
+          </button>
+        </div>
       </div>
     );
   }
@@ -241,6 +278,30 @@ const ProofingReview = () => {
               </button>
             </form>
           </div>
+        </div>
+      )}
+
+      {error && gallery && (
+        <div className="error-banner" style={{
+          background: '#fff3cd',
+          color: '#856404',
+          padding: '12px 20px',
+          borderBottom: '1px solid #ffeeba',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <span>{error}</span>
+          <button onClick={() => window.location.reload()} style={{
+            background: '#856404',
+            color: 'white',
+            border: 'none',
+            padding: '4px 12px',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}>
+            Refresh
+          </button>
         </div>
       )}
 

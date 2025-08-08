@@ -65,17 +65,30 @@ export const createGallery = async (galleryData) => {
 // Get gallery by ID (public access)
 export const getGalleryById = async (galleryId) => {
   try {
+    if (!galleryId) {
+      console.error("No gallery ID provided");
+      return null;
+    }
+    
     const galleryDoc = await getDoc(doc(firestore, "proofGalleries", galleryId));
     readCounter.recordRead("get", "proofGalleries", "getGalleryById", 1);
     
     if (!galleryDoc.exists()) {
+      console.log("Gallery not found:", galleryId);
       return null;
     }
     
-    return { id: galleryDoc.id, ...galleryDoc.data() };
+    const data = galleryDoc.data();
+    if (!data) {
+      console.error("Gallery exists but has no data:", galleryId);
+      return null;
+    }
+    
+    return { id: galleryDoc.id, ...data };
   } catch (error) {
     console.error("Error getting gallery:", error);
-    throw error;
+    // Don't throw, return null to handle gracefully
+    return null;
   }
 };
 
@@ -283,19 +296,34 @@ const cleanupUploadedFiles = async (uploadedFiles) => {
 // Get proofs by gallery ID
 export const getProofsByGalleryId = async (galleryId) => {
   try {
-    const q = query(
-      collection(firestore, "proofs"),
-      where("galleryId", "==", galleryId),
-      orderBy("order", "asc")
-    );
+    // Try with orderBy first
+    let snapshot;
+    try {
+      const q = query(
+        collection(firestore, "proofs"),
+        where("galleryId", "==", galleryId),
+        orderBy("order", "asc")
+      );
+      snapshot = await getDocs(q);
+    } catch (orderError) {
+      // If orderBy fails (likely missing index), try without it
+      console.warn("OrderBy failed, trying without ordering:", orderError.message);
+      const q = query(
+        collection(firestore, "proofs"),
+        where("galleryId", "==", galleryId)
+      );
+      snapshot = await getDocs(q);
+    }
     
-    const snapshot = await getDocs(q);
     readCounter.recordRead("query", "proofs", "getProofsByGalleryId", snapshot.docs.length);
     
-    return snapshot.docs.map(doc => ({
+    const proofs = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+    
+    // Sort client-side if order field exists but index is missing
+    return proofs.sort((a, b) => (a.order || 0) - (b.order || 0));
   } catch (error) {
     console.error("Error getting proofs:", error);
     throw error;
