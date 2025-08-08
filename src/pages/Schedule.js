@@ -77,6 +77,16 @@ const subMonths = (date, months) => {
   return addMonths(date, -months);
 };
 
+const addDays = (date, days) => {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+};
+
+const subDays = (date, days) => {
+  return addDays(date, -days);
+};
+
 // Helper function to format dates consistently
 const formatLocalDate = (date) => {
   const year = date.getFullYear();
@@ -343,12 +353,16 @@ const Schedule = () => {
     loadBlockedDates();
   }, [organization?.id, showBlockedDatesModal, showQuickBlockModal]);
 
-  // Handle header date click for quick blocking
-  const handleHeaderDateClick = (date) => {
-    // Only allow admins/managers to block dates
-    if (isAdmin) {
+  // Handle header date click - switch to day view or quick blocking
+  const handleHeaderDateClick = (date, event) => {
+    // If shift key is held and user is admin, open quick block modal
+    if (event && event.shiftKey && isAdmin) {
       setSelectedDateForBlock(date);
       setShowQuickBlockModal(true);
+    } else {
+      // Otherwise, switch to day view for that date
+      setCurrentDate(date);
+      setViewMode("day");
     }
   };
 
@@ -632,7 +646,16 @@ const Schedule = () => {
 
   // Get date range based on view mode
   const getDateRange = () => {
-    if (viewMode === "week") {
+    if (viewMode === "day") {
+      const dayStart = new Date(currentDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(currentDate);
+      dayEnd.setHours(23, 59, 59, 999);
+      return {
+        start: dayStart,
+        end: dayEnd,
+      };
+    } else if (viewMode === "week") {
       return {
         start: startOfWeek(currentDate, 0),
         end: endOfWeek(currentDate, 0),
@@ -659,7 +682,9 @@ const Schedule = () => {
 
   // Navigation functions
   const navigatePrevious = () => {
-    if (viewMode === "week") {
+    if (viewMode === "day") {
+      setCurrentDate(subDays(currentDate, 1));
+    } else if (viewMode === "week") {
       setCurrentDate(subWeeks(currentDate, 1));
     } else {
       setCurrentDate(subMonths(currentDate, 1));
@@ -667,7 +692,9 @@ const Schedule = () => {
   };
 
   const navigateNext = () => {
-    if (viewMode === "week") {
+    if (viewMode === "day") {
+      setCurrentDate(addDays(currentDate, 1));
+    } else if (viewMode === "week") {
       setCurrentDate(addWeeks(currentDate, 1));
     } else {
       setCurrentDate(addMonths(currentDate, 1));
@@ -778,7 +805,14 @@ const Schedule = () => {
 
   // Format date range for display
   const formatDateRange = () => {
-    if (viewMode === "week") {
+    if (viewMode === "day") {
+      return currentDate.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+    } else if (viewMode === "week") {
       const start = dateRange.start;
       const end = dateRange.end;
       const startMonth = start.toLocaleDateString("en-US", { month: "short" });
@@ -1017,6 +1051,14 @@ const Schedule = () => {
         <div className="schedule__controls-left">
           {/* View Mode Selector */}
           <div className="schedule__view-selector">
+            <button
+              className={`schedule__view-btn ${
+                viewMode === "day" ? "schedule__view-btn--active" : ""
+              }`}
+              onClick={() => setViewMode("day")}
+            >
+              Day
+            </button>
             <button
               className={`schedule__view-btn ${
                 viewMode === "week" ? "schedule__view-btn--active" : ""

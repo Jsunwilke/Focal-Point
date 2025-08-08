@@ -1215,12 +1215,39 @@ const WeekView = ({
               ...headerCellStyle,
               ...(isToday(day) ? todayHeaderStyle : {}),
               ...(isDateBlocked(day) ? { backgroundColor: '#ffe6e6' } : {}),
-              position: 'relative'
+              position: 'relative',
+              cursor: isDateBlocked(day) ? "not-allowed" : "pointer",
+              userSelect: "none",
+              transition: "background-color 0.2s"
             }}
+            onClick={(event) => {
+              if (onHeaderDateClick && !isDateBlocked(day)) {
+                onHeaderDateClick(day, event);
+              }
+            }}
+            onMouseEnter={(e) => {
+              if (!isDateBlocked(day)) {
+                e.currentTarget.style.backgroundColor = isToday(day) ? '#e6f3ff' : '#f0f8ff';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isDateBlocked(day)) {
+                e.currentTarget.style.backgroundColor = isToday(day) ? todayHeaderStyle.backgroundColor : '';
+              } else {
+                e.currentTarget.style.backgroundColor = '#ffe6e6';
+              }
+            }}
+            title={
+              isDateBlocked(day) 
+                ? `Already blocked: ${getBlockedInfoForDate(day)?.reason || "Blocked"}`
+                : isAdmin 
+                  ? "Shift+Click to block date, Click to view day"
+                  : "Click to view day"
+            }
           >
             <div
               className="calendar-header__day"
-              style={{ marginBottom: "4px" }}
+              style={{ marginBottom: "4px", pointerEvents: "none" }}
             >
               {dayNames[index]}
             </div>
@@ -1231,21 +1258,8 @@ const WeekView = ({
               style={{
                 fontSize: "var(--font-size-lg, 16px)",
                 fontWeight: "var(--font-weight-semibold, 600)",
-                cursor: isAdmin ? (isDateBlocked(day) ? "not-allowed" : "pointer") : "default",
-                userSelect: "none",
+                pointerEvents: "none"
               }}
-              onClick={() => {
-                if (isAdmin && onHeaderDateClick && !isDateBlocked(day)) {
-                  onHeaderDateClick(day);
-                }
-              }}
-              title={
-                isAdmin 
-                  ? (isDateBlocked(day) 
-                      ? `Already blocked: ${getBlockedInfoForDate(day)?.reason || "Blocked"}` 
-                      : "Click to block this date")
-                  : ""
-              }
             >
               {day.getDate()}
             </div>

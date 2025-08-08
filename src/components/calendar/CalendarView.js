@@ -2,6 +2,7 @@
 import React from "react";
 import WeekView from "./WeekView";
 import MonthView from "./MonthView";
+import DayView from "./DayView";
 
 const CalendarView = ({
   viewMode,
@@ -25,6 +26,26 @@ const CalendarView = ({
 }) => {
   const renderView = () => {
     switch (viewMode) {
+      case "day":
+        return (
+          <DayView
+            currentDate={currentDate}
+            sessions={sessions}
+            teamMembers={teamMembers}
+            scheduleType={scheduleType}
+            userProfile={userProfile}
+            organization={organization}
+            blockedDates={blockedDates}
+            isAdmin={isAdmin}
+            onUpdateSession={onUpdateSession}
+            onSessionClick={onSessionClick}
+            onTimeOffClick={onTimeOffClick}
+            onAddSession={onAddSession}
+            onEmployeeReorder={onEmployeeReorder}
+            onResetEmployeeOrder={onResetEmployeeOrder}
+            hasCustomOrder={hasCustomOrder}
+          />
+        );
       case "week":
         return (
           <WeekView
