@@ -351,30 +351,9 @@ const HoursTrackingWidget = () => {
 
   const weekStats = calculateProgress(weekHours, weekTarget, true);
   
-  // Special handling for bi-weekly pay periods with first week overtime
-  let periodStats;
-  if (currentPeriod?.type === 'bi-weekly' && firstWeekHours > 40) {
-    // Calculate how much of the first week is overtime
-    const firstWeekOvertime = firstWeekHours - 40;
-    const regularHours = 40 + secondWeekHours; // First 40 hours of week 1 + all of week 2
-    const totalHours = firstWeekHours + secondWeekHours;
-    
-    // Calculate percentages for display
-    const totalProgress = (totalHours / periodTarget) * 100;
-    const regularPercentage = (regularHours / totalHours) * 100;
-    const overtimePercentage = (firstWeekOvertime / totalHours) * 100;
-    
-    periodStats = {
-      total: totalProgress,
-      regular: regularPercentage,
-      overtime: overtimePercentage,
-      overtimeHours: firstWeekOvertime,
-      hasOvertime: true,
-      isPartialOT: totalHours < periodTarget // Flag to indicate we're showing OT before hitting target
-    };
-  } else {
-    periodStats = calculateProgress(periodHours, periodTarget);
-  }
+  // Calculate period stats using the standard method for all period types
+  // This ensures correct overtime calculation: total hours - target hours
+  const periodStats = calculateProgress(periodHours, periodTarget);
 
   return (
     <div className="hours-tracking-widget">

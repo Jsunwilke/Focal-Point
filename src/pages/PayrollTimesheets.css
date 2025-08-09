@@ -33,7 +33,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: var(--spacing-2xl);
+  margin-bottom: var(--spacing-lg);
   gap: var(--spacing-lg);
 }
 
@@ -45,7 +45,7 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: var(--font-size-3xl);
+  font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
   color: var(--text-primary);
   margin-bottom: var(--spacing-xs);
@@ -135,8 +135,8 @@
   background: var(--background-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
-  margin-bottom: var(--spacing-xl);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
 }
 
 /* Error Display */
@@ -177,22 +177,22 @@
 
 /* Insights Section */
 .payroll-insights {
-  margin-bottom: var(--spacing-xl);
+  margin-bottom: var(--spacing-lg);
 }
 
 .insights-title {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
 }
 
 .insights-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--spacing-lg);
 }
 
@@ -200,7 +200,7 @@
   background: var(--background-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
+  padding: var(--spacing-md);
 }
 
 .insight-card-title {
@@ -225,14 +225,14 @@
 .top-performers-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs);
 }
 
 .performer-item {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm);
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs);
   background: var(--background-tertiary);
   border-radius: var(--radius-sm);
 }
@@ -329,7 +329,7 @@
 .payroll-tabs {
   display: flex;
   gap: 0;
-  margin-bottom: var(--spacing-xl);
+  margin-bottom: var(--spacing-lg);
   background: var(--background-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -342,7 +342,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-lg);
+  padding: var(--spacing-sm) var(--spacing-md);
   background: var(--background-secondary);
   border: none;
   border-right: 1px solid var(--border-color);
@@ -727,16 +727,16 @@
 /* Summary Cards */
 .payroll-summary-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-lg);
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
 }
 
 .summary-card {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-lg);
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
   background: var(--background-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -746,8 +746,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   background: var(--primary-light);
   color: var(--primary-color);
   border-radius: var(--radius-md);
@@ -759,17 +759,17 @@
 }
 
 .summary-card-value {
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);
   color: var(--text-primary);
-  margin-bottom: var(--spacing-xs);
+  margin-bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .summary-card-label {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -780,16 +780,19 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
   background: var(--background-tertiary);
   border-radius: var(--radius-sm);
+  min-height: 40px;
+  overflow: visible;
 }
 
 .table-controls-left {
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
+  flex: 1;
 }
 
 .table-controls-right {
@@ -799,6 +802,11 @@
 }
 
 .search-box {
+  flex: 1;
+  max-width: 300px;
+}
+
+.search-input-wrapper {
   position: relative;
   display: flex;
   align-items: center;
@@ -808,17 +816,22 @@
   position: absolute;
   left: var(--spacing-sm);
   color: var(--text-secondary);
-  z-index: 1;
+  pointer-events: none;
+  width: 16px;
+  height: 16px;
 }
 
 .search-input {
-  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 2.5rem;
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  padding-left: 2.5rem;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
   color: var(--text-primary);
   background: var(--background-secondary);
-  width: 300px;
+  height: 38px;
+  box-sizing: border-box;
 }
 
 .search-input:focus {
@@ -1440,7 +1453,13 @@
   }
   
   .insights-grid {
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 992px) {
+  .insights-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -1461,7 +1480,7 @@
   }
   
   .payroll-summary-cards {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
   }
   
   .table-row {

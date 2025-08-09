@@ -2296,18 +2296,10 @@ export const calculateTotalHours = (timeEntries) => {
   return totalMilliseconds / (1000 * 60 * 60);
 };
 
-// Format duration in hours and minutes
+// Format duration in decimal hours
 export const formatDuration = (hours) => {
-  const wholeHours = Math.floor(hours);
-  const minutes = Math.round((hours - wholeHours) * 60);
-  
-  if (wholeHours === 0) {
-    return `${minutes}m`;
-  } else if (minutes === 0) {
-    return `${wholeHours}h`;
-  } else {
-    return `${wholeHours}h ${minutes}m`;
-  }
+  // Round to 2 decimal places
+  return hours.toFixed(2);
 };
 
 // Check for time overlap with existing entries (sanitized to prevent data exposure)

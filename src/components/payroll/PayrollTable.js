@@ -52,9 +52,12 @@ const PayrollTable = ({ payrollData, loading, onEmployeeSelect }) => {
 
   // Filter and sort employees
   const filteredEmployees = employees.filter(emp => {
+    // Add null checks for employee properties
+    if (!emp || !emp.employee) return false;
+    
     const matchesText = !filterText || 
-      emp.employee.name.toLowerCase().includes(filterText.toLowerCase()) ||
-      emp.employee.email.toLowerCase().includes(filterText.toLowerCase());
+      (emp.employee.name && emp.employee.name.toLowerCase().includes(filterText.toLowerCase())) ||
+      (emp.employee.email && emp.employee.email.toLowerCase().includes(filterText.toLowerCase()));
     
     const matchesRole = roleFilter === 'all' || emp.employee.role === roleFilter;
     
@@ -155,7 +158,9 @@ const PayrollTable = ({ payrollData, loading, onEmployeeSelect }) => {
     };
   };
 
-  const uniqueRoles = [...new Set(employees.map(emp => emp.employee.role))];
+  const uniqueRoles = [...new Set(employees
+    .filter(emp => emp && emp.employee && emp.employee.role)
+    .map(emp => emp.employee.role))];
 
   return (
     <div className="payroll-table">
@@ -206,22 +211,24 @@ const PayrollTable = ({ payrollData, loading, onEmployeeSelect }) => {
       <div className="payroll-table-controls">
         <div className="table-controls-left">
           <div className="search-box">
-            <Search size={16} className="search-icon" />
-            <input
-              type="text"
-              placeholder="Search employees..."
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              className="search-input"
-            />
-            {filterText && (
-              <button 
-                className="search-clear"
-                onClick={() => setFilterText('')}
-              >
-                <X size={16} />
-              </button>
-            )}
+            <div className="search-input-wrapper">
+              <Search size={16} className="search-icon" />
+              <input
+                type="text"
+                placeholder="Search employees..."
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+                className="search-input"
+              />
+              {filterText && (
+                <button 
+                  className="search-clear"
+                  onClick={() => setFilterText('')}
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
         
