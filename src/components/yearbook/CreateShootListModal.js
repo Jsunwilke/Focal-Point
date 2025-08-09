@@ -310,7 +310,7 @@ const overlayStyles = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  zIndex: 10001,
+  zIndex: 99999, // Very high z-index to ensure it's on top
 };
 
 const modalStyles = {

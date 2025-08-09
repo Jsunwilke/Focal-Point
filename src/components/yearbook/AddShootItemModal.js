@@ -9,7 +9,8 @@ const AddShootItemModal = ({
   isOpen, 
   onClose, 
   onSave, 
-  categories = []
+  categories = [],
+  editItem = null // If provided, we're in edit mode
 }) => {
   const [category, setCategory] = useState('');
   const [newCategory, setNewCategory] = useState('');
@@ -23,16 +24,27 @@ const AddShootItemModal = ({
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
-      setCategory(categories.length > 0 ? categories[0] : '');
-      setNewCategory('');
-      setIsNewCategory(categories.length === 0);
-      setItemName('');
-      setItemDescription('');
-      setIsRequired(false);
+      if (editItem) {
+        // Edit mode - populate with existing values
+        setCategory(editItem.category || '');
+        setNewCategory('');
+        setIsNewCategory(false);
+        setItemName(editItem.name || '');
+        setItemDescription(editItem.description || '');
+        setIsRequired(editItem.required || false);
+      } else {
+        // Add mode - reset to defaults
+        setCategory(categories.length > 0 ? categories[0] : '');
+        setNewCategory('');
+        setIsNewCategory(categories.length === 0);
+        setItemName('');
+        setItemDescription('');
+        setIsRequired(false);
+      }
       setError('');
       setIsSaving(false);
     }
-  }, [isOpen, categories]);
+  }, [isOpen, categories, editItem]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -55,15 +67,22 @@ const AddShootItemModal = ({
     setIsSaving(true);
 
     try {
-      await onSave(finalCategory, {
+      const itemData = {
         name,
         description: itemDescription.trim(),
         required: isRequired
-      });
+      };
+      
+      if (editItem) {
+        // Include item ID for edit mode
+        itemData.id = editItem.id;
+      }
+      
+      await onSave(finalCategory, itemData);
       
       onClose();
     } catch (err) {
-      setError(err.message || 'Failed to add item');
+      setError(err.message || `Failed to ${editItem ? 'update' : 'add'} item`);
       setIsSaving(false);
     }
   };
@@ -74,7 +93,7 @@ const AddShootItemModal = ({
     <div className="modal-overlay" style={overlayStyles} onClick={onClose}>
       <div className="modal-container add-item-modal" style={modalStyles} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Add New Item</h2>
+          <h2>{editItem ? 'Edit Item' : 'Add New Item'}</h2>
           <button className="modal-close" onClick={onClose}>
             <X size={20} />
           </button>
@@ -83,7 +102,7 @@ const AddShootItemModal = ({
         <form onSubmit={handleSubmit} className="add-item-form">
           <div className="form-group">
             <label htmlFor="category">Category</label>
-            {categories.length > 0 && (
+            {categories.length > 0 && !editItem && (
               <div className="category-options">
                 <label className="radio-option">
                   <input
@@ -183,8 +202,14 @@ const AddShootItemModal = ({
               className="btn btn-primary"
               disabled={isSaving}
             >
-              <Plus size={16} />
-              {isSaving ? 'Adding...' : 'Add Item'}
+              {editItem ? (
+                isSaving ? 'Updating...' : 'Update Item'
+              ) : (
+                <>
+                  <Plus size={16} />
+                  {isSaving ? 'Adding...' : 'Add Item'}
+                </>
+              )}
             </button>
           </div>
         </form>
@@ -206,7 +231,7 @@ const overlayStyles = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  zIndex: 10002,
+  zIndex: 99999, // Very high z-index to ensure it's on top
 };
 
 const modalStyles = {

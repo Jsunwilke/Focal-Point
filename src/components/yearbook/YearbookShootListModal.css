@@ -402,7 +402,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10002;
+  z-index: 99999; /* Very high z-index to ensure it's on top of everything */
 }
 
 .confirmation-dialog {

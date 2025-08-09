@@ -1,8 +1,8 @@
 const { onDocumentWritten, onDocumentCreated } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onRequest, onCall } = require('firebase-functions/v2/https');
+const { logger } = require('firebase-functions/logger');
 const admin = require('firebase-admin');
-const { logger } = require('firebase-functions');
 const axios = require('axios');
 
 // Initialize admin (only once)
@@ -17,6 +17,9 @@ const { notificationService, NotificationType } = require('./notificationService
 
 // Import Captura stats functions
 const capturaStats = require('./capturaStats');
+
+// Import proofing email service
+const proofingEmailService = require('./proofingEmailService');
 
 // Function 1: Update Player Search Index when sports jobs change
 exports.updatePlayerSearchIndex = onDocumentWritten('sportsJobs/{jobId}', async (event) => {
@@ -2234,3 +2237,219 @@ exports.getCapturaOrdersSimple = onCall({
 // Export Captura stats functions
 exports.syncDailyOrders = capturaStats.syncDailyOrders;
 exports.backfillHistoricalData = capturaStats.backfillHistoricalData;
+
+// ======================================
+// PROOFING GALLERY EMAIL NOTIFICATIONS
+// ======================================
+
+/**
+ * Cloud Function triggered when a proofGallery document is updated
+ * Checks if the gallery status changed to "approved" and sends notifications
+ */
+exports.onProofGalleryUpdate = onDocumentWritten('proofGalleries/{galleryId}', async (event) => {
+    // For v2 functions, the structure is different
+    const galleryId = event.params.galleryId;
+    
+    try {
+        // Check if we have the data
+        if (!event.data) {
+            console.log('No data in event');
+            return null;
+        }
+        
+        const change = event.data;
+        
+        // Skip if document was deleted
+        if (!change.after) {
+            console.log(`Gallery ${galleryId} deleted`);
+            return null;
+        }
+        
+        const beforeData = change.before ? change.before.data() : null;
+        const afterData = change.after.data();
+        
+        // Skip if this is a new document (not an update)
+        if (!beforeData) {
+            console.log(`Gallery ${galleryId} created (not an update)`);
+            return null;
+        }
+        
+        // Check if status changed to approved
+        if (beforeData.status !== 'approved' && afterData.status === 'approved') {
+            console.log(`Gallery ${galleryId} approved. Sending notifications...`);
+            
+            // Get organization ID
+            const organizationId = afterData.organizationId || afterData.organizationID;
+            if (!organizationId) {
+                console.error('No organization ID found for gallery');
+                return null;
+            }
+            
+            // Get team members who should be notified
+            const notifiableMembers = await getNotifiableTeamMembers(organizationId);
+            
+            if (notifiableMembers.length === 0) {
+                console.log('No team members have notifications enabled');
+                return null;
+            }
+            
+            console.log(`Found ${notifiableMembers.length} team members to notify`);
+            
+            // Prepare gallery details for email
+            const galleryDetails = {
+                id: galleryId,
+                name: afterData.name,
+                schoolName: afterData.schoolName,
+                totalImages: afterData.totalImages,
+                approvedBy: afterData.lastApprovedBy || 'Client',
+                approvedDate: new Date().toISOString()
+            };
+            
+            // Send batch emails
+            const results = await proofingEmailService.sendBatchProofingApprovalEmails(
+                notifiableMembers,
+                galleryDetails
+            );
+            
+            // Log the notification event
+            await logProofingNotificationActivity(galleryId, notifiableMembers.length, results);
+            
+            console.log(`Successfully sent ${results.successful} emails, ${results.failed} failed`);
+            return {
+                success: true,
+                sent: results.successful,
+                failed: results.failed
+            };
+        }
+        
+        return null;
+    } catch (error) {
+        // Safer error logging
+        const errorMessage = error ? (error.message || String(error)) : 'Unknown error';
+        const safeGalleryId = galleryId || 'unknown';
+        console.error(`Error in onProofGalleryUpdate for gallery ${safeGalleryId}:`, errorMessage);
+        if (error && error.stack) {
+            console.error('Stack trace:', error.stack);
+        }
+        // Don't throw error to prevent function retry
+        return { error: errorMessage };
+    }
+});
+
+/**
+ * Optional: HTTP endpoint for manual trigger (for testing)
+ */
+exports.sendProofingApprovalEmailManual = onCall({
+    cors: true,
+    enforceAppCheck: false,
+}, async (request) => {
+    try {
+        // Validate authentication
+        if (!request.auth) {
+            throw new Error('Authentication required');
+        }
+        
+        const { galleryId, organizationId } = request.data;
+        
+        if (!galleryId || !organizationId) {
+            throw new Error('Gallery ID and Organization ID are required');
+        }
+        
+        // Get gallery data
+        const galleryDoc = await db.collection('proofGalleries')
+            .doc(galleryId)
+            .get();
+        
+        if (!galleryDoc.exists) {
+            throw new Error('Gallery not found');
+        }
+        
+        const galleryData = galleryDoc.data();
+        
+        // Get notifiable team members
+        const teamMembers = await getNotifiableTeamMembers(organizationId);
+        
+        if (teamMembers.length === 0) {
+            return {
+                success: true,
+                message: 'No team members have notifications enabled',
+                sent: 0
+            };
+        }
+        
+        // Send emails
+        const results = await proofingEmailService.sendBatchProofingApprovalEmails(
+            teamMembers,
+            {
+                id: galleryId,
+                name: galleryData.name,
+                schoolName: galleryData.schoolName,
+                totalImages: galleryData.totalImages,
+                approvedBy: galleryData.lastApprovedBy || 'Client',
+                approvedDate: new Date().toISOString()
+            }
+        );
+        
+        return {
+            success: true,
+            message: `Emails sent to ${results.successful} recipients`,
+            sent: results.successful,
+            failed: results.failed,
+            results: results.details
+        };
+    } catch (error) {
+        logger.error('Error in sendProofingApprovalEmailManual:', error);
+        throw new Error(`Failed to send approval emails: ${error.message}`);
+    }
+});
+
+/**
+ * Helper function to get team members with notifications enabled
+ */
+async function getNotifiableTeamMembers(organizationId) {
+    try {
+        const snapshot = await db.collection('users')
+            .where('organizationID', '==', organizationId)
+            .where('notifyOnProofingApproval', '==', true)
+            .get();
+        
+        const teamMembers = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.email) {
+                teamMembers.push({
+                    id: doc.id,
+                    email: data.email,
+                    firstName: data.firstName || '',
+                    lastName: data.lastName || '',
+                    displayName: data.displayName || `${data.firstName} ${data.lastName}`
+                });
+            }
+        });
+        
+        return teamMembers;
+    } catch (error) {
+        console.error('Error getting notifiable team members:', error);
+        return [];
+    }
+}
+
+/**
+ * Log notification activity to Firestore
+ */
+async function logProofingNotificationActivity(galleryId, recipientCount, results) {
+    try {
+        await db.collection('proofActivity').add({
+            galleryId,
+            action: 'notifications_sent',
+            recipientCount,
+            successful: results.successful,
+            failed: results.failed,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            details: `Sent approval notifications to ${recipientCount} team members`
+        });
+    } catch (error) {
+        console.error('Error logging notification activity:', error);
+        // Don't throw - logging shouldn't break the notification flow
+    }
+}

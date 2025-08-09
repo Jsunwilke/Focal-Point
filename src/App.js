@@ -1,6 +1,7 @@
 // src/App.js
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { loadEmailJS } from "./services/emailService";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { WorkflowProvider } from "./contexts/WorkflowContext";
 import { ToastProvider } from "./contexts/ToastContext";
@@ -154,6 +155,13 @@ const AppContent = () => {
 };
 
 const App = () => {
+  // Initialize EmailJS when app loads
+  useEffect(() => {
+    loadEmailJS().catch(error => {
+      console.warn('EmailJS initialization failed:', error);
+    });
+  }, []);
+
   return (
     <AuthProvider>
       <ToastProvider>

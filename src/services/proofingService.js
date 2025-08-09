@@ -18,6 +18,7 @@ import {
 import { ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import { firestore, storage } from "../firebase/config";
 import { readCounter } from "./readCounter";
+import { sendBatchProofingApprovalEmails } from "./emailService";
 import { proofingCacheService } from "./proofingCacheService";
 import bcrypt from "bcryptjs";
 
@@ -49,6 +50,8 @@ export const createGallery = async (galleryData) => {
       totalImages: 0,
       approvedCount: 0,
       deniedCount: 0,
+      isArchived: false,
+      archivedAt: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
@@ -58,6 +61,64 @@ export const createGallery = async (galleryData) => {
     return galleryRef.id;
   } catch (error) {
     console.error("Error creating gallery:", error);
+    throw error;
+  }
+};
+
+// Update gallery details
+export const updateGalleryDetails = async (galleryId, updates) => {
+  try {
+    const { password, ...data } = updates;
+    const updateData = { ...data };
+    
+    // Only update password if a new one is provided
+    if (password !== undefined) {
+      if (password === '') {
+        // Remove password
+        updateData.password = null;
+      } else if (password !== null) {
+        // Hash new password
+        updateData.password = await hashPassword(password);
+      }
+      // If password is null, don't update it (keep existing)
+    }
+    
+    // Add updated timestamp
+    updateData.updatedAt = serverTimestamp();
+    
+    // Update the gallery document
+    await updateDoc(doc(firestore, "proofGalleries", galleryId), updateData);
+    readCounter.recordRead("update", "proofGalleries", "updateGalleryDetails", 1);
+    
+    return true;
+  } catch (error) {
+    console.error("Error updating gallery details:", error);
+    throw error;
+  }
+};
+
+// Add photos to existing gallery
+export const addPhotosToGallery = async (galleryId, files, onProgress, signal) => {
+  try {
+    // Upload the photos
+    const result = await uploadProofImages(galleryId, files, onProgress, signal);
+    
+    // Get current gallery to update count
+    const galleryDoc = await getDoc(doc(firestore, "proofGalleries", galleryId));
+    const currentTotal = galleryDoc.data().totalImages || 0;
+    
+    // Update the total image count
+    await updateDoc(doc(firestore, "proofGalleries", galleryId), {
+      totalImages: currentTotal + result.uploaded.length,
+      updatedAt: serverTimestamp()
+    });
+    
+    readCounter.recordRead("get", "proofGalleries", "addPhotosToGallery", 1);
+    readCounter.recordRead("update", "proofGalleries", "addPhotosToGallery", 1);
+    
+    return result;
+  } catch (error) {
+    console.error("Error adding photos to gallery:", error);
     throw error;
   }
 };
@@ -93,10 +154,11 @@ export const getGalleryById = async (galleryId) => {
 };
 
 // Subscribe to galleries for an organization
-export const subscribeToGalleries = (organizationId, callback, errorCallback) => {
+export const subscribeToGalleries = (organizationId, callback, errorCallback, isArchived = false) => {
   const q = query(
     collection(firestore, "proofGalleries"),
     where("organizationId", "==", organizationId),
+    where("isArchived", "==", isArchived),
     orderBy("createdAt", "desc")
   );
   
@@ -353,6 +415,28 @@ export const subscribeToProofs = (galleryId, callback, errorCallback) => {
   );
 };
 
+// Toggle gallery archive status
+export const toggleGalleryArchiveStatus = async (galleryId, shouldArchive) => {
+  try {
+    const galleryRef = doc(firestore, "proofGalleries", galleryId);
+    await updateDoc(galleryRef, {
+      isArchived: shouldArchive,
+      archivedAt: shouldArchive ? serverTimestamp() : null,
+      updatedAt: serverTimestamp()
+    });
+    
+    readCounter.recordRead("update", "proofGalleries", "toggleGalleryArchiveStatus", 1);
+    
+    // Clear cache to ensure fresh data
+    proofingCacheService.clearGalleryCache(galleryId);
+    
+    return { success: true };
+  } catch (error) {
+    console.error("Error toggling gallery archive status:", error);
+    throw error;
+  }
+};
+
 // Update proof status
 export const updateProofStatus = async (galleryId, proofId, status, denialNotes, reviewerEmail) => {
   try {
@@ -402,6 +486,38 @@ export const updateProofStatus = async (galleryId, proofId, status, denialNotes,
   }
 };
 
+// Get team members who should be notified about proofing approvals
+const getNotifiableTeamMembers = async (organizationId) => {
+  try {
+    const usersQuery = query(
+      collection(firestore, "users"),
+      where("organizationID", "==", organizationId),
+      where("notifyOnProofingApproval", "==", true)
+    );
+    
+    const snapshot = await getDocs(usersQuery);
+    readCounter.recordRead("query", "users", "getNotifiableTeamMembers", snapshot.size);
+    
+    const teamMembers = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.email) {
+        teamMembers.push({
+          id: doc.id,
+          email: data.email,
+          firstName: data.firstName || '',
+          lastName: data.lastName || ''
+        });
+      }
+    });
+    
+    return teamMembers;
+  } catch (error) {
+    console.error("Error getting notifiable team members:", error);
+    return [];
+  }
+};
+
 // Update gallery status based on proof statuses
 const updateGalleryStatus = async (galleryId) => {
   try {
@@ -409,6 +525,7 @@ const updateGalleryStatus = async (galleryId) => {
     const gallery = galleryDoc.data();
     
     let newStatus = "pending";
+    const previousStatus = gallery.status;
     
     if (gallery.totalImages > 0) {
       if (gallery.approvedCount === gallery.totalImages) {
@@ -426,9 +543,49 @@ const updateGalleryStatus = async (galleryId) => {
         updatedAt: serverTimestamp()
       });
       readCounter.recordRead("update", "proofGalleries", "updateGalleryStatus", 1);
+      
+      // If gallery just became approved, send notifications
+      if (newStatus === "approved" && previousStatus !== "approved") {
+        await sendProofingApprovalNotifications(galleryId, gallery);
+      }
     }
   } catch (error) {
     console.error("Error updating gallery status:", error);
+  }
+};
+
+// Send notifications when a gallery is approved
+const sendProofingApprovalNotifications = async (galleryId, galleryData) => {
+  try {
+    console.log("Gallery approved, sending notifications for:", galleryId);
+    
+    // Get team members who should be notified
+    const notifiableMembers = await getNotifiableTeamMembers(galleryData.organizationId);
+    
+    if (notifiableMembers.length === 0) {
+      console.log("No team members have notifications enabled");
+      return;
+    }
+    
+    // Prepare gallery details for email
+    const galleryDetails = {
+      id: galleryId,
+      name: galleryData.name,
+      schoolName: galleryData.schoolName,
+      totalImages: galleryData.totalImages,
+      approvedBy: galleryData.lastApprovedBy || 'Client'
+    };
+    
+    // Send batch emails
+    const results = await sendBatchProofingApprovalEmails(notifiableMembers, galleryDetails);
+    
+    console.log("Email notification results:", results);
+    
+    // Log the notification event
+    await logActivity(galleryId, 'notifications_sent', null, `Sent to ${notifiableMembers.length} recipients`);
+    
+  } catch (error) {
+    console.error("Error sending proofing approval notifications:", error);
   }
 };
 

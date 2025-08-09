@@ -258,6 +258,34 @@ const YearbookShootListModal = ({
     }
   };
 
+  const handleEditItem = async (category, itemData) => {
+    try {
+      // Update the item with new values
+      await updateShootItem(schoolId, selectedYear, itemData.id, {
+        name: itemData.name,
+        description: itemData.description,
+        category: category,
+        required: itemData.required
+      });
+      
+      // Update local state
+      setShootList(prev => ({
+        ...prev,
+        items: prev.items.map(item => 
+          item.id === itemData.id 
+            ? { ...item, name: itemData.name, description: itemData.description, category, required: itemData.required }
+            : item
+        )
+      }));
+      
+      // Close the modal
+      setEditingItem(null);
+    } catch (error) {
+      console.error('Error updating item:', error);
+      throw error; // Re-throw to show error in modal
+    }
+  };
+
   const handleDelete = async () => {
     if (!shootList || isDeleting) return;
 
@@ -623,6 +651,15 @@ const YearbookShootListModal = ({
           onSave={handleAddItem}
         />
       )}
+      {editingItem && shootList && (
+        <AddShootItemModal
+          isOpen={!!editingItem}
+          onClose={() => setEditingItem(null)}
+          categories={[...new Set(shootList.items.map(item => item.category))].sort()}
+          onSave={handleEditItem}
+          editItem={editingItem}
+        />
+      )}
     </div>
   );
 
@@ -640,8 +677,7 @@ const overlayStyles = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  zIndex: 20000, // Much higher to ensure it's on top
-  isolation: 'isolate', // Create new stacking context
+  zIndex: 9999, // Lower z-index for parent modal
   pointerEvents: 'auto', // Ensure click events work
 };
 
@@ -657,7 +693,6 @@ const modalStyles = {
   flexDirection: 'column',
   margin: 0,
   transform: 'none',
-  zIndex: 20001, // Ensure modal content is also high
 };
 
 export default YearbookShootListModal;

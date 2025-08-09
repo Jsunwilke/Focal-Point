@@ -1,8 +1,8 @@
 // src/components/proofing/GalleryDetailsModal.js
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
-import { X, Copy, ExternalLink, Trash2, Clock, Eye, Check, AlertCircle } from "lucide-react";
-import { getProofsByGalleryId, subscribeToProofs, getGalleryActivity, deleteGallery, batchReplaceProofImages } from "../../services/proofingService";
+import { X, Copy, ExternalLink, Trash2, Clock, Eye, Check, AlertCircle, Archive, ArchiveRestore } from "lucide-react";
+import { getProofsByGalleryId, subscribeToProofs, getGalleryActivity, deleteGallery, batchReplaceProofImages, toggleGalleryArchiveStatus } from "../../services/proofingService";
 import { proofingCacheService } from "../../services/proofingCacheService";
 import { readCounter } from "../../services/readCounter";
 import { useToast } from "../../contexts/ToastContext";
@@ -90,6 +90,19 @@ const GalleryDetailsModal = ({ isOpen, onClose, gallery, organization, userEmail
   // Open gallery in new tab
   const openInNewTab = () => {
     window.open(`/proof/${gallery.id}`, '_blank');
+  };
+
+  // Handle archive/unarchive gallery
+  const handleArchiveToggle = async () => {
+    const action = gallery.isArchived ? "unarchive" : "archive";
+    try {
+      await toggleGalleryArchiveStatus(gallery.id, !gallery.isArchived);
+      showToast(`Gallery ${action}d successfully`, "success");
+      onClose();
+    } catch (error) {
+      console.error(`Error ${action}ing gallery:`, error);
+      showToast(`Failed to ${action} gallery`, "error");
+    }
   };
 
   // Handle delete gallery
@@ -197,6 +210,13 @@ const GalleryDetailsModal = ({ isOpen, onClose, gallery, organization, userEmail
                 title="Open in new tab"
               >
                 <ExternalLink size={14} />
+              </button>
+              <button
+                className="icon-btn"
+                onClick={handleArchiveToggle}
+                title={gallery.isArchived ? "Unarchive gallery" : "Archive gallery"}
+              >
+                {gallery.isArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
               </button>
             </div>
 
