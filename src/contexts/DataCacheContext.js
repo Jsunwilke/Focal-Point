@@ -899,7 +899,14 @@ export const DataCacheProvider = ({ children }) => {
 
     let unsubscribe;
 
-    if (useOptimized && latestTimestamp) {
+    // Enhanced validation: only use optimized listener if we truly have a valid timestamp
+    const canUseOptimized = useOptimized && 
+                           latestTimestamp && 
+                           latestTimestamp instanceof Date && 
+                           !isNaN(latestTimestamp.getTime());
+
+    if (canUseOptimized) {
+      console.log('[DataCacheContext] Using optimized listener for new reports only after:', latestTimestamp.toISOString());
       // Use optimized listener that only fetches new reports
       unsubscribe = subscribeToNewDailyJobReports(
         organization.id,
@@ -936,7 +943,12 @@ export const DataCacheProvider = ({ children }) => {
         latestTimestamp
       );
     } else {
-      // Use full listener with date filtering (last 3 months by default)
+      // Use full listener only when cache is missing or expired
+      console.warn('[DataCacheContext] Using FULL listener - this will fetch ALL reports!', {
+        useOptimized,
+        hasTimestamp: !!latestTimestamp,
+        timestampValid: latestTimestamp instanceof Date && !isNaN(latestTimestamp?.getTime())
+      });
       unsubscribe = subscribeToDailyJobReports(
         organization.id,
         (reports) => {
@@ -994,39 +1006,69 @@ export const DataCacheProvider = ({ children }) => {
       if (cachedReports.reports.length > 0) {
         // Find the most recent report timestamp
         const sortedReports = [...cachedReports.reports].sort((a, b) => {
-          const timeA = a.timestamp?.seconds || 0;
-          const timeB = b.timestamp?.seconds || 0;
+          // Handle various timestamp formats
+          let timeA = 0;
+          let timeB = 0;
+          
+          if (a.timestamp) {
+            if (a.timestamp.seconds) timeA = a.timestamp.seconds;
+            else if (a.timestamp instanceof Date) timeA = a.timestamp.getTime() / 1000;
+            else if (typeof a.timestamp.toDate === 'function') timeA = a.timestamp.toDate().getTime() / 1000;
+          }
+          
+          if (b.timestamp) {
+            if (b.timestamp.seconds) timeB = b.timestamp.seconds;
+            else if (b.timestamp instanceof Date) timeB = b.timestamp.getTime() / 1000;
+            else if (typeof b.timestamp.toDate === 'function') timeB = b.timestamp.toDate().getTime() / 1000;
+          }
+          
           return timeB - timeA;
         });
         
-        if (sortedReports[0].timestamp) {
+        if (sortedReports[0] && sortedReports[0].timestamp) {
           // Try to extract a valid date from the timestamp
-          let tempDate;
+          let tempDate = null;
           try {
-            if (sortedReports[0].timestamp.toDate) {
-              tempDate = sortedReports[0].timestamp.toDate();
-            } else if (sortedReports[0].timestamp.seconds) {
-              tempDate = new Date(sortedReports[0].timestamp.seconds * 1000);
+            const ts = sortedReports[0].timestamp;
+            
+            // Handle different timestamp formats
+            if (ts instanceof Date) {
+              tempDate = ts;
+            } else if (typeof ts.toDate === 'function') {
+              tempDate = ts.toDate();
+            } else if (ts.seconds) {
+              tempDate = new Date(ts.seconds * 1000);
+            } else if (typeof ts === 'object' && ts._seconds) {
+              // Handle Firestore Timestamp serialized format
+              tempDate = new Date(ts._seconds * 1000);
             }
             
             // Validate the date
             if (tempDate instanceof Date && !isNaN(tempDate.getTime())) {
               latestTimestamp = tempDate;
-              secureLogger.debug('DataCacheContext: Valid latest timestamp found:', tempDate.toISOString());
+              console.log('[DataCacheContext] Successfully extracted latest timestamp:', tempDate.toISOString());
             } else {
-              secureLogger.warn('DataCacheContext: Invalid timestamp found in cached reports, using null');
-              latestTimestamp = null;
+              console.warn('[DataCacheContext] Could not extract valid timestamp from cached reports');
             }
           } catch (err) {
-            secureLogger.error('DataCacheContext: Error parsing timestamp:', err);
-            latestTimestamp = null;
+            console.error('[DataCacheContext] Error parsing timestamp:', err);
           }
+        } else {
+          console.log('[DataCacheContext] No reports with timestamps found in cache');
         }
       }
       
       // Delay real-time sync to avoid immediate reads when user is just passing through
       syncTimeout = setTimeout(() => {
-        unsubscribe = setupDailyJobReportsListener(true, latestTimestamp);
+        // Only use optimized listener if we have a valid timestamp
+        // If no valid timestamp, skip the listener entirely since we have valid cache
+        if (latestTimestamp) {
+          console.log('[DataCacheContext] Setting up optimized listener with timestamp:', latestTimestamp.toISOString());
+          unsubscribe = setupDailyJobReportsListener(true, latestTimestamp);
+        } else {
+          console.log('[DataCacheContext] Valid cache exists but no timestamp found - skipping real-time sync to avoid unnecessary reads');
+          // Cache is valid for 30 days, no need to set up a listener if we can't optimize it
+        }
       }, 5000); // 5 second delay like sessions
     } else {
       // No cache - need immediate sync with date-limited query

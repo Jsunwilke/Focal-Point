@@ -484,6 +484,49 @@ export const cleanupTemporaryInvites = async (organizationID, olderThanDays = 30
   }
 };
 
+// Helper function to normalize date to YYYY-MM-DD format
+const normalizeDateToISO = (dateInput) => {
+  if (!dateInput) return null;
+  
+  let date;
+  
+  // Handle different date formats
+  if (typeof dateInput === 'string') {
+    // MM/DD/YYYY format
+    if (dateInput.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+      const [month, day, year] = dateInput.split('/');
+      date = new Date(year, parseInt(month) - 1, day);
+    }
+    // MM.DD.YYYY format
+    else if (dateInput.match(/^\d{1,2}\.\d{1,2}\.\d{4}$/)) {
+      const [month, day, year] = dateInput.split('.');
+      date = new Date(year, parseInt(month) - 1, day);
+    }
+    // YYYY-MM-DD format (already correct)
+    else if (dateInput.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      return dateInput;
+    }
+    // Try parsing as is
+    else {
+      date = new Date(dateInput);
+    }
+  } else if (dateInput instanceof Date) {
+    date = dateInput;
+  } else {
+    return dateInput; // Return as-is if we can't parse it
+  }
+  
+  // Convert to YYYY-MM-DD format
+  if (date && !isNaN(date.getTime())) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  return dateInput; // Return original if parsing failed
+};
+
 // Daily Job Reports Functions
 export const createDailyJobReport = async (reportData) => {
   try {
@@ -504,7 +547,8 @@ export const createDailyJobReport = async (reportData) => {
       finalReportData.templateVersion = reportData.templateVersion || 1;
       
       // Core fields that all reports have
-      finalReportData.date = reportData.date;
+      // Normalize date to YYYY-MM-DD format for consistent storage
+      finalReportData.date = normalizeDateToISO(reportData.date);
       finalReportData.yourName = reportData.photographer;
       
       // Store template-specific fields in customFields
@@ -515,8 +559,12 @@ export const createDailyJobReport = async (reportData) => {
         }
       });
     } else {
-      // Legacy report structure - pass through all data
+      // Legacy report structure - pass through all data but normalize date
       Object.assign(finalReportData, reportData);
+      // Ensure date is normalized for legacy reports too
+      if (finalReportData.date) {
+        finalReportData.date = normalizeDateToISO(finalReportData.date);
+      }
     }
 
     const reportRef = await addDoc(collection(firestore, "dailyJobReports"), finalReportData);
@@ -548,24 +596,15 @@ export const getDailyJobReports = async (
     
     let q;
     
-    // Build base query with date filtering
+    // Build base query - get ALL reports for organization
     const queryConstraints = [
       where("organizationID", "==", organizationID)
     ];
     
-    // Add date filtering at database level for string dates
-    // This will catch most documents and dramatically reduce reads
-    if (startDate && endDate) {
-      console.log(`🔍 Querying dailyJobReports for organization: ${organizationID} from ${startDate} to ${endDate}`);
-      // For string dates in YYYY-MM-DD format
-      queryConstraints.push(where("date", ">=", startDate));
-      queryConstraints.push(where("date", "<=", endDate));
-    } else {
-      console.log(`🔍 Querying all dailyJobReports for organization: ${organizationID}`);
-    }
+    // Note: Date filtering will be done client-side to handle various date formats
+    console.log(`🔍 Querying all dailyJobReports for organization: ${organizationID}`);
     
-    // Add ordering and pagination
-    queryConstraints.push(orderBy("date", "desc"));
+    // Add ordering by timestamp (which is always consistent)
     queryConstraints.push(orderBy("timestamp", "desc"));
     queryConstraints.push(limit(pageSize));
     
@@ -829,33 +868,19 @@ export const deleteDailyJobReportsBatch = async (reportIds) => {
 
 // Subscribe to real-time daily job reports updates (ALL reports)
 export const subscribeToDailyJobReports = (organizationID, callback, errorCallback, startDate = null) => {
-  // Default to 3 months ago if no start date provided
-  const effectiveStartDate = startDate || (() => {
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-    return threeMonthsAgo;
-  })();
+  // Load ALL reports for the organization to handle various date formats
+  // Client-side filtering will handle date ranges
+  console.log(`[DailyReports] Loading ALL reports for organization ${organizationID}`);
 
-  let q;
-  if (effectiveStartDate) {
-    // Query with date filter to limit results
-    q = query(
-      collection(firestore, "dailyJobReports"),
-      where("organizationID", "==", organizationID),
-      where("timestamp", ">=", Timestamp.fromDate(effectiveStartDate)),
-      orderBy("timestamp", "desc")
-    );
-  } else {
-    // Fallback to original query (not recommended)
-    q = query(
-      collection(firestore, "dailyJobReports"),
-      where("organizationID", "==", organizationID),
-      orderBy("timestamp", "desc")
-    );
-  }
+  // Simple query without date filter to get all reports
+  const q = query(
+    collection(firestore, "dailyJobReports"),
+    where("organizationID", "==", organizationID),
+    orderBy("timestamp", "desc")
+  );
 
   const listenerTag = `full-${Date.now()}`;
-  console.log(`[DailyReports-${listenerTag}] Subscribing to reports for organization ${organizationID}${effectiveStartDate ? ` from ${effectiveStartDate.toISOString()}` : ' (ALL)'}`);
+  console.log(`[DailyReports-${listenerTag}] Subscribing to ALL reports for organization ${organizationID}`);
 
   return onSnapshot(
     q,

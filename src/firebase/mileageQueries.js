@@ -639,7 +639,9 @@ export const generateMileageSummary = (dailyReports, teamMembers, startDate, end
 
     processedReports++;
     const userId = report.userId;
-    const userName = report.yourName || 'Unknown';
+    // Use display name from team member if available, otherwise fall back to report name
+    const teamMember = teamMemberMap[userId];
+    const userName = teamMember?.displayName || report.yourName || 'Unknown';
     
     console.log(`[generateMileageSummary] Processing report ${index}: ${userName} - ${report.totalMileage} miles`);
     

@@ -254,6 +254,11 @@ service cloud.firestore {
       allow create: if request.auth != null && 
                        belongsToSameOrg(request.auth.uid, request.resource.data.organizationID);
       
+      // Users from the same organization can update mileage entries
+      allow update: if request.auth != null && 
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
+                       resource.data.keys().hasAny(['totalMileage']);
+      
       // Users can update their own reports
       allow update: if request.auth != null && 
                        belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
@@ -265,15 +270,19 @@ service cloud.firestore {
                        isAdminOrManager(request.auth.uid) &&
                        belongsToSameOrg(request.auth.uid, resource.data.organizationID);
       
-      // Users can delete their own reports
+      // Users can delete their own reports or reports they created
       allow delete: if request.auth != null && 
-                       resource.data.userId == request.auth.uid &&
-                       belongsToSameOrg(request.auth.uid, resource.data.organizationID);
-      
-      // Admins can delete any report in their organization
-      allow delete: if request.auth != null && 
-                       isAdmin(request.auth.uid) &&
-                       belongsToSameOrg(request.auth.uid, resource.data.organizationID);
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
+                       (
+                         // Check if userId field exists and matches
+                         (resource.data.keys().hasAny(['userId']) && 
+                          resource.data.userId == request.auth.uid) ||
+                         // Check if user's display name matches yourName field (for legacy reports)
+                         (resource.data.keys().hasAny(['yourName']) && 
+                          resource.data.yourName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName) ||
+                         // Admins and managers can delete any report
+                         isAdminOrManager(request.auth.uid)
+                       );
     }
 
     // Districts collection
@@ -370,11 +379,9 @@ service cloud.firestore {
       allow create: if request.auth != null && 
                        belongsToSameOrg(request.auth.uid, request.resource.data.organizationID);
       
-      // Users assigned to the job can update it
+      // Users from the same organization can update sports jobs
       allow update: if request.auth != null && 
-                       belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
-                       (resource.data.keys().hasAny(['photographer']) && 
-                        resource.data.photographer == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName);
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationID);
       
       // Admins/Managers can update any sports job in their organization
       allow update: if request.auth != null && 
@@ -526,7 +533,7 @@ service cloud.firestore {
                        (!request.resource.data.keys().hasAny(['clockOutTime']) || request.resource.data.clockOutTime is timestamp) &&
                        (!request.resource.data.keys().hasAny(['notes']) || request.resource.data.notes is string);
       
-      // Users can update their own time entries (for clock out and editing completed entries)
+      // Users can update their own time entries (for clock out, editing clock-in time while active, and editing completed entries)
       allow update: if request.auth != null && 
                        request.auth.uid == resource.data.userId &&
                        belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
@@ -537,6 +544,26 @@ service cloud.firestore {
                          // Allow clock out operations (clockInTime and date unchanged)
                          (request.resource.data.clockInTime == resource.data.clockInTime &&
                           request.resource.data.date == resource.data.date) ||
+                         // Allow editing clock-in time and notes while actively clocked in
+                         (resource.data.status == 'clocked-in' &&
+                          request.resource.data.status == 'clocked-in' &&
+                          // These fields must not change (handle null values properly)
+                          (!resource.data.keys().hasAny(['clockOutTime']) || 
+                           resource.data.clockOutTime == null || 
+                           request.resource.data.clockOutTime == resource.data.clockOutTime) &&
+                          request.resource.data.date == resource.data.date &&
+                          (!resource.data.keys().hasAny(['sessionId']) || 
+                           resource.data.sessionId == null || 
+                           request.resource.data.sessionId == resource.data.sessionId) &&
+                          // Notes can be updated (validate if provided)
+                          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['notes']) || 
+                           request.resource.data.notes == null || 
+                           request.resource.data.notes is string) &&
+                          // Validate clock-in time is reasonable (not in future, within last 48 hours)
+                          request.resource.data.clockInTime is timestamp &&
+                          request.resource.data.clockInTime <= request.time &&
+                          // 48 hours = 172800000 milliseconds
+                          request.resource.data.clockInTime.toMillis() >= request.time.toMillis() - 172800000) ||
                          // Allow editing completed entries (can change times and date, but must be completed)
                          (resource.data.status == 'clocked-out' &&
                           request.resource.data.status == 'clocked-out' &&

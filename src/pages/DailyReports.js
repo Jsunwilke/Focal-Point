@@ -58,12 +58,23 @@ const parseDateField = (dateField) => {
   else if (typeof dateField.toDate === "function") {
     date = dateField.toDate();
   }
-  // String date (YYYY-MM-DD or ISO format)
+  // String date (various formats)
   else if (typeof dateField === 'string') {
     // For YYYY-MM-DD format, ensure proper parsing
     if (dateField.match(/^\d{4}-\d{2}-\d{2}$/)) {
       date = new Date(dateField + 'T00:00:00');
-    } else {
+    } 
+    // For MM/DD/YYYY format
+    else if (dateField.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+      const [month, day, year] = dateField.split('/');
+      date = new Date(year, parseInt(month) - 1, day);
+    }
+    // For MM.DD.YYYY format
+    else if (dateField.match(/^\d{1,2}\.\d{1,2}\.\d{4}$/)) {
+      const [month, day, year] = dateField.split('.');
+      date = new Date(year, parseInt(month) - 1, day);
+    }
+    else {
       date = new Date(dateField);
     }
   }
@@ -350,11 +361,22 @@ const DailyReports = () => {
       // Firebase Timestamp with toDate method
       date = reportDate.toDate();
     } else if (typeof reportDate === 'string') {
-      // String date (YYYY-MM-DD or ISO format)
+      // String date (various formats)
       // For YYYY-MM-DD format, ensure proper parsing by adding time
       if (reportDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
         date = new Date(reportDate + 'T00:00:00');
-      } else {
+      } 
+      // For MM/DD/YYYY format
+      else if (reportDate.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+        const [month, day, year] = reportDate.split('/');
+        date = new Date(year, parseInt(month) - 1, day);
+      }
+      // For MM.DD.YYYY format
+      else if (reportDate.match(/^\d{1,2}\.\d{1,2}\.\d{4}$/)) {
+        const [month, day, year] = reportDate.split('.');
+        date = new Date(year, parseInt(month) - 1, day);
+      }
+      else {
         date = new Date(reportDate);
       }
     } else if (reportDate instanceof Date) {
@@ -482,30 +504,8 @@ const DailyReports = () => {
       if (sortField === "date" || sortField === "timestamp") {
         // Convert various date formats to timestamps for sorting
         const getDateValue = (dateField) => {
-          if (!dateField) return 0;
-          
-          // Firebase Timestamp with seconds property
-          if (dateField.seconds) {
-            return dateField.seconds * 1000;
-          }
-          
-          // Firebase Timestamp with toDate method
-          if (typeof dateField.toDate === 'function') {
-            return dateField.toDate().getTime();
-          }
-          
-          // String date (YYYY-MM-DD or ISO format)
-          if (typeof dateField === 'string') {
-            const parsed = new Date(dateField);
-            return isNaN(parsed.getTime()) ? 0 : parsed.getTime();
-          }
-          
-          // Already a Date object
-          if (dateField instanceof Date) {
-            return dateField.getTime();
-          }
-          
-          return 0;
+          const parsed = parseDateField(dateField);
+          return parsed ? parsed.getTime() : 0;
         };
         
         aValue = getDateValue(a[sortField]);
