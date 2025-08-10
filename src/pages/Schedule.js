@@ -251,8 +251,8 @@ const Schedule = () => {
 
   // Use cached sessions data and update loading state
   useEffect(() => {
-    setLoading(cacheLoading.any);
-  }, [cacheLoading.any]);
+    setLoading(cacheLoading.sessions);
+  }, [cacheLoading.sessions]);
 
   // Initialize photographer preferences when team members cache updates
   useEffect(() => {

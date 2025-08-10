@@ -677,7 +677,7 @@ export const DataCacheProvider = ({ children }) => {
 
   // Set up users real-time listener with cache-first loading
   useEffect(() => {
-    if (!stableOrgId) return;
+    if (!organization?.id) return;
 
     // Skip if listener is already active
     if (listenersActiveRef.current.users) {
@@ -686,13 +686,13 @@ export const DataCacheProvider = ({ children }) => {
       return;
     }
     
-    console.log('🟡 USERS LISTENER: Creating new listener for organization:', stableOrgId);
+    console.log('🟡 USERS LISTENER: Creating new listener for organization:', organization.id);
 
     let unsubscribe = null;
     let syncTimeout = null;
 
     // Load from cache first for instant display
-    const cachedUsers = dataCacheService.getCachedUsers(stableOrgId);
+    const cachedUsers = dataCacheService.getCachedUsers(organization.id);
     if (cachedUsers) {
       const processedData = processUsersData(cachedUsers);
       setUsersCache({
@@ -708,7 +708,7 @@ export const DataCacheProvider = ({ children }) => {
       syncTimeout = setTimeout(() => {
         if (!listenersActiveRef.current.users) {
           console.log('🟢 USERS LISTENER: Setting up after 5s delay');
-          unsubscribe = setupUsersListener(stableOrgId, cachedUsers);
+          unsubscribe = setupUsersListener(organization.id, cachedUsers);
           listenersActiveRef.current.users = true;
         } else {
           console.log('🔵 USERS LISTENER: Already active during timeout, skipping');
@@ -719,7 +719,7 @@ export const DataCacheProvider = ({ children }) => {
       console.log('🔴 USERS LISTENER: No cache, setting up immediately');
       setUsersCache(prev => ({ ...prev, loading: true, error: null }));
       readCounter.recordCacheMiss('users', 'DataCacheContext');
-      unsubscribe = setupUsersListener(null);
+      unsubscribe = setupUsersListener(organization.id);
       listenersActiveRef.current.users = true;
     }
 
@@ -738,7 +738,7 @@ export const DataCacheProvider = ({ children }) => {
       // Only cleanup if organization is changing or component is unmounting
       if (syncTimeout) clearTimeout(syncTimeout);
     };
-  }, [stableOrgId, processUsersData, setupUsersListener]); // Use stable org ID to prevent unnecessary re-runs
+  }, [organization?.id, processUsersData, setupUsersListener]); // Depend on organization.id directly
 
   // Set up real-time listener for time-off requests
   const setupTimeOffListener = useCallback(() => {

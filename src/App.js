@@ -38,6 +38,7 @@ import Orders from "./pages/Orders";
 import TestCaptura from "./pages/TestCaptura";
 import CapturaStats from "./pages/CapturaStats";
 import TestCapturaBackfill from "./pages/TestCapturaBackfill";
+import PhotoCritique from "./pages/PhotoCritique";
 import "./App.css";
 
 const AppContent = () => {
@@ -134,6 +135,7 @@ const AppContent = () => {
                       <Route path="/sports" element={<Sports />} />
                       <Route path="/tracking" element={<Tracking />} />
                       <Route path="/proofing" element={<Proofing />} />
+                      <Route path="/photo-critique" element={<PhotoCritique />} />
                       <Route path="/orders" element={<Orders />} />
                       <Route path="/test-captura" element={<TestCaptura />} />
                       <Route path="/stats" element={<CapturaStats />} />

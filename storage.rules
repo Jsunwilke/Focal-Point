@@ -65,7 +65,24 @@ service firebase.storage {
       return path.split('/')[0];
     }
 
-    // Organization-scoped storage
+    // Photo critiques storage
+    match /organizations/{orgId}/critiques/{critiqueId}/{fileName} {
+      allow read: if isAuthenticated() && getOrganizationId() == orgId;
+      // Allow photographers and managers to upload critique images
+      allow write: if isAuthenticated() && 
+                      getOrganizationId() == orgId &&
+                      (isManager() || 
+                       (userExists() && getUserData().isPhotographer == true)) &&
+                      isValidImageType() &&
+                      isValidFileSize(50); // 50MB limit for critique images
+      // Allow the uploader or managers to delete
+      allow delete: if isAuthenticated() && 
+                       getOrganizationId() == orgId &&
+                       (isManager() || 
+                        (userExists() && getUserData().isPhotographer == true));
+    }
+
+    // Organization-scoped storage (general)
     match /organizations/{orgId}/{allPaths=**} {
       allow read: if isAuthenticated() && getOrganizationId() == orgId;
       allow write: if isAuthenticated() && getOrganizationId() == orgId && isManager();

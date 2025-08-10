@@ -1,0 +1,181 @@
+/* src/components/critique/ImageAnnotator.css */
+.image-annotator {
+  background: white;
+  border-radius: 12px;
+  width: 90vw;
+  max-width: 1200px;
+  height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.annotator-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.annotator-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.annotator-close {
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: color 0.2s;
+}
+
+.annotator-close:hover {
+  color: var(--color-text-primary);
+}
+
+.annotator-toolbar {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background);
+}
+
+.toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.toolbar-section label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.color-picker {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.color-swatch.active {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.width-picker {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.width-option {
+  padding: 0.375rem 0.75rem;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.width-option:hover {
+  background: var(--color-background);
+}
+
+.width-option.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.toolbar-actions {
+  margin-left: auto;
+  gap: 0.5rem;
+}
+
+.tool-button {
+  padding: 0.5rem;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tool-button:hover {
+  background: var(--color-background);
+}
+
+.tool-button.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.annotator-canvas {
+  flex: 1;
+  padding: 1.5rem;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  min-height: 0;
+}
+
+.canvas-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.annotator-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .image-annotator {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+  
+  .annotator-toolbar {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  
+  .toolbar-actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+  }
+}

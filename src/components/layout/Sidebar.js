@@ -21,6 +21,7 @@ import {
   MessageCircle,
   Image,
   ShoppingCart,
+  Camera,
 } from "lucide-react";
 import "./Sidebar.css";
 
@@ -105,6 +106,13 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       label: "Proofing",
       icon: Image,
       path: "/proofing",
+      enabled: true,
+    },
+    {
+      id: "photo-critique",
+      label: "Photo Critique",
+      icon: Camera,
+      path: "/photo-critique",
       enabled: true,
     },
     {

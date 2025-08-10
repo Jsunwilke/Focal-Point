@@ -2,7 +2,6 @@
 import React, { useState } from "react";
 import { ChevronDown, LogOut, User, Settings, Menu } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
-import { useDataCache } from "../../contexts/DataCacheContext";
 import Button from "../shared/Button";
 import ProfileSettingsModal from "../settings/ProfileSettingsModal";
 import StudioSettingsModal from "../settings/StudioSettingsModal";
@@ -10,11 +9,7 @@ import HeaderReadCounter from "./HeaderReadCounter";
 import "./Header.css";
 
 const Header = ({ onMenuToggle, isMobile }) => {
-  const { user, organization, signout } = useAuth();
-  const { users } = useDataCache();
-  
-  // Get current user from cached users
-  const userProfile = users?.find(u => u.id === user?.uid) || null;
+  const { user, userProfile, organization, signout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showStudioSettings, setShowStudioSettings] = useState(false);

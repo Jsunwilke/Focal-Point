@@ -8,6 +8,7 @@ import {
   calculateTotalHours, 
   formatDuration 
 } from '../../firebase/firestore';
+import { getCurrentPayPeriod } from '../../utils/payPeriods';
 import './HoursTrackingWidget.css';
 
 const HoursTrackingWidget = () => {
@@ -38,125 +39,23 @@ const HoursTrackingWidget = () => {
     return { startOfWeek, endOfWeek };
   };
 
-  // Calculate current pay period based on organization settings
-  const getCurrentPayPeriod = () => {
+  // Use the shared utility function to get current pay period
+  const getPayPeriod = () => {
     if (!organization?.payPeriodSettings?.isActive) {
       return null;
     }
-
-    const { type, config } = organization.payPeriodSettings;
-    const today = new Date();
-
-    switch (type) {
-      case 'weekly':
-        return getWeeklyPeriod(today, config);
-      case 'bi-weekly':
-        return getBiWeeklyPeriod(today, config);
-      case 'semi-monthly':
-        return getSemiMonthlyPeriod(today, config);
-      case 'monthly':
-        return getMonthlyPeriod(today, config);
-      default:
-        return null;
-    }
-  };
-
-  const getWeeklyPeriod = (date, config) => {
-    const dayOfWeek = date.getDay();
-    const startDay = config.dayOfWeek || 1; // Default to Monday
     
-    const daysToStart = dayOfWeek === 0 ? (7 - startDay) : (startDay - dayOfWeek);
-    const start = new Date(date);
-    start.setDate(date.getDate() - (dayOfWeek === 0 ? 7 - startDay : dayOfWeek - startDay));
-    start.setHours(0, 0, 0, 0);
-    
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    end.setHours(23, 59, 59, 999);
-    
-    return {
-      start,
-      end,
-      label: `Week of ${start.toLocaleDateString()}`,
-      type: 'weekly'
-    };
-  };
-
-  const getBiWeeklyPeriod = (date, config) => {
-    const referenceDate = new Date(config.startDate);
-    const daysDiff = Math.floor((date.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24));
-    const periodNumber = Math.floor(daysDiff / 14);
-    
-    const start = new Date(referenceDate);
-    start.setDate(referenceDate.getDate() + (periodNumber * 14));
-    start.setHours(0, 0, 0, 0);
-    
-    const end = new Date(start);
-    end.setDate(start.getDate() + 13);
-    end.setHours(23, 59, 59, 999);
-    
-    return {
-      start,
-      end,
-      label: `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`,
-      type: 'bi-weekly'
-    };
-  };
-
-  const getSemiMonthlyPeriod = (date, config) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const day = date.getDate();
-    
-    const firstDate = config.firstDate || 1;
-    const secondDate = config.secondDate || 15;
-    
-    if (day < secondDate) {
-      // First half of month
-      const start = new Date(year, month, firstDate);
-      const end = new Date(year, month, secondDate - 1, 23, 59, 59, 999);
+    const period = getCurrentPayPeriod(organization.payPeriodSettings);
+    if (period) {
+      // Convert string dates to Date objects for compatibility
       return {
-        start,
-        end,
-        label: `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`,
-        type: 'semi-monthly'
-      };
-    } else {
-      // Second half of month
-      const start = new Date(year, month, secondDate);
-      const end = new Date(year, month + 1, 0, 23, 59, 59, 999); // Last day of month
-      return {
-        start,
-        end,
-        label: `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`,
-        type: 'semi-monthly'
+        start: new Date(period.start),
+        end: new Date(period.end),
+        label: period.label,
+        type: organization.payPeriodSettings.type
       };
     }
-  };
-
-  const getMonthlyPeriod = (date, config) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const startDay = config.dayOfMonth || 1;
-    
-    let start, end;
-    
-    if (date.getDate() >= startDay) {
-      // Current period
-      start = new Date(year, month, startDay);
-      end = new Date(year, month + 1, startDay - 1, 23, 59, 59, 999);
-    } else {
-      // Previous period
-      start = new Date(year, month - 1, startDay);
-      end = new Date(year, month, startDay - 1, 23, 59, 59, 999);
-    }
-    
-    return {
-      start,
-      end,
-      label: `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`,
-      type: 'monthly'
-    };
+    return null;
   };
 
   useEffect(() => {
@@ -180,7 +79,7 @@ const HoursTrackingWidget = () => {
         setWeekHours(weekHoursTotal);
 
         // Load pay period hours
-        const period = getCurrentPayPeriod();
+        const period = getPayPeriod();
         if (period) {
           setCurrentPeriod(period);
           

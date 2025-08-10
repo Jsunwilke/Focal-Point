@@ -1471,6 +1471,116 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // PHOTO CRITIQUE SYSTEM - SUBMISSIONS AND FEEDBACK
+    // ============================================================================
+    
+    // Photo Critiques collection
+    match /photoCritiques/{critiqueId} {
+      // Users can read critiques from their organization
+      allow read: if request.auth != null && 
+                     belongsToSameOrg(request.auth.uid, resource.data.organizationId);
+      
+      // Photographers and managers can create critiques (updated for training tool structure)
+      allow create: if request.auth != null && 
+                       belongsToSameOrg(request.auth.uid, request.resource.data.organizationId) &&
+                       (getUserRole(request.auth.uid) == 'manager' ||
+                        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isPhotographer == true) &&
+                       // Validate required fields for new structure
+                       request.resource.data.keys().hasAll(['organizationId', 'submitterId']) &&
+                       // Validate data types
+                       request.resource.data.organizationId is string &&
+                       request.resource.data.submitterId == request.auth.uid &&
+                       // Validate manager training fields
+                       (!request.resource.data.keys().hasAny(['managerNotes']) || 
+                        request.resource.data.managerNotes is string) &&
+                       (!request.resource.data.keys().hasAny(['exampleType']) || 
+                        request.resource.data.exampleType in ['example', 'improvement']) &&
+                       (!request.resource.data.keys().hasAny(['targetPhotographerId']) || 
+                        request.resource.data.targetPhotographerId is string) &&
+                       // Validate image arrays
+                       (!request.resource.data.keys().hasAny(['imageUrls']) || 
+                        request.resource.data.imageUrls is list) &&
+                       (!request.resource.data.keys().hasAny(['thumbnailUrls']) || 
+                        request.resource.data.thumbnailUrls is list) &&
+                       // Support backward compatibility fields
+                       (!request.resource.data.keys().hasAny(['imageUrl']) || 
+                        request.resource.data.imageUrl is string) &&
+                       (!request.resource.data.keys().hasAny(['thumbnailUrl']) || 
+                        request.resource.data.thumbnailUrl is string) &&
+                       (!request.resource.data.keys().hasAny(['status']) || 
+                        request.resource.data.status is string) &&
+                       // Validate optional timestamp fields
+                       (!request.resource.data.keys().hasAny(['createdAt']) || 
+                        request.resource.data.createdAt is timestamp) &&
+                       (!request.resource.data.keys().hasAny(['updatedAt']) || 
+                        request.resource.data.updatedAt is timestamp);
+      
+      // Submitters can update their own critiques, admins can update any
+      allow update: if request.auth != null && 
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationId) &&
+                       (request.auth.uid == resource.data.submitterId || 
+                        isAdmin(request.auth.uid)) &&
+                       // Prevent changing core identity fields
+                       request.resource.data.organizationId == resource.data.organizationId &&
+                       request.resource.data.submitterId == resource.data.submitterId;
+      
+      // Submitters can delete their own critiques, admins can delete any
+      allow delete: if request.auth != null && 
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationId) &&
+                       (request.auth.uid == resource.data.submitterId || 
+                        isAdmin(request.auth.uid));
+    }
+    
+    // Critique Feedback collection
+    match /critiqueFeedback/{feedbackId} {
+      // Users can read feedback from their organization
+      allow read: if request.auth != null && 
+                     exists(/databases/$(database)/documents/photoCritiques/$(resource.data.critiqueId)) &&
+                     belongsToSameOrg(request.auth.uid, 
+                       get(/databases/$(database)/documents/photoCritiques/$(resource.data.critiqueId)).data.organizationId);
+      
+      // Team members with isPhotographer designation can provide feedback
+      allow create: if request.auth != null && 
+                       exists(/databases/$(database)/documents/photoCritiques/$(request.resource.data.critiqueId)) &&
+                       belongsToSameOrg(request.auth.uid, 
+                         get(/databases/$(database)/documents/photoCritiques/$(request.resource.data.critiqueId)).data.organizationId) &&
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isPhotographer == true &&
+                       // Validate required fields
+                       request.resource.data.keys().hasAll(['critiqueId', 'reviewerId', 'rating']) &&
+                       // Validate data types
+                       request.resource.data.critiqueId is string &&
+                       request.resource.data.reviewerId == request.auth.uid &&
+                       request.resource.data.rating is number &&
+                       request.resource.data.rating >= 1 &&
+                       request.resource.data.rating <= 5 &&
+                       // Validate optional fields
+                       (!request.resource.data.keys().hasAny(['notes']) || 
+                        request.resource.data.notes is string) &&
+                       (!request.resource.data.keys().hasAny(['annotationData']) || 
+                        request.resource.data.annotationData is string) &&
+                       (!request.resource.data.keys().hasAny(['createdAt']) || 
+                        request.resource.data.createdAt is timestamp);
+      
+      // Reviewers can update their own feedback
+      allow update: if request.auth != null && 
+                       request.auth.uid == resource.data.reviewerId &&
+                       exists(/databases/$(database)/documents/photoCritiques/$(resource.data.critiqueId)) &&
+                       belongsToSameOrg(request.auth.uid, 
+                         get(/databases/$(database)/documents/photoCritiques/$(resource.data.critiqueId)).data.organizationId) &&
+                       // Prevent changing core identity fields
+                       request.resource.data.critiqueId == resource.data.critiqueId &&
+                       request.resource.data.reviewerId == resource.data.reviewerId;
+      
+      // Reviewers can delete their own feedback, admins can delete any
+      allow delete: if request.auth != null && 
+                       (request.auth.uid == resource.data.reviewerId || 
+                        isAdmin(request.auth.uid)) &&
+                       exists(/databases/$(database)/documents/photoCritiques/$(resource.data.critiqueId)) &&
+                       belongsToSameOrg(request.auth.uid, 
+                         get(/databases/$(database)/documents/photoCritiques/$(resource.data.critiqueId)).data.organizationId);
+    }
+
+    // ============================================================================
     // CAPTURA STATS COLLECTIONS
     // ============================================================================
     

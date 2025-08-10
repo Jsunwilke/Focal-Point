@@ -1,0 +1,105 @@
+/* src/components/critique/StarRating.css */
+.star-rating {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.star-rating__stars {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.star-rating__star {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.star-rating__star:hover:not(:disabled) {
+  transform: scale(1.1);
+}
+
+.star-rating__star:disabled {
+  cursor: default;
+}
+
+.star-rating__star--filled {
+  color: #fbbf24;
+}
+
+.star-rating__star--half {
+  position: relative;
+  color: #fbbf24;
+}
+
+.star-rating__star--half::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--color-background);
+  clip-path: inset(0 0 0 50%);
+}
+
+/* Size variations */
+.star-rating--small .star-rating__star {
+  width: 20px;
+  height: 20px;
+}
+
+.star-rating--medium .star-rating__star {
+  width: 24px;
+  height: 24px;
+}
+
+.star-rating--large .star-rating__star {
+  width: 32px;
+  height: 32px;
+}
+
+/* Readonly state */
+.star-rating--readonly .star-rating__star {
+  cursor: default;
+}
+
+.star-rating--readonly .star-rating__star:hover {
+  transform: none;
+}
+
+/* Label styles */
+.star-rating__label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.star-rating__value {
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.star-rating__text {
+  color: var(--color-text-secondary);
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .star-rating__star {
+    color: #6b7280;
+  }
+  
+  .star-rating__star--filled,
+  .star-rating__star--half {
+    color: #fbbf24;
+  }
+}
