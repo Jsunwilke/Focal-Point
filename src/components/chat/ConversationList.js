@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useChat } from '../../contexts/ChatContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
-import { RefreshCw, Pin, Users } from 'lucide-react';
+import { RefreshCw, Pin, Users, Trash2, LogOut, MoreVertical } from 'lucide-react';
 import UserAvatar from '../shared/UserAvatar';
 import './ConversationList.css';
 
@@ -16,10 +16,13 @@ const ConversationList = ({ onNewConversation }) => {
     forceRefreshConversations,
     togglePinConversation,
     organizationUsers,
-    markConversationAsRead
+    markConversationAsRead,
+    deleteConversation
   } = useChat();
   const { userProfile } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
+  const [showOptionsFor, setShowOptionsFor] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const formatLastSeen = (timestamp) => {
     if (!timestamp) return '';
@@ -59,6 +62,52 @@ const ConversationList = ({ onNewConversation }) => {
     const isPinned = conversation.pinnedBy?.includes(userProfile?.id);
     await togglePinConversation(conversation.id, isPinned);
   };
+
+  const handleOptionsClick = (e, conversationId) => {
+    e.stopPropagation();
+    setShowOptionsFor(showOptionsFor === conversationId ? null : conversationId);
+  };
+
+  const handleDeleteConversation = async (e, conversation) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    console.log('Delete clicked for conversation:', conversation.id);
+    console.log('Current confirmDelete state:', confirmDelete);
+    
+    if (confirmDelete === conversation.id) {
+      // Double-click to confirm
+      console.log('Confirming delete for conversation:', conversation.id);
+      try {
+        await deleteConversation(conversation.id);
+        setConfirmDelete(null);
+        setShowOptionsFor(null);
+      } catch (error) {
+        console.error('Failed to delete conversation:', error);
+      }
+    } else {
+      // First click - show confirmation state
+      console.log('Setting confirmation state for conversation:', conversation.id);
+      setConfirmDelete(conversation.id);
+      // Reset confirmation after 3 seconds
+      setTimeout(() => {
+        setConfirmDelete((current) => current === conversation.id ? null : current);
+      }, 3000);
+    }
+  };
+
+  // Close options dropdown when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (e) => {
+      // Don't close if clicking inside the options area or delete button
+      if (!e.target.closest('.conversation-item__options') && 
+          !e.target.closest('.conversation-item__delete-btn')) {
+        setShowOptionsFor(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const getConversationAvatar = (conversation) => {
     if (conversation.type === 'direct') {
@@ -188,6 +237,36 @@ const ConversationList = ({ onNewConversation }) => {
                     >
                       <Pin size={14} />
                     </button>
+                    <div className="conversation-item__options" style={{ position: 'relative' }}>
+                      <button
+                        className="conversation-item__options-btn"
+                        onClick={(e) => handleOptionsClick(e, conversation.id)}
+                        title="More options"
+                      >
+                        <MoreVertical size={14} />
+                      </button>
+                      {showOptionsFor === conversation.id && (
+                        <div className="conversation-item__options-dropdown">
+                          <button
+                            className={`conversation-item__delete-btn ${confirmDelete === conversation.id ? 'conversation-item__delete-btn--confirm' : ''}`}
+                            onClick={(e) => handleDeleteConversation(e, conversation)}
+                            onMouseDown={(e) => e.preventDefault()}
+                          >
+                            {userProfile?.role === 'admin' ? (
+                              <>
+                                <Trash2 size={14} />
+                                {confirmDelete === conversation.id ? 'Click to confirm' : 'Delete'}
+                              </>
+                            ) : (
+                              <>
+                                <LogOut size={14} />
+                                {confirmDelete === conversation.id ? 'Click to confirm' : 'Leave'}
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <span className="conversation-item__time">
                       {formatLastSeen(conversation.lastActivity)}
                     </span>

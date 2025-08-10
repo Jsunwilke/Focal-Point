@@ -11,6 +11,7 @@ import {
   X,
   Search,
   RefreshCw,
+  Camera,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
@@ -28,7 +29,7 @@ import "./TeamManagement.css";
 const TeamManagement = () => {
   const { userProfile, organization } = useAuth();
   const { showToast } = useToast();
-  const { teamMembers, loading: { users: loading }, refreshUsers } = useDataCache();
+  const { teamMembers, loading: { users: loading }, refreshUsers, updateUserOptimistically } = useDataCache();
   const [searchTerm, setSearchTerm] = useState("");
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showInviteSuccess, setShowInviteSuccess] = useState(false);
@@ -123,8 +124,12 @@ const TeamManagement = () => {
     setSelectedTeamMember(null);
   };
 
-  const handleTeamMemberUpdate = async () => {
-    await refreshUsers(); // Refresh the team members list
+  const handleTeamMemberUpdate = async (updatedUser) => {
+    // Use optimistic update instead of refreshing all users
+    if (updatedUser && updatedUser.id) {
+      updateUserOptimistically(updatedUser.id, updatedUser);
+      showToast("Team member updated successfully", "success");
+    }
   };
 
   const getInvitationLink = (email) => {
@@ -301,11 +306,21 @@ const TeamManagement = () => {
                       {member.firstName?.[0] || member.email[0]}
                     </div>
                     <div className="team-card__info">
-                      <h3 className="team-card__name">
-                        {member.firstName && member.lastName
-                          ? `${member.firstName} ${member.lastName}`
-                          : member.email}
-                      </h3>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <h3 className="team-card__name">
+                          {member.firstName && member.lastName
+                            ? `${member.firstName} ${member.lastName}`
+                            : member.email}
+                        </h3>
+                        {member.isPhotographer && (
+                          <span 
+                            className="team-card__photographer-badge"
+                            title="Photographer with Setup"
+                          >
+                            <Camera size={16} />
+                          </span>
+                        )}
+                      </div>
                       <p className="team-card__email">{member.email}</p>
                     </div>
                     {userProfile?.role === "admin" && (

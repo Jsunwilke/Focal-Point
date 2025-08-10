@@ -1544,114 +1544,6 @@ const DailyReports = () => {
               </span>
             </div>
           </div>
-          
-          {/* Job Type Distribution Chart */}
-          {filteredAndSortedReports.length > 0 && (
-            <div className="reports-chart">
-              <h3 className="reports-chart__title">Job Type Distribution</h3>
-              <div className="job-type-chart">
-                {
-                  (() => {
-                    const jobTypeCounts = {};
-                    let totalJobs = 0;
-                    
-                    reports.forEach(report => {
-                      if (Array.isArray(report.jobDescriptions)) {
-                        report.jobDescriptions.forEach(job => {
-                          jobTypeCounts[job] = (jobTypeCounts[job] || 0) + 1;
-                          totalJobs++;
-                        });
-                      }
-                    });
-                    
-                    const sortedJobTypes = Object.entries(jobTypeCounts)
-                      .sort((a, b) => b[1] - a[1])
-                      .slice(0, 8); // Show top 8 job types
-                    
-                    return sortedJobTypes.map(([jobType, count]) => {
-                      const percentage = totalJobs > 0 ? (count / totalJobs) * 100 : 0;
-                      return (
-                        <div key={jobType} className="job-type-bar">
-                          <div className="job-type-info">
-                            <span className="job-type-name">{jobType}</span>
-                            <span className="job-type-count">{count} ({percentage.toFixed(1)}%)</span>
-                          </div>
-                          <div className="job-type-progress">
-                            <div 
-                              className="job-type-progress-fill"
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()
-                }
-              </div>
-            </div>
-          )}
-          
-          {/* Photographer Performance Chart */}
-          {filteredAndSortedReports.length > 0 && (
-            <div className="reports-chart">
-              <h3 className="reports-chart__title">Photographer Activity</h3>
-              <div className="photographer-chart">
-                {
-                  (() => {
-                    const photographerStats = {};
-                    
-                    reports.forEach(report => {
-                      const name = report.yourName || 'Unknown';
-                      if (!photographerStats[name]) {
-                        photographerStats[name] = {
-                          reports: 0,
-                          photos: 0,
-                          schools: new Set()
-                        };
-                      }
-                      photographerStats[name].reports += 1;
-                      photographerStats[name].photos += report.photoURLs ? report.photoURLs.length : 0;
-                      if (report.schoolOrDestination) {
-                        photographerStats[name].schools.add(report.schoolOrDestination);
-                      }
-                    });
-                    
-                    const sortedPhotographers = Object.entries(photographerStats)
-                      .map(([name, stats]) => ({
-                        name,
-                        reports: stats.reports,
-                        photos: stats.photos,
-                        schools: stats.schools.size
-                      }))
-                      .sort((a, b) => b.reports - a.reports)
-                      .slice(0, 6); // Show top 6 photographers
-                    
-                    const maxReports = Math.max(...sortedPhotographers.map(p => p.reports));
-                    
-                    return sortedPhotographers.map((photographer) => {
-                      const percentage = maxReports > 0 ? (photographer.reports / maxReports) * 100 : 0;
-                      return (
-                        <div key={photographer.name} className="photographer-bar">
-                          <div className="photographer-info">
-                            <span className="photographer-name">{photographer.name}</span>
-                            <span className="photographer-stats">
-                              {photographer.reports} reports • {photographer.photos} photos • {photographer.schools} schools
-                            </span>
-                          </div>
-                          <div className="photographer-progress">
-                            <div 
-                              className="photographer-progress-fill"
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()
-                }
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Controls Section */}
@@ -1662,7 +1554,7 @@ const DailyReports = () => {
               <Search size={16} className="reports-search__icon" />
               <input
                 type="text"
-                placeholder="Search reports by photographer, school, notes..."
+                placeholder="Search reports..."
                 value={searchTerm}
                 onChange={handleSearchChange}
                 className="reports-search__input"
@@ -1795,16 +1687,17 @@ const DailyReports = () => {
           </div>
 
           {/* View Toggle */}
-          <div className="toggle-switch">
-            <label>
-              <input
-                type="checkbox"
-                checked={viewMode === "database"}
-                onChange={(e) => setViewMode(e.target.checked ? "database" : "card")}
-              />
-              Database View
-            </label>
-          </div>
+            <div className="reports-view-toggle">
+              <button
+                className={`reports-view-toggle__button ${
+                  viewMode === "database" ? "reports-view-toggle__button--active" : ""
+                }`}
+                onClick={() => setViewMode(viewMode === "database" ? "card" : "database")}
+              >
+                <CalendarDays size={16} />
+                <span>{viewMode === "database" ? "Database View" : "Card View"}</span>
+              </button>
+            </div>
 
           {/* Sort Menu */}
           <div className="reports-sort">

@@ -1173,9 +1173,9 @@ export const DataCacheProvider = ({ children }) => {
     });
     
     // Update cache storage - clear old cache first to ensure fresh data
-    if (stableOrgId) {
-      dataCacheService.setCachedUsers(stableOrgId, updatedUsers);
-      console.log('localStorage cache updated for organization:', stableOrgId);
+    if (organization?.id) {
+      dataCacheService.setCachedUsers(organization.id, updatedUsers);
+      console.log('localStorage cache updated for organization:', organization.id);
     } else {
       console.warn('No organization ID - cannot update localStorage cache');
     }
@@ -1270,19 +1270,19 @@ export const DataCacheProvider = ({ children }) => {
     // Refresh functions - invalidate cache to trigger listener updates
     refreshSessions: () => {
       secureLogger.debug("Manual refresh: Sessions");
-      dataCacheService.clearCache(organization?.id);
+      dataCacheService.clearSessionsCache(organization?.id);
       invalidateCache('sessions');
       // Real-time listener will automatically fetch new data
     },
     refreshUsers: () => {
       secureLogger.debug("Manual refresh: Users");
-      dataCacheService.clearCache(organization?.id);
+      dataCacheService.clearUsersCache(organization?.id);
       invalidateCache('users');
       // Real-time listener will automatically fetch new data
     },
     refreshTimeOff: () => {
       secureLogger.debug("Manual refresh: Time-off");
-      dataCacheService.clearCache(organization?.id);
+      dataCacheService.clearTimeOffCache(organization?.id);
       invalidateCache('timeOff');
       // Real-time listener will automatically fetch new data
     },

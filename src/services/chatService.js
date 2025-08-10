@@ -449,8 +449,61 @@ class ChatService {
     }
   }
 
-  // Delete a conversation (admin only or last participant in group)
-  async deleteConversation(conversationId, userId) {
+  // Admin delete conversation - permanently deletes conversation and all messages
+  async adminDeleteConversation(conversationId, userId, userRole) {
+    try {
+      console.log(`[ChatService] Starting admin delete for conversation ${conversationId}`);
+      
+      // Check if user is admin
+      if (userRole !== 'admin') {
+        throw new Error('Only administrators can delete conversations');
+      }
+
+      const conversationRef = doc(firestore, 'conversations', conversationId);
+      
+      // Get conversation to verify it exists
+      console.log(`[ChatService] Checking if conversation exists: ${conversationId}`);
+      const conversationDoc = await getDoc(conversationRef, 'chatService.adminDeleteConversation');
+      if (!conversationDoc.exists()) {
+        throw new Error('Conversation not found');
+      }
+      
+      // Create batch for all deletions
+      const batch = writeBatch(firestore);
+      
+      // Delete all messages in the conversation
+      try {
+        console.log(`[ChatService] Deleting messages for conversation: ${conversationId}`);
+        const messagesRef = collection(firestore, 'messages', conversationId, 'messages');
+        const messagesSnapshot = await getDocs(messagesRef, 'chatService.adminDelete');
+        
+        console.log(`[ChatService] Found ${messagesSnapshot.size} messages to delete`);
+        messagesSnapshot.docs.forEach((messageDoc) => {
+          batch.delete(messageDoc.ref);
+        });
+      } catch (msgError) {
+        console.log(`[ChatService] Error fetching messages (might not exist):`, msgError);
+        // Continue even if messages collection doesn't exist
+      }
+      
+      // Delete the conversation document itself
+      console.log(`[ChatService] Adding conversation document to batch delete`);
+      batch.delete(conversationRef);
+      
+      // Commit all deletions
+      console.log(`[ChatService] Committing batch delete`);
+      await batch.commit();
+      
+      console.log(`[ChatService] Successfully deleted conversation ${conversationId}`);
+      return { success: true };
+    } catch (error) {
+      console.error('[ChatService] Error in admin delete conversation:', error);
+      throw error;
+    }
+  }
+
+  // Delete a conversation (for regular users - just leaves the conversation)
+  async deleteConversation(conversationId, userId, userName = 'User') {
     try {
       const conversationRef = doc(firestore, 'conversations', conversationId);
       
@@ -467,18 +520,9 @@ class ChatService {
         throw new Error('Not authorized to delete this conversation');
       }
       
-      // For now, we'll just remove the user from the conversation
-      // Full deletion would require admin permissions or additional logic
-      // You could implement soft delete by adding a 'deletedBy' field
-      if (conversation.type === 'direct') {
-        // For direct conversations, we could implement soft delete
-        // by adding a deletedBy array to hide it from specific users
-        console.warn('Direct conversation deletion not fully implemented');
-        throw new Error('Direct conversation deletion coming soon');
-      } else {
-        // For groups, just leave the conversation
-        await this.leaveConversation(conversationId, userId, 'User');
-      }
+      // For regular users, just leave the conversation
+      await this.leaveConversation(conversationId, userId, userName);
+      return { success: true, action: 'left' };
     } catch (error) {
       console.error('Error deleting conversation:', error);
       throw error;

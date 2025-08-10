@@ -10,6 +10,7 @@ import {
   Save,
   DollarSign,
   Shield,
+  Camera,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { updateUserProfile, deleteUser } from "../../firebase/firestore";
@@ -35,6 +36,7 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
     address: "", // Single string address
     homeAddress: "", // GPS coordinates in "lat,lng" format
     notifyOnProofingApproval: false, // Email notification for approved galleries
+    isPhotographer: false, // Photographer with setup designation
   });
 
   const [loading, setLoading] = useState(false);
@@ -58,6 +60,7 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
         address: "", // Will be set below after checking format
         homeAddress: teamMember.homeAddress || "", // GPS coordinates
         notifyOnProofingApproval: teamMember.notifyOnProofingApproval || false,
+        isPhotographer: teamMember.isPhotographer || false,
       });
       
       // Handle backward compatibility for address field
@@ -231,6 +234,7 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
         address: formData.address,
         homeAddress: formData.homeAddress,
         notifyOnProofingApproval: formData.notifyOnProofingApproval,
+        isPhotographer: formData.isPhotographer,
         updatedAt: new Date(),
       };
 
@@ -244,9 +248,15 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
       // Update user profile in Firestore
       await updateUserProfile(teamMember.id, updateData);
 
-      // Call onUpdate callback if provided
+      // Create the complete updated user object
+      const updatedUser = {
+        ...teamMember,
+        ...updateData
+      };
+
+      // Call onUpdate callback with the updated user data
       if (onUpdate) {
-        onUpdate();
+        onUpdate(updatedUser);
       }
 
       // Show success message
@@ -616,6 +626,35 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
                       <strong>Notify when proofing gallery is approved</strong>
                       <div style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.25rem' }}>
                         Receive email notifications when a proofing gallery reaches 100% approval status
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-section">
+                <h3 className="form-section__title">
+                  <Camera size={16} />
+                  Photographer Settings
+                </h3>
+
+                <div className="form-group">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <input
+                      type="checkbox"
+                      id="isPhotographer"
+                      name="isPhotographer"
+                      checked={formData.isPhotographer}
+                      onChange={(e) => setFormData({ ...formData, isPhotographer: e.target.checked })}
+                      style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                    />
+                    <label 
+                      htmlFor="isPhotographer" 
+                      style={{ cursor: 'pointer', marginBottom: 0 }}
+                    >
+                      <strong>Photographer with Setup</strong>
+                      <div style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                        Mark this team member as a photographer with camera equipment setup
                       </div>
                     </label>
                   </div>

@@ -643,6 +643,52 @@ export const ChatProvider = ({ children }) => {
     }
   }, [activeConversation?.id, userProfile?.id, userProfile?.firstName, userProfile?.lastName, showToast]);
 
+  // Delete a conversation (admin only or leave for regular users)
+  const deleteConversation = useCallback(async (conversationId) => {
+    console.log('[ChatContext] deleteConversation called for:', conversationId);
+    console.log('[ChatContext] User role:', userProfile?.role);
+    
+    try {
+      let result;
+      
+      // Check if user is admin
+      if (userProfile?.role === 'admin') {
+        // Admin can permanently delete
+        console.log('[ChatContext] Calling adminDeleteConversation');
+        result = await chatService.adminDeleteConversation(conversationId, userProfile.id, userProfile.role);
+        console.log('[ChatContext] Admin delete result:', result);
+        showToast('Conversation permanently deleted', 'success');
+      } else {
+        // Regular users just leave the conversation
+        console.log('[ChatContext] Calling deleteConversation (leave)');
+        const userName = `${userProfile.firstName} ${userProfile.lastName}`;
+        result = await chatService.deleteConversation(conversationId, userProfile.id, userName);
+        showToast('Left conversation', 'success');
+      }
+      
+      // Remove from local state
+      console.log('[ChatContext] Removing conversation from local state');
+      setConversations(prev => prev.filter(conv => conv.id !== conversationId));
+      
+      // Clear active conversation if it's the one being deleted
+      if (activeConversation?.id === conversationId) {
+        setActiveConversation(null);
+        setMessages([]);
+      }
+      
+      // Clear cache for this conversation
+      chatCacheService.clearConversationCache(conversationId);
+      
+      return result;
+    } catch (error) {
+      console.error('[ChatContext] Error deleting conversation:', error);
+      console.error('[ChatContext] Error stack:', error.stack);
+      showToast(error.message || 'Failed to delete conversation', 'error');
+      // Don't re-throw the error so the UI doesn't break
+      return { success: false, error: error.message };
+    }
+  }, [activeConversation?.id, userProfile?.id, userProfile?.role, userProfile?.firstName, userProfile?.lastName, showToast]);
+
   // Get conversation display name
   const getConversationDisplayName = useCallback((conversation) => {
     if (!conversation || !userProfile?.id) return 'Unknown';
@@ -714,6 +760,7 @@ export const ChatProvider = ({ children }) => {
     addParticipantsToConversation,
     removeParticipantFromConversation,
     leaveConversation,
+    deleteConversation,
     setIsMainChatView,
     markConversationAsRead,
   };

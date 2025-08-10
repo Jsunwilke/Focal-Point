@@ -199,6 +199,43 @@ class DataCacheService {
     }
   }
 
+  // Clear specific cache types
+  clearSessionsCache(organizationId) {
+    try {
+      localStorage.removeItem(`datacache_sessions_${organizationId}`);
+      localStorage.removeItem(`datacache_lastsync_sessions_${organizationId}`);
+    } catch (error) {
+      console.warn('Failed to clear sessions cache:', error);
+    }
+  }
+
+  clearUsersCache(organizationId) {
+    try {
+      localStorage.removeItem(`datacache_users_${organizationId}`);
+      localStorage.removeItem(`datacache_lastsync_users_${organizationId}`);
+    } catch (error) {
+      console.warn('Failed to clear users cache:', error);
+    }
+  }
+
+  clearTimeOffCache(organizationId) {
+    try {
+      localStorage.removeItem(`datacache_timeoff_${organizationId}`);
+      localStorage.removeItem(`datacache_lastsync_timeoff_${organizationId}`);
+    } catch (error) {
+      console.warn('Failed to clear time-off cache:', error);
+    }
+  }
+
+  clearDailyJobCache(organizationId) {
+    try {
+      localStorage.removeItem(`datacache_dailyjob_${organizationId}`);
+      localStorage.removeItem(`datacache_lastsync_dailyjob_${organizationId}`);
+    } catch (error) {
+      console.warn('Failed to clear daily job cache:', error);
+    }
+  }
+
   // Clear all caches for an organization
   clearCache(organizationId) {
     try {
