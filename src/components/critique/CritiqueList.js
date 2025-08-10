@@ -65,6 +65,13 @@ const CritiqueList = ({ critiques, viewMode, canProvideFeedback }) => {
           </div>
         </div>
         
+        {critique.targetPhotographerName && (
+          <div className="critique-card__photographer">
+            <span className="critique-card__photographer-label">For:</span>
+            <span className="critique-card__photographer-name">{critique.targetPhotographerName}</span>
+          </div>
+        )}
+        
         {critique.managerNotes && (
           <p className="critique-card__description">
             {critique.managerNotes.length > 100 
@@ -100,6 +107,12 @@ const CritiqueList = ({ critiques, viewMode, canProvideFeedback }) => {
           <span>By {critique.submitterName || 'Unknown'}</span>
           <span>•</span>
           <span>{formatDate(critique.createdAt)}</span>
+          {critique.targetPhotographerName && (
+            <>
+              <span>•</span>
+              <span>For {critique.targetPhotographerName}</span>
+            </>
+          )}
         </div>
         
         {critique.description && (

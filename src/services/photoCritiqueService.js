@@ -96,6 +96,7 @@ export const createPhotoCritique = async (critiqueData, imageFiles) => {
       managerNotes: critiqueData.notes,
       exampleType: critiqueData.type, // 'example' or 'improvement'
       targetPhotographerId: critiqueData.photographerId, // Which photographer this is for
+      targetPhotographerName: critiqueData.photographerName, // Name of the photographer
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       // Remove peer review fields as this is now a training tool

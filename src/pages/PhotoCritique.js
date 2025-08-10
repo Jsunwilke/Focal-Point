@@ -1,6 +1,6 @@
 // src/pages/PhotoCritique.js
 import React, { useState, useEffect } from 'react';
-import { Plus, Filter, Grid, List, Star, MessageSquare, Camera, ArrowLeft, User } from 'lucide-react';
+import { Plus, Filter, Grid, List, Star, MessageSquare, Camera, ArrowLeft, User, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { PhotoCritiqueProvider, usePhotoCritique } from '../contexts/PhotoCritiqueContext';
 import Button from '../components/shared/Button';
@@ -74,11 +74,18 @@ const PhotoCritiqueContent = () => {
     // Don't reload - let the real-time listener handle updates
   };
 
-  // Stats calculation
+  // Stats calculation - filter by photographer if one is selected
+  const statsData = selectedPhotographer 
+    ? critiques.filter(c => 
+        c.targetPhotographerId === selectedPhotographer.id || 
+        c.photographerId === selectedPhotographer.id
+      )
+    : critiques;
+    
   const stats = {
-    total: critiques.length,
-    goodExamples: critiques.filter(c => c.exampleType === 'example').length,
-    improvements: critiques.filter(c => c.exampleType === 'improvement').length
+    total: statsData.length,
+    goodExamples: statsData.filter(c => c.exampleType === 'example').length,
+    improvements: statsData.filter(c => c.exampleType === 'improvement').length
   };
 
   if (loading && critiques.length === 0) {
@@ -90,9 +97,15 @@ const PhotoCritiqueContent = () => {
       {/* Header */}
       <div className="photo-critique__header">
         <div className="photo-critique__title-section">
-          <h1>School Photography Training</h1>
+          <h1>
+            {selectedPhotographer 
+              ? `Training Photos for ${selectedPhotographer.firstName} ${selectedPhotographer.lastName}`
+              : 'School Photography Training'}
+          </h1>
           <p className="photo-critique__subtitle">
-            Training examples for school photographers
+            {selectedPhotographer
+              ? `Viewing training examples for this photographer`
+              : 'Training examples for school photographers'}
           </p>
         </div>
         
@@ -106,6 +119,37 @@ const PhotoCritiqueContent = () => {
           </Button>
         )}
       </div>
+
+      {/* Photographer Context Bar */}
+      {selectedPhotographer && (
+        <div className="photo-critique__photographer-bar">
+          <button 
+            className="photo-critique__back-button"
+            onClick={handleBackToPhotographers}
+          >
+            <ChevronLeft size={20} />
+            <span>All Photographers</span>
+          </button>
+          
+          <div className="photo-critique__photographer-info">
+            <div className="photo-critique__photographer-avatar">
+              {selectedPhotographer.photoURL ? (
+                <img src={selectedPhotographer.photoURL} alt={`${selectedPhotographer.firstName} ${selectedPhotographer.lastName}`} />
+              ) : (
+                <User size={24} />
+              )}
+            </div>
+            <div className="photo-critique__photographer-details">
+              <h2 className="photo-critique__photographer-name">
+                {selectedPhotographer.firstName} {selectedPhotographer.lastName}
+              </h2>
+              <p className="photo-critique__photographer-meta">
+                {selectedPhotographer.email} • {stats.total} training {stats.total === 1 ? 'example' : 'examples'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="photo-critique__stats">
@@ -183,7 +227,6 @@ const PhotoCritiqueContent = () => {
           </button>
         </div>
         </div>
-      )}
 
       {/* Main Content */}
       {error && (

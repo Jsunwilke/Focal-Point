@@ -148,7 +148,19 @@ const PhotoCritiqueModal = ({ isOpen, onClose, onSuccess, preselectedPhotographe
     setError(null);
     
     try {
-      await submitCritique(formData, imageFiles);
+      // Find the selected photographer's name
+      const selectedPhotographer = photographers.find(p => p.id === formData.photographerId);
+      const photographerName = selectedPhotographer 
+        ? `${selectedPhotographer.firstName} ${selectedPhotographer.lastName}`.trim()
+        : 'Unknown Photographer';
+      
+      // Include photographer name in the submission data
+      const submissionData = {
+        ...formData,
+        photographerName: photographerName
+      };
+      
+      await submitCritique(submissionData, imageFiles);
       onSuccess();
     } catch (err) {
       console.error('Error submitting critique:', err);

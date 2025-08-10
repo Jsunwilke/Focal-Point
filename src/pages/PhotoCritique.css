@@ -26,10 +26,87 @@
   margin: 0;
 }
 
-/* Back Button */
-.photo-critique__back-btn {
-  margin-bottom: 1rem;
-  padding: 0.5rem 1rem;
+/* Photographer Context Bar */
+.photo-critique__photographer-bar {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.photo-critique__back-button {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.625rem 1rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #475569;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.photo-critique__back-button:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  transform: translateX(-2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.photo-critique__photographer-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+}
+
+.photo-critique__photographer-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: white;
+  border: 3px solid #3b82f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.photo-critique__photographer-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-critique__photographer-avatar svg {
+  color: #3b82f6;
+}
+
+.photo-critique__photographer-details {
+  flex: 1;
+}
+
+.photo-critique__photographer-name {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e293b;
+  letter-spacing: -0.025em;
+}
+
+.photo-critique__photographer-meta {
+  margin: 0.25rem 0 0 0;
+  color: #64748b;
   font-size: 0.875rem;
 }
 
@@ -195,6 +272,26 @@
   .photo-critique__header {
     flex-direction: column;
     gap: 1rem;
+  }
+  
+  .photo-critique__photographer-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+  
+  .photo-critique__back-button {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .photo-critique__photographer-info {
+    justify-content: center;
+  }
+  
+  .photo-critique__photographer-avatar {
+    width: 48px;
+    height: 48px;
   }
   
   .photo-critique__stats {
