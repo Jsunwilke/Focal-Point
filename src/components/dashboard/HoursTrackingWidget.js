@@ -21,19 +21,19 @@ const HoursTrackingWidget = () => {
   const [firstWeekHours, setFirstWeekHours] = useState(0);
   const [secondWeekHours, setSecondWeekHours] = useState(0);
 
-  // Get start and end of current week (Monday to Sunday)
+  // Get start and end of current week (Sunday to Saturday)
   const getWeekBounds = () => {
     const now = new Date();
     const dayOfWeek = now.getDay();
     const startOfWeek = new Date(now);
     
-    // Adjust to Monday (0 = Sunday, 1 = Monday, etc.)
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    startOfWeek.setDate(now.getDate() + daysToMonday);
+    // Adjust to Sunday (0 = Sunday, 1 = Monday, etc.)
+    const daysToSunday = -dayOfWeek; // Sunday is 0, so this makes Sunday the start
+    startOfWeek.setDate(now.getDate() + daysToSunday);
     startOfWeek.setHours(0, 0, 0, 0);
     
     const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setDate(startOfWeek.getDate() + 6); // Saturday is 6 days after Sunday
     endOfWeek.setHours(23, 59, 59, 999);
     
     return { startOfWeek, endOfWeek };
@@ -62,33 +62,86 @@ const HoursTrackingWidget = () => {
     const loadHoursData = async () => {
       if (!user || !organization) return;
 
+      // Helper function to format dates
+      const formatDate = (date) => {
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      };
+
       try {
         setLoading(true);
         setError('');
 
         // Load week hours
         const { startOfWeek, endOfWeek } = getWeekBounds();
+        const startWeekStr = formatDate(startOfWeek);
+        const endWeekStr = formatDate(endOfWeek);
+        
         const weekEntries = await getWeekTimeEntries(
           user.uid, 
           organization.id, 
           startOfWeek, 
           endOfWeek
         );
-        const completedWeekEntries = weekEntries.filter(entry => entry.status === 'clocked-out');
+        
+        // Filter to ensure entries are actually within this week
+        const filteredWeekEntries = weekEntries.filter(entry => {
+          return entry.date >= startWeekStr && entry.date <= endWeekStr;
+        });
+        
+        const completedWeekEntries = filteredWeekEntries.filter(entry => entry.status === 'clocked-out');
         const weekHoursTotal = calculateTotalHours(completedWeekEntries);
         setWeekHours(weekHoursTotal);
 
         // Load pay period hours
         const period = getPayPeriod();
+        
         if (period) {
           setCurrentPeriod(period);
           
-          const formatDate = (date) => {
-            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-          };
+          // Local date correction for widget only
+          let correctedStart = new Date(period.start);
+          let correctedEnd = new Date(period.end);
           
-          const startString = formatDate(period.start);
-          const endString = formatDate(period.end);
+          // Check if the dates are off by one day
+          // The label shows the correct dates but the actual dates are one day early
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const todayStr = formatDate(today);
+          
+          // Get the date that the label says the period starts
+          const labelMatch = period.label ? period.label.match(/(\w+)\s+(\d+),\s+(\d+)/) : null;
+          
+          if (labelMatch) {
+            const labelStartMonth = labelMatch[1];
+            const labelStartDay = parseInt(labelMatch[2]);
+            const labelStartYear = parseInt(labelMatch[3]);
+            
+            // Create date from label
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const monthIndex = monthNames.indexOf(labelStartMonth);
+            
+            if (monthIndex !== -1) {
+              const labelStartDate = new Date(labelStartYear, monthIndex, labelStartDay);
+              labelStartDate.setHours(0, 0, 0, 0);
+              
+              // If the actual period.start is before the label start date, correct it
+              correctedStart.setHours(0, 0, 0, 0);
+              if (correctedStart < labelStartDate) {
+                const daysDiff = Math.round((labelStartDate - correctedStart) / (1000 * 60 * 60 * 24));
+                correctedStart.setDate(correctedStart.getDate() + daysDiff);
+                correctedEnd.setDate(correctedEnd.getDate() + daysDiff);
+              }
+            }
+          }
+          
+          const startString = formatDate(correctedStart);
+          const endString = formatDate(correctedEnd);
+          
+          console.warn('[HoursWidget] Period Date Strings:', {
+            startString: startString,
+            endString: endString,
+            periodLabel: period.label
+          });
           
           const periodEntries = await getTimeEntries(
             user.uid, 
@@ -97,8 +150,47 @@ const HoursTrackingWidget = () => {
             endString
           );
           
-          const completedPeriodEntries = periodEntries.filter(entry => entry.status === 'clocked-out');
+          // Debug what entries we got
+          console.warn('[HoursWidget] Period Entries Retrieved:', {
+            count: periodEntries.length,
+            firstThreeEntries: periodEntries.slice(0, 3).map(e => ({
+              date: e.date,
+              hours: e.totalHours,
+              status: e.status
+            }))
+          });
+          
+          // Filter to ensure entries are actually within the pay period
+          const filteredPeriodEntries = periodEntries.filter(entry => {
+            const isInPeriod = entry.date >= startString && entry.date <= endString;
+            if (!isInPeriod && periodEntries.indexOf(entry) < 3) {
+              console.warn('[HoursWidget] Entry excluded:', {
+                entryDate: entry.date,
+                periodStart: startString,
+                periodEnd: endString,
+                comparison: {
+                  'entry.date >= start': entry.date >= startString,
+                  'entry.date <= end': entry.date <= endString
+                }
+              });
+            }
+            return isInPeriod;
+          });
+          
+          console.warn('[HoursWidget] After filtering:', {
+            originalCount: periodEntries.length,
+            filteredCount: filteredPeriodEntries.length,
+            removed: periodEntries.length - filteredPeriodEntries.length
+          });
+          
+          const completedPeriodEntries = filteredPeriodEntries.filter(entry => entry.status === 'clocked-out');
           const periodHoursTotal = calculateTotalHours(completedPeriodEntries);
+          
+          console.warn('[HoursWidget] Final Period Hours:', {
+            completedEntries: completedPeriodEntries.length,
+            totalHours: periodHoursTotal
+          });
+          
           setPeriodHours(periodHoursTotal);
           
           // For bi-weekly periods, calculate first and second week hours separately

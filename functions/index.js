@@ -2453,3 +2453,93 @@ async function logProofingNotificationActivity(galleryId, recipientCount, result
         // Don't throw - logging shouldn't break the notification flow
     }
 }
+
+// Function: Send Photo Critique Notification when new critique is created
+exports.onPhotoCritiqueCreated = onDocumentCreated('photoCritiques/{critiqueId}', async (event) => {
+    const critique = event.data.data();
+    const critiqueId = event.params.critiqueId;
+    
+    try {
+        // Get the target photographer's user document
+        const userDoc = await db.collection('users')
+            .doc(critique.targetPhotographerId)
+            .get();
+        
+        if (!userDoc.exists) {
+            console.log(`Target photographer ${critique.targetPhotographerId} not found`);
+            return null;
+        }
+        
+        const userData = userDoc.data();
+        const fcmToken = userData?.fcmToken;
+        
+        if (!fcmToken) {
+            console.log(`No FCM token for photographer ${critique.targetPhotographerId}`);
+            return null;
+        }
+        
+        // Determine the message based on example type
+        const isGoodExample = critique.exampleType === 'example';
+        const exampleTypeText = isGoodExample ? 'good example' : 'needs improvement';
+        
+        // Create the notification message
+        const message = {
+            notification: {
+                title: 'New Training Photo',
+                body: `${critique.submitterName} sent you a ${exampleTypeText} photo with feedback`
+            },
+            data: {
+                type: 'photo_critique',
+                critiqueId: critiqueId,
+                submitterName: critique.submitterName,
+                exampleType: critique.exampleType,
+                targetPhotographerId: critique.targetPhotographerId,
+                targetPhotographerName: critique.targetPhotographerName
+            },
+            token: fcmToken,
+            apns: {
+                payload: {
+                    aps: {
+                        sound: 'default',
+                        badge: 1
+                    }
+                }
+            }
+        };
+        
+        // Send the notification
+        const response = await admin.messaging().send(message);
+        console.log(`Photo critique notification sent successfully to ${critique.targetPhotographerName}:`, response);
+        
+        // Log the notification activity
+        await db.collection('notificationLogs').add({
+            type: 'photo_critique',
+            critiqueId: critiqueId,
+            recipientId: critique.targetPhotographerId,
+            recipientName: critique.targetPhotographerName,
+            submitterName: critique.submitterName,
+            exampleType: critique.exampleType,
+            fcmToken: fcmToken.substring(0, 10) + '...', // Store partial token for debugging
+            status: 'sent',
+            response: response,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        return { success: true, messageId: response };
+        
+    } catch (error) {
+        console.error('Error sending photo critique notification:', error);
+        
+        // Log the error
+        await db.collection('notificationLogs').add({
+            type: 'photo_critique',
+            critiqueId: critiqueId,
+            recipientId: critique.targetPhotographerId,
+            status: 'error',
+            error: error.message,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        return { success: false, error: error.message };
+    }
+});
