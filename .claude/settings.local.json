@@ -74,7 +74,9 @@
       "Bash(timeout 30 npm start)",
       "Bash(firebase login:ci:*)",
       "Bash(ln:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(awk:*)",
+      "Bash(python3:*)"
     ],
     "deny": []
   }

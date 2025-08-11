@@ -33,11 +33,9 @@ export const getPayrollData = async (organizationID, startDate, endDate, userIds
     let teamMembers = [];
     const cachedUsers = dataCacheService.getCachedUsers(organizationID);
     if (cachedUsers && cachedUsers.length > 0) {
-      console.log('[PayrollQueries] Using cached users:', cachedUsers.length, 'users');
       readCounter.recordCacheHit('users', 'PayrollQueries', cachedUsers.length);
       teamMembers = cachedUsers;
     } else {
-      console.log('[PayrollQueries] No cached users, fetching from Firebase');
       readCounter.recordCacheMiss('users', 'PayrollQueries');
       teamMembers = await getTeamMembers(organizationID);
     }
@@ -75,7 +73,6 @@ export const getPayrollData = async (organizationID, startDate, endDate, userIds
       }
     };
   } catch (error) {
-    console.error('Error fetching payroll data:', error);
     throw error;
   }
 };
@@ -156,7 +153,6 @@ export const getPayrollDataForPeriod = async (
       }
     };
   } catch (error) {
-    console.error('Error fetching payroll data for period:', error);
     throw error;
   }
 };
@@ -342,15 +338,6 @@ const calculateOvertime = (userEntries, startDate, endDate, overtimeSettings = n
     weeklyThreshold: 40
   };
   
-  // Debug logging
-  console.log('Overtime Calculation Debug:', {
-    startDate,
-    endDate,
-    daysDiff,
-    isBiWeeklyPeriod,
-    calculationMethod: settings.calculationMethod,
-    overtimeSettings: overtimeSettings
-  });
   
   let dailyOvertime = 0;
   let weeklyOvertime = 0;
@@ -371,28 +358,17 @@ const calculateOvertime = (userEntries, startDate, endDate, overtimeSettings = n
     // Note: daysDiff already calculated above
     
     if (isBiWeeklyPeriod) {
-      console.log('Bi-weekly overtime calculation triggered');
       // For bi-weekly periods, calculate overtime per week
       // Split the period into two weeks
       const weekBoundary = new Date(start);
       weekBoundary.setDate(weekBoundary.getDate() + 6);
       weekBoundary.setHours(23, 59, 59, 999);
       
-      console.log('Week boundary calculation:', {
-        startDate: start.toISOString(),
-        weekBoundary: weekBoundary.toISOString(),
-        endDate: end.toISOString()
-      });
       
       // Calculate hours for each week
       let week1Hours = 0;
       let week2Hours = 0;
       
-      // Log the dates being processed
-      console.log('Daily hours entries:', Object.entries(dailyHours).map(([date, data]) => ({
-        date,
-        hours: data.hours
-      })));
       
       Object.entries(dailyHours).forEach(([dateStr, dayData]) => {
         const date = new Date(dateStr);
@@ -408,24 +384,11 @@ const calculateOvertime = (userEntries, startDate, endDate, overtimeSettings = n
       const week2Overtime = week2Hours > settings.weeklyThreshold ? week2Hours - settings.weeklyThreshold : 0;
       weeklyOvertime = week1Overtime + week2Overtime;
       
-      console.log('Bi-weekly overtime breakdown:', {
-        week1Hours,
-        week1Overtime,
-        week2Hours,
-        week2Overtime,
-        totalWeeklyOvertime: weeklyOvertime,
-        weeklyThreshold: settings.weeklyThreshold
-      });
     } else {
       // For non-bi-weekly periods, calculate overtime for the entire period
       if (totalHours > settings.weeklyThreshold) {
         weeklyOvertime = totalHours - settings.weeklyThreshold;
       }
-      console.log('Non-bi-weekly period - calculating overtime for entire period:', {
-        totalHours,
-        weeklyThreshold: settings.weeklyThreshold,
-        weeklyOvertime
-      });
     }
   } else {
     // For daily method, still calculate weekly for informational purposes
@@ -441,12 +404,6 @@ const calculateOvertime = (userEntries, startDate, endDate, overtimeSettings = n
   // Determine which overtime to use based on calculation method
   const overtimeHours = settings.calculationMethod === 'weekly' ? weeklyOvertime : dailyOvertime;
   
-  console.log('Final overtime calculation:', {
-    dailyOvertime,
-    weeklyOvertime,
-    selectedMethod: settings.calculationMethod,
-    finalOvertimeHours: overtimeHours
-  });
 
   return {
     daily: {
@@ -609,7 +566,6 @@ export const getAvailablePayPeriods = (payPeriodSettings, count = 6) => {
 
     return periods;
   } catch (error) {
-    console.error('Error generating pay periods:', error);
     return [];
   }
 };

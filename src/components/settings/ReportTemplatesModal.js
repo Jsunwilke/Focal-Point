@@ -170,15 +170,6 @@ const ReportTemplatesModal = ({ onClose }) => {
   useEffect(() => {
     // Debug user permissions
     if (userProfile && organization) {
-      console.log("=== DEBUG USER PERMISSIONS ===");
-      console.log("User profile:", userProfile);
-      console.log("User role:", userProfile.role);
-      console.log("Organization:", organization);
-      console.log("Organization ID:", organization.id);
-      console.log("User organization ID:", userProfile.organizationID);
-      console.log("Roles match for admin/manager:", ['admin', 'manager'].includes(userProfile.role));
-      console.log("Organization IDs match:", userProfile.organizationID === organization.id);
-      console.log("===========================");
     }
     
     loadTemplates();
@@ -199,11 +190,8 @@ const ReportTemplatesModal = ({ onClose }) => {
       setError("");
       
       // Debug logging
-      console.log("Loading templates - organization:", organization);
-      console.log("User profile:", userProfile);
       
       if (!organization?.id) {
-        console.error("No organization ID available");
         setError("Organization data not available. Please refresh the page.");
         return;
       }
@@ -211,7 +199,6 @@ const ReportTemplatesModal = ({ onClose }) => {
       const templatesData = await getReportTemplates(organization.id);
       setTemplates(templatesData);
     } catch (err) {
-      console.error("Error loading templates:", err);
       if (err.code === 'permission-denied') {
         setError("Permission denied. Please check that you have admin or manager privileges.");
       } else {
@@ -229,7 +216,6 @@ const ReportTemplatesModal = ({ onClose }) => {
       return;
     }
     
-    console.log("Creating template with organization ID:", organization.id);
     
     setEditingTemplate({
       name: "",
@@ -263,8 +249,6 @@ const ReportTemplatesModal = ({ onClose }) => {
       }
       
       // Debug logging
-      console.log("Saving template:", editingTemplate);
-      console.log("User profile role:", userProfile?.role);
       
       if (isCreating) {
         await createReportTemplate(editingTemplate);
@@ -278,7 +262,6 @@ const ReportTemplatesModal = ({ onClose }) => {
       setActiveTab("list");
       setError("");
     } catch (err) {
-      console.error("Error saving template:", err);
       if (err.code === 'permission-denied') {
         setError("Permission denied. You need admin or manager privileges to save templates.");
       } else {
@@ -293,11 +276,9 @@ const ReportTemplatesModal = ({ onClose }) => {
     }
 
     try {
-      console.log("Deleting template:", templateId);
       await deleteReportTemplate(templateId);
       await loadTemplates();
     } catch (err) {
-      console.error("Error deleting template:", err);
       if (err.code === 'permission-denied') {
         setError("Permission denied. You need admin privileges to delete templates.");
       } else {
@@ -371,7 +352,6 @@ const ReportTemplatesModal = ({ onClose }) => {
         }
         setSaveStatus('saved');
       } catch (err) {
-        console.error('Auto-save failed:', err);
         setSaveStatus('error');
       }
     }, 2000); // Auto-save after 2 seconds of inactivity

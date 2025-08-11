@@ -500,14 +500,10 @@ const Schedule = () => {
 
   // Handle employee reorder
   const handleEmployeeReorder = (draggedId, targetId) => {
-    console.log("handleEmployeeReorder called with:", { draggedId, targetId });
-    
     // Get current sorted team members
     const currentMembers = [...sortedFilteredTeamMembers];
     const draggedIndex = currentMembers.findIndex(m => m.id === draggedId);
     const targetIndex = currentMembers.findIndex(m => m.id === targetId);
-    
-    console.log("Indexes:", { draggedIndex, targetIndex });
     
     if (draggedIndex !== -1 && targetIndex !== -1 && draggedIndex !== targetIndex) {
       // Remove dragged member
@@ -518,7 +514,6 @@ const Schedule = () => {
       
       // Extract just the IDs for storage
       const newOrder = currentMembers.map(m => m.id);
-      console.log("New order:", newOrder);
       
       setEmployeeOrder(newOrder);
       saveEmployeeOrder(organization.id, newOrder);
@@ -858,14 +853,7 @@ const Schedule = () => {
     const passesSchoolFilter = 
       visibleSchools.size === 0 || visibleSchools.has(session.schoolId);
 
-    // Debug logging for unassigned sessions
-    if (!session.photographerId) {
-      console.log('Unassigned session found:', session);
-      console.log('Passes schedule filter:', passesScheduleFilter);
-      console.log('Passes photographer filter:', passesPhotographerFilter);
-      console.log('Passes school filter:', passesSchoolFilter);
-      console.log('Final result:', passesScheduleFilter && passesPhotographerFilter && passesSchoolFilter);
-    }
+    // Debug logging for unassigned sessions removed
 
     return passesScheduleFilter && passesPhotographerFilter && passesSchoolFilter;
   });
@@ -893,7 +881,6 @@ const Schedule = () => {
   const sortTeamMembersByOrder = (members, order) => {
     // Ensure members is an array
     if (!members || !Array.isArray(members)) {
-      console.warn("Members is not an array:", members);
       return [];
     }
     
@@ -935,7 +922,6 @@ const Schedule = () => {
       
       return sortedMembers;
     } catch (error) {
-      console.error("Error in sortTeamMembersByOrder:", error);
       // Fallback to alphabetical order
       return [...members].sort((a, b) => {
         const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();

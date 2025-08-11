@@ -137,12 +137,6 @@ const HoursTrackingWidget = () => {
           const startString = formatDate(correctedStart);
           const endString = formatDate(correctedEnd);
           
-          console.warn('[HoursWidget] Period Date Strings:', {
-            startString: startString,
-            endString: endString,
-            periodLabel: period.label
-          });
-          
           const periodEntries = await getTimeEntries(
             user.uid, 
             organization.id, 
@@ -150,47 +144,13 @@ const HoursTrackingWidget = () => {
             endString
           );
           
-          // Debug what entries we got
-          console.warn('[HoursWidget] Period Entries Retrieved:', {
-            count: periodEntries.length,
-            firstThreeEntries: periodEntries.slice(0, 3).map(e => ({
-              date: e.date,
-              hours: e.totalHours,
-              status: e.status
-            }))
-          });
-          
           // Filter to ensure entries are actually within the pay period
           const filteredPeriodEntries = periodEntries.filter(entry => {
-            const isInPeriod = entry.date >= startString && entry.date <= endString;
-            if (!isInPeriod && periodEntries.indexOf(entry) < 3) {
-              console.warn('[HoursWidget] Entry excluded:', {
-                entryDate: entry.date,
-                periodStart: startString,
-                periodEnd: endString,
-                comparison: {
-                  'entry.date >= start': entry.date >= startString,
-                  'entry.date <= end': entry.date <= endString
-                }
-              });
-            }
-            return isInPeriod;
-          });
-          
-          console.warn('[HoursWidget] After filtering:', {
-            originalCount: periodEntries.length,
-            filteredCount: filteredPeriodEntries.length,
-            removed: periodEntries.length - filteredPeriodEntries.length
+            return entry.date >= startString && entry.date <= endString;
           });
           
           const completedPeriodEntries = filteredPeriodEntries.filter(entry => entry.status === 'clocked-out');
           const periodHoursTotal = calculateTotalHours(completedPeriodEntries);
-          
-          console.warn('[HoursWidget] Final Period Hours:', {
-            completedEntries: completedPeriodEntries.length,
-            totalHours: periodHoursTotal
-          });
-          
           setPeriodHours(periodHoursTotal);
           
           // For bi-weekly periods, calculate first and second week hours separately

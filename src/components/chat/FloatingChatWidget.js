@@ -38,7 +38,6 @@ const FloatingChatWidget = () => {
         setIsOpen(savedIsOpen);
         setIsMinimized(savedIsMinimized);
       } catch (error) {
-        console.error('Error loading floating chat state:', error);
       }
     }
     
@@ -53,7 +52,6 @@ const FloatingChatWidget = () => {
   
   // Monitor unread counts for auto-open functionality
   useEffect(() => {
-    console.log('[FloatingChatWidget] Unread counts changed:', unreadCounts);
     
     // Skip if widget is already open or on chat page
     if (isOpen || location.pathname === '/chat') {
@@ -74,7 +72,6 @@ const FloatingChatWidget = () => {
     let conversationWithNewMessage = null;
     Object.entries(unreadCounts).forEach(([convId, count]) => {
       const previousCount = previousUnreadCounts.current[convId] || 0;
-      console.log(`[FloatingChatWidget] Conv ${convId}: prev=${previousCount}, current=${count}`);
       if (count > previousCount && count > 0) {
         conversationWithNewMessage = conversations.find(c => c.id === convId);
       }
@@ -82,7 +79,6 @@ const FloatingChatWidget = () => {
     
     // Auto-open to the conversation with new message
     if (conversationWithNewMessage) {
-      console.log('[FloatingChatWidget] Auto-opening for new message in:', conversationWithNewMessage.id);
       setIsOpen(true);
       setFloatingActiveConversation(conversationWithNewMessage);
       setActiveConversation(conversationWithNewMessage);
@@ -100,7 +96,6 @@ const FloatingChatWidget = () => {
     return total;
   }, 0);
   
-  console.log('[FloatingChatWidget] Total unread:', totalUnread, 'Active conv:', floatingActiveConversation?.id);
 
   const handleToggle = () => {
     if (!isOpen) {
@@ -151,7 +146,6 @@ const FloatingChatWidget = () => {
     e.stopPropagation(); // Prevent conversation selection
     
     if (!conversation?.id || !userProfile?.id) {
-      console.error('[FloatingChatWidget] Missing conversation or user ID');
       return;
     }
     
@@ -164,12 +158,6 @@ const FloatingChatWidget = () => {
       ? optimisticPinStates[conversation.id]
       : (conversation.pinnedBy?.includes(userProfile?.id) || false);
     
-    console.log('[FloatingChatWidget] Toggling pin for:', {
-      conversationId: conversation.id,
-      conversationName: getConversationDisplayName(conversation),
-      currentlyPinned: currentPinState,
-      userId: userProfile.id
-    });
     
     setPinningConversationId(conversation.id);
     

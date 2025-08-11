@@ -12,7 +12,8 @@ class SecureLogger {
        window.location.hostname === '127.0.0.1' ||
        window.location.hostname.includes('localhost'));
     
-    this.canLog = this.isDevelopment || this.isLocalhost;
+    // Disable debug logging even in development
+    this.canLog = false;
   }
 
   /**

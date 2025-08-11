@@ -43,18 +43,15 @@ export const ChatProvider = ({ children }) => {
   // Use cached users from DataCacheContext
   useEffect(() => {
     if (cachedUsers && cachedUsers.length > 0 && userProfile?.id) {
-      console.log('[ChatContext] Using cached users from DataCacheContext:', cachedUsers.length);
       
       // Filter out current user and any users without IDs
       const validUsers = cachedUsers.filter(user => user.id && user.id !== userProfile.id);
       setOrganizationUsers(validUsers);
     } else if (userProfile?.organizationID && !cachedUsers) {
       // Only fetch if we don't have cached users
-      console.log('[ChatContext] No cached users available, fetching from service');
       const loadOrganizationUsers = async () => {
         try {
           const users = await chatService.getOrganizationUsers(userProfile.organizationID);
-          console.log('[ChatContext] Loaded organization users:', users);
           
           // Filter out current user and any users without IDs
           const validUsers = users.filter(user => user.id && user.id !== userProfile.id);
@@ -83,7 +80,6 @@ export const ChatProvider = ({ children }) => {
       chatCacheService.setCachedConversations(conversations);
       
     } catch (error) {
-      console.error('[ChatContext] Error force refreshing conversations:', error);
       showToast('Failed to refresh conversations', 'error');
     }
   }, [userProfile?.id, showToast]);
@@ -272,7 +268,6 @@ export const ChatProvider = ({ children }) => {
             }));
           })
           .catch(error => {
-            console.error('[ChatContext] Error marking messages as read:', error);
           });
       }, 100);
       
@@ -296,7 +291,6 @@ export const ChatProvider = ({ children }) => {
       // Include current user in participants
       const allParticipants = [userProfile.id, ...validParticipantIds.filter(id => id !== userProfile.id)];
       
-      console.log('[ChatContext] Creating conversation with participants:', allParticipants);
       
       // Check if direct conversation already exists
       if (type === 'direct' && allParticipants.length === 2) {
@@ -333,11 +327,6 @@ export const ChatProvider = ({ children }) => {
   const sendMessage = useCallback(async (text, type = 'text', fileUrl = null) => {
 
     if (!activeConversation?.id || !userProfile?.id || !text.trim()) {
-      console.error('[ChatContext] Cannot send message - missing required data:', {
-        activeConversation: activeConversation?.id,
-        userProfile: userProfile?.id,
-        textEmpty: !text.trim()
-      });
       return;
     }
 
@@ -408,7 +397,6 @@ export const ChatProvider = ({ children }) => {
       // Note: The real-time listener will handle updating the cache
       // when the new message comes through
     } catch (error) {
-      console.error('[ChatContext] Error sending message:', error);
       showToast(`Failed to send message: ${error.message}`, 'error');
     } finally {
       setSendingMessage(false);
@@ -502,7 +490,6 @@ export const ChatProvider = ({ children }) => {
       
       showToast(isCurrentlyPinned ? 'Conversation unpinned' : 'Conversation pinned', 'success');
     } catch (error) {
-      console.error('[ChatContext] Error toggling pin:', error);
       showToast('Failed to update pin status', 'error');
     }
   }, [userProfile?.id, showToast]);
@@ -616,7 +603,6 @@ export const ChatProvider = ({ children }) => {
       // Then update Firebase
       await chatService.markMessagesAsRead(conversationId, userProfile.id);
     } catch (error) {
-      console.error('[ChatContext] Error marking messages as read:', error);
       // Optionally revert optimistic update on error
     }
   }, [userProfile?.id]);
@@ -645,8 +631,6 @@ export const ChatProvider = ({ children }) => {
 
   // Delete a conversation (admin only or leave for regular users)
   const deleteConversation = useCallback(async (conversationId) => {
-    console.log('[ChatContext] deleteConversation called for:', conversationId);
-    console.log('[ChatContext] User role:', userProfile?.role);
     
     try {
       let result;
@@ -654,20 +638,16 @@ export const ChatProvider = ({ children }) => {
       // Check if user is admin
       if (userProfile?.role === 'admin') {
         // Admin can permanently delete
-        console.log('[ChatContext] Calling adminDeleteConversation');
         result = await chatService.adminDeleteConversation(conversationId, userProfile.id, userProfile.role);
-        console.log('[ChatContext] Admin delete result:', result);
         showToast('Conversation permanently deleted', 'success');
       } else {
         // Regular users just leave the conversation
-        console.log('[ChatContext] Calling deleteConversation (leave)');
         const userName = `${userProfile.firstName} ${userProfile.lastName}`;
         result = await chatService.deleteConversation(conversationId, userProfile.id, userName);
         showToast('Left conversation', 'success');
       }
       
       // Remove from local state
-      console.log('[ChatContext] Removing conversation from local state');
       setConversations(prev => prev.filter(conv => conv.id !== conversationId));
       
       // Clear active conversation if it's the one being deleted
@@ -681,8 +661,6 @@ export const ChatProvider = ({ children }) => {
       
       return result;
     } catch (error) {
-      console.error('[ChatContext] Error deleting conversation:', error);
-      console.error('[ChatContext] Error stack:', error.stack);
       showToast(error.message || 'Failed to delete conversation', 'error');
       // Don't re-throw the error so the UI doesn't break
       return { success: false, error: error.message };

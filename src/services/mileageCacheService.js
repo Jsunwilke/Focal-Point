@@ -36,7 +36,6 @@ class MileageCacheService {
   getMileageKey(organizationId, startDate, endDate, userIds = null) {
     const userIdStr = userIds ? userIds.sort().join(',') : 'all';
     const key = `${this.MILEAGE_KEY_PREFIX}${organizationId}_${startDate}_${endDate}_${userIdStr}`;
-    console.log(`[MileageCache DEBUG] Generated cache key: ${key}`);
     return key;
   }
 
@@ -47,7 +46,6 @@ class MileageCacheService {
       const cached = localStorage.getItem(key);
       
       if (!cached) {
-        console.log(`[MileageCache DEBUG] No cache found for key: ${key}`);
         return null;
       }
 
@@ -57,21 +55,14 @@ class MileageCacheService {
       const isExpired = Date.now() - cacheData.timestamp > this.CACHE_DURATION;
       const isWrongVersion = cacheData.version !== this.CACHE_VERSION;
       
-      console.log(`[MileageCache DEBUG] Cache validation for ${key}:`);
-      console.log(`  Version: ${cacheData.version} (expected: ${this.CACHE_VERSION}) - ${isWrongVersion ? 'INVALID' : 'VALID'}`);
-      console.log(`  Age: ${Math.round((Date.now() - cacheData.timestamp) / 1000 / 60)} minutes - ${isExpired ? 'EXPIRED' : 'VALID'}`);
-      console.log(`  Reports: ${cacheData.data?.dailyReports?.length || 0}`);
       
       if (isWrongVersion || isExpired) {
-        console.log(`[MileageCache DEBUG] Removing invalid cache for ${key}`);
         localStorage.removeItem(key);
         return null;
       }
 
-      console.log(`[Cache Hit] Mileage data for period ${startDate} to ${endDate} (${cacheData.data?.dailyReports?.length || 0} reports)`);
       return cacheData.data;
     } catch (error) {
-      console.warn('Failed to retrieve cached mileage data:', error);
       return null;
     }
   }
@@ -86,15 +77,9 @@ class MileageCacheService {
         data: data
       };
       
-      console.log(`[MileageCache DEBUG] Setting cache for key: ${key}`);
-      console.log(`  Reports to cache: ${data?.dailyReports?.length || 0}`);
-      console.log(`  Period: ${startDate} to ${endDate}`);
-      console.log(`  Total miles in data: ${data?.summary?.totalMiles || 0}`);
       
       localStorage.setItem(key, this.serializeData(cacheData));
-      console.log(`[Cache Set] Mileage data for period ${startDate} to ${endDate} (${data?.dailyReports?.length || 0} reports)`);
     } catch (error) {
-      console.warn('Failed to cache mileage data:', error);
     }
   }
 
@@ -109,9 +94,7 @@ class MileageCacheService {
           clearedCount++;
         }
       });
-      console.log(`[Cache Clear] Cleared ${clearedCount} mileage cache entries for organization ${organizationId}`);
     } catch (error) {
-      console.warn('Failed to clear mileage cache:', error);
     }
   }
 
@@ -126,10 +109,8 @@ class MileageCacheService {
           clearedCount++;
         }
       });
-      console.log(`[Cache Clear] Force cleared ${clearedCount} mileage cache entries due to pay period boundary fixes`);
       return clearedCount;
     } catch (error) {
-      console.warn('Failed to force clear mileage cache:', error);
       return 0;
     }
   }
@@ -162,10 +143,8 @@ class MileageCacheService {
       });
       
       if (clearedCount > 0) {
-        console.log(`[Cache Clear] Removed ${clearedCount} expired mileage cache entries`);
       }
     } catch (error) {
-      console.warn('Failed to clear expired mileage caches:', error);
     }
   }
 
@@ -199,7 +178,6 @@ class MileageCacheService {
       
       return mileageCaches;
     } catch (error) {
-      console.warn('Failed to get cache info:', error);
       return [];
     }
   }
@@ -207,12 +185,9 @@ class MileageCacheService {
   // Add debugging function for browser console
   inspectCache() {
     const cacheInfo = this.getCacheInfo();
-    console.log('[Mileage Cache] Current cache entries:');
     cacheInfo.forEach((entry, index) => {
-      console.log(`[${index + 1}] ${entry.period} - ${entry.reports} reports - Age: ${entry.age} - ${entry.expired ? 'EXPIRED' : 'VALID'}`);
     });
     if (cacheInfo.length === 0) {
-      console.log('[Mileage Cache] No cache entries found');
     }
     return cacheInfo;
   }
@@ -223,7 +198,6 @@ class MileageCacheService {
       const cacheInfo = this.getCacheInfo();
       const periods = [];
       
-      console.log('[MileageCache DEBUG] Analyzing pay period overlaps...');
       
       cacheInfo.forEach(entry => {
         if (entry.period && entry.period.includes(' to ')) {
@@ -269,19 +243,13 @@ class MileageCacheService {
       }
       
       if (overlaps.length > 0) {
-        console.warn(`[MileageCache DEBUG] Found ${overlaps.length} pay period overlaps:`);
         overlaps.forEach((overlap, index) => {
-          console.warn(`  [${index + 1}] "${overlap.period1}" overlaps with "${overlap.period2}"`);
-          console.warn(`       Key1: ${overlap.key1} (${overlap.reports1} reports)`);
-          console.warn(`       Key2: ${overlap.key2} (${overlap.reports2} reports)`);
         });
       } else {
-        console.log('[MileageCache DEBUG] No pay period overlaps detected');
       }
       
       return { periods, overlaps };
     } catch (error) {
-      console.error('[MileageCache DEBUG] Error checking pay period overlaps:', error);
       return { periods: [], overlaps: [] };
     }
   }
@@ -296,7 +264,6 @@ mileageCacheService.clearExpiredCaches();
 // This ensures clean regeneration with corrected boundaries
 const clearedCount = mileageCacheService.clearAllMileageCache();
 if (clearedCount > 0) {
-  console.log(`[MileageCacheService] Cleared ${clearedCount} cache entries due to pay period boundary fixes`);
 }
 
 // Add global debugging functions for browser console
@@ -306,14 +273,11 @@ if (typeof window !== 'undefined') {
   window.clearMileageCache = (organizationId) => {
     if (organizationId) {
       mileageCacheService.clearOrganizationCache(organizationId);
-      console.log(`[Mileage Cache] Cleared cache for organization ${organizationId}`);
     } else {
-      console.log('[Mileage Cache] Please provide organizationId: clearMileageCache("org-id")');
     }
   };
   window.forceClearAllMileageCache = () => {
     const cleared = mileageCacheService.clearAllMileageCache();
-    console.log(`[Mileage Cache] Force cleared ${cleared} entries`);
     return cleared;
   };
 }

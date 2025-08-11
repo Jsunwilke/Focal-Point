@@ -50,13 +50,10 @@ const MileageTracking = () => {
     setError('');
 
     try {
-      console.log(`[MileageTracking] 📅 Loading mileage data for period: ${selectedPeriod.value}`);
-      console.log(`[MileageTracking] 📅 Selected period object:`, selectedPeriod);
       
       // Check cache status before loading
       const cacheAvailable = await preloadDailyReportsForMileage(organization.id);
       if (!cacheAvailable) {
-        console.log(`[MileageTracking] ⚠️ Daily reports cache not available - may require Firebase reads`);
       }
       
       let data;
@@ -92,10 +89,8 @@ const MileageTracking = () => {
         );
       }
 
-      console.log(`[MileageTracking] ✅ Successfully loaded mileage data: ${data.userBreakdown?.totalMiles || 0} miles, ${data.userBreakdown?.totalJobs || 0} jobs`);
       setMileageData(data);
     } catch (err) {
-      console.error('Error loading mileage data:', err);
       setError(err.message || 'Failed to load mileage data');
     } finally {
       setLoading(false);
@@ -117,7 +112,6 @@ const MileageTracking = () => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err) {
-      console.error('Error exporting mileage data:', err);
       setError('Failed to export mileage data');
     }
   };
@@ -139,12 +133,10 @@ const MileageTracking = () => {
 
     setLoadingStats(true);
     try {
-      console.log(`[MileageTracking] Loading monthly and yearly stats`);
       
       // Check cache status for stats
       const cacheAvailable = await preloadDailyReportsForMileage(organization.id);
       if (!cacheAvailable) {
-        console.log(`[MileageTracking] ⚠️ Daily reports cache not available for stats - may require Firebase reads`);
       }
       
       const [monthlyResult, yearlyResult] = await Promise.all([
@@ -152,11 +144,9 @@ const MileageTracking = () => {
         getUserMileageDataForCurrentYear(organization.id, user.uid)
       ]);
       
-      console.log(`[MileageTracking] ✅ Stats loaded - Monthly: ${monthlyResult?.userBreakdown?.totalMiles || 0} miles, Yearly: ${yearlyResult?.userBreakdown?.totalMiles || 0} miles`);
       setMonthlyData(monthlyResult);
       setYearlyData(yearlyResult);
     } catch (err) {
-      console.error('Error loading monthly/yearly stats:', err);
       // Don't show error for stats - just log it
     } finally {
       setLoadingStats(false);

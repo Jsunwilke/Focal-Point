@@ -179,7 +179,8 @@ const generateWeeklyPeriods = (start, end, config, periods) => {
   while (current <= end) {
     const periodEnd = new Date(current);
     periodEnd.setDate(periodEnd.getDate() + 6);
-    periodEnd.setHours(23, 59, 59, 999);
+    // Keep time at start of day for clean boundaries
+    periodEnd.setHours(0, 0, 0, 0);
 
     periods.push({
       start: formatDate(current),
@@ -195,28 +196,30 @@ const generateWeeklyPeriods = (start, end, config, periods) => {
  * Generate bi-weekly pay periods
  */
 const generateBiWeeklyPeriods = (start, end, config, periods) => {
-  const referenceDate = new Date(config.startDate);
-  referenceDate.setHours(0, 0, 0, 0); // Ensure we start at beginning of day
+  // Parse the date string in local timezone to avoid UTC conversion issues
+  const [year, month, day] = config.startDate.split('-').map(Number);
+  const referenceDate = new Date(year, month - 1, day, 0, 0, 0, 0);
   
-  // Calculate which bi-weekly period the start date falls into
-  const daysDiff = Math.floor((start.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24));
-  const periodNumber = Math.floor(daysDiff / 14);
+  // Calculate how many days have passed since the reference date
+  const startTime = new Date(start);
+  startTime.setHours(0, 0, 0, 0);
+  const daysSinceReference = Math.floor((startTime.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24));
   
-  // Find the start of the period that contains or comes before our start date
-  let current = new Date(referenceDate);
-  current.setDate(current.getDate() + (periodNumber * 14));
+  // Calculate which period number we're in (0-based)
+  const periodsSinceReference = Math.floor(daysSinceReference / 14);
+  
+  // Find the start of the period that contains our start date
+  // If daysSinceReference is negative, go back one more period
+  let periodsToAdd = daysSinceReference >= 0 ? periodsSinceReference : periodsSinceReference - 1;
+  
+  let current = new Date(referenceDate.getTime() + (periodsToAdd * 14 * 24 * 60 * 60 * 1000));
   current.setHours(0, 0, 0, 0);
-  
-  // If we're before our target start date, we need to go back one period
-  if (current > start) {
-    current.setDate(current.getDate() - 14);
-  }
   
   // Generate periods
   while (current <= end) {
     const periodEnd = new Date(current);
-    periodEnd.setDate(periodEnd.getDate() + 13); // 14 days total (0-13)
-    periodEnd.setHours(23, 59, 59, 999);
+    periodEnd.setDate(periodEnd.getDate() + 13); // 14 days total (day 0 through day 13)
+    periodEnd.setHours(0, 0, 0, 0);
 
     // Only include periods that overlap with our date range
     if (periodEnd >= start) {
@@ -227,9 +230,8 @@ const generateBiWeeklyPeriods = (start, end, config, periods) => {
       });
     }
 
-    // IMPORTANT: Start next period the day AFTER current period ends
-    // This prevents dates from appearing in multiple periods
-    current.setDate(current.getDate() + 14);
+    // Move to the next period start (14 days after current start)
+    current = new Date(current.getTime() + (14 * 24 * 60 * 60 * 1000));
   }
 };
 
@@ -250,7 +252,7 @@ const generateSemiMonthlyPeriods = (start, end, config, periods) => {
       // First period of the month
       const firstStart = new Date(year, month, config.firstDate);
       const firstEnd = new Date(year, month, config.secondDate - 1);
-      firstEnd.setHours(23, 59, 59, 999);
+      firstEnd.setHours(0, 0, 0, 0);
 
       if (firstEnd >= start && firstStart <= end) {
         periods.push({
@@ -264,7 +266,7 @@ const generateSemiMonthlyPeriods = (start, end, config, periods) => {
       const secondStart = new Date(year, month, config.secondDate);
       const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
       const secondEnd = new Date(year, month, lastDayOfMonth);
-      secondEnd.setHours(23, 59, 59, 999);
+      secondEnd.setHours(0, 0, 0, 0);
 
       if (secondEnd >= start && secondStart <= end) {
         periods.push({
@@ -305,7 +307,7 @@ const generateMonthlyPeriods = (start, end, config, periods) => {
         periodEnd.setDate(0); // Last day of the month
       }
       
-      periodEnd.setHours(23, 59, 59, 999);
+      periodEnd.setHours(0, 0, 0, 0);
 
       if (periodEnd >= start && periodStart <= end) {
         periods.push({
@@ -366,7 +368,7 @@ export const getPreviousPayPeriod = (payPeriodSettings) => {
   // This ensures no overlap between periods
   const previousEnd = new Date(currentStart);
   previousEnd.setDate(previousEnd.getDate() - 1);
-  previousEnd.setHours(23, 59, 59, 999); // End at the very end of the previous day
+  previousEnd.setHours(0, 0, 0, 0); // Keep consistent with period generation
 
   // Get a range that includes the previous period
   const rangeStart = new Date(previousEnd);
@@ -458,9 +460,13 @@ export const generatePayPeriodPreview = (payPeriodSettings, count = 3) => {
  */
 
 const formatDate = (date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  // Ensure we're working with a Date object
+  const d = date instanceof Date ? date : new Date(date);
+  
+  // Use local date values to avoid timezone issues
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 

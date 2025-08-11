@@ -586,21 +586,17 @@ export const DataCacheProvider = ({ children }) => {
             // If we had cached data and are comparing, only count actual changes
             if (existingCachedUsers && existingCachedUsers.length > 0) {
               if (changesDetected.length > 0) {
-                console.log('📊 USERS LISTENER: Initial sync detected', changesDetected.length, 'changes from cached data');
                 readCounter.recordRead('onSnapshot-sync', 'users', 'DataCacheContext', changesDetected.length);
                 secureLogger.debug("Users sync with cache:", changesDetected.length, "changes detected");
               } else {
-                console.log('📊 USERS LISTENER: Initial sync - no changes from cached data (0 reads)');
                 // No changes detected, data came from Firestore's cache
               }
             } else {
               // No cached data, this is a full fresh load
-              console.log('📊 USERS LISTENER: Initial load fetched', snapshot.size, 'users from Firebase (no cache)');
               readCounter.recordRead('onSnapshot-initial', 'users', 'DataCacheContext', snapshot.size);
               secureLogger.debug("Users initial load:", snapshot.size, "documents");
             }
           } else {
-            console.log('📊 USERS LISTENER: Initial load from Firestore cache (no Firebase reads)');
           }
           
           isInitialLoad = false;
@@ -670,7 +666,6 @@ export const DataCacheProvider = ({ children }) => {
   // Update stable org ID only when it actually changes
   useEffect(() => {
     if (organization?.id && organization.id !== stableOrgId) {
-      console.log('🔄 ORG ID: Updating stable org ID from', stableOrgId, 'to', organization.id);
       setStableOrgId(organization.id);
     }
   }, [organization?.id, stableOrgId]);
@@ -681,12 +676,10 @@ export const DataCacheProvider = ({ children }) => {
 
     // Skip if listener is already active
     if (listenersActiveRef.current.users) {
-      console.log('🔵 USERS LISTENER: Already active, skipping setup');
       secureLogger.debug('Users listener already active, skipping setup');
       return;
     }
     
-    console.log('🟡 USERS LISTENER: Creating new listener for organization:', organization.id);
 
     let unsubscribe = null;
     let syncTimeout = null;
@@ -707,16 +700,13 @@ export const DataCacheProvider = ({ children }) => {
       // Pass the cached users so the listener can detect changes
       syncTimeout = setTimeout(() => {
         if (!listenersActiveRef.current.users) {
-          console.log('🟢 USERS LISTENER: Setting up after 5s delay');
           unsubscribe = setupUsersListener(organization.id, cachedUsers);
           listenersActiveRef.current.users = true;
         } else {
-          console.log('🔵 USERS LISTENER: Already active during timeout, skipping');
         }
       }, 5000); // 5 second delay to match sessions
     } else {
       // No cache - need immediate sync
-      console.log('🔴 USERS LISTENER: No cache, setting up immediately');
       setUsersCache(prev => ({ ...prev, loading: true, error: null }));
       readCounter.recordCacheMiss('users', 'DataCacheContext');
       unsubscribe = setupUsersListener(organization.id);
@@ -906,7 +896,6 @@ export const DataCacheProvider = ({ children }) => {
                            !isNaN(latestTimestamp.getTime());
 
     if (canUseOptimized) {
-      console.log('[DataCacheContext] Using optimized listener for new reports only after:', latestTimestamp.toISOString());
       // Use optimized listener that only fetches new reports
       unsubscribe = subscribeToNewDailyJobReports(
         organization.id,
@@ -944,11 +933,6 @@ export const DataCacheProvider = ({ children }) => {
       );
     } else {
       // Use full listener only when cache is missing or expired
-      console.warn('[DataCacheContext] Using FULL listener - this will fetch ALL reports!', {
-        useOptimized,
-        hasTimestamp: !!latestTimestamp,
-        timestampValid: latestTimestamp instanceof Date && !isNaN(latestTimestamp?.getTime())
-      });
       unsubscribe = subscribeToDailyJobReports(
         organization.id,
         (reports) => {
@@ -1046,15 +1030,11 @@ export const DataCacheProvider = ({ children }) => {
             // Validate the date
             if (tempDate instanceof Date && !isNaN(tempDate.getTime())) {
               latestTimestamp = tempDate;
-              console.log('[DataCacheContext] Successfully extracted latest timestamp:', tempDate.toISOString());
             } else {
-              console.warn('[DataCacheContext] Could not extract valid timestamp from cached reports');
             }
           } catch (err) {
-            console.error('[DataCacheContext] Error parsing timestamp:', err);
           }
         } else {
-          console.log('[DataCacheContext] No reports with timestamps found in cache');
         }
       }
       
@@ -1063,10 +1043,8 @@ export const DataCacheProvider = ({ children }) => {
         // Only use optimized listener if we have a valid timestamp
         // If no valid timestamp, skip the listener entirely since we have valid cache
         if (latestTimestamp) {
-          console.log('[DataCacheContext] Setting up optimized listener with timestamp:', latestTimestamp.toISOString());
           unsubscribe = setupDailyJobReportsListener(true, latestTimestamp);
         } else {
-          console.log('[DataCacheContext] Valid cache exists but no timestamp found - skipping real-time sync to avoid unnecessary reads');
           // Cache is valid for 30 days, no need to set up a listener if we can't optimize it
         }
       }, 5000); // 5 second delay like sessions
@@ -1095,7 +1073,6 @@ export const DataCacheProvider = ({ children }) => {
   // Cleanup all listeners on unmount ONLY
   useEffect(() => {
     return () => {
-      console.log('🔴 DATACACHE UNMOUNTING: Cleaning up all listeners');
       // Reset the active flags
       listenersActiveRef.current = {
         sessions: false,
@@ -1181,26 +1158,13 @@ export const DataCacheProvider = ({ children }) => {
 
   // Optimistic update for users
   const updateUserOptimistically = useCallback((userId, updateData) => {
-    console.log('updateUserOptimistically called:', {
-      userId,
-      updateData,
-      organizationId: organization?.id,
-      hasOrganization: !!organization
-    });
     
     // Use ref to get current state
     const currentUsers = usersCacheRef.current.data || [];
-    console.log('Current users count from React state:', currentUsers.length);
     
     // Update the user in the cached data
     const updatedUsers = currentUsers.map(user => {
       if (user.id === userId) {
-        console.log('Found user to update:', {
-          oldDisplayName: user.displayName,
-          newDisplayName: updateData.displayName,
-          oldFirstName: user.firstName,
-          newFirstName: updateData.firstName
-        });
         return {
           ...user,
           ...updateData,
@@ -1217,21 +1181,14 @@ export const DataCacheProvider = ({ children }) => {
     // Update cache storage - clear old cache first to ensure fresh data
     if (organization?.id) {
       dataCacheService.setCachedUsers(organization.id, updatedUsers);
-      console.log('localStorage cache updated for organization:', organization.id);
     } else {
-      console.warn('No organization ID - cannot update localStorage cache');
     }
     
     // Process and update UI immediately
     const processedData = processUsersData(updatedUsers);
-    console.log('Processed users data:', {
-      count: processedData.length,
-      updatedUser: processedData.find(u => u.id === userId)
-    });
     
     // Force new array reference to ensure React detects the change
     setUsersCache(prevCache => {
-      console.log('Previous cache had', prevCache.data?.length, 'users');
       return {
         data: [...processedData],  // Create new array reference
         loading: false,
@@ -1241,10 +1198,6 @@ export const DataCacheProvider = ({ children }) => {
       };
     });
     
-    console.log('Users cache updated', {
-      newDataReference: processedData,
-      firstUser: processedData[0]
-    });
     
     // Also reprocess sessions to update photographer names
     // Use current sessions from React state

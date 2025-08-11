@@ -54,10 +54,8 @@ class SessionsCacheService {
         return null;
       }
 
-      console.log(`[Cache Hit] Sessions for organization ${organizationId}${startDate ? ` (${startDate} to ${endDate})` : ' (all)'}`);
       return cacheData.data;
     } catch (error) {
-      console.warn('Failed to retrieve cached sessions:', error);
       return null;
     }
   }
@@ -72,9 +70,7 @@ class SessionsCacheService {
         data: sessions
       };
       localStorage.setItem(key, this.serializeData(cacheData));
-      console.log(`[Cache Set] ${sessions.length} sessions for organization ${organizationId}${startDate ? ` (${startDate} to ${endDate})` : ' (all)'}`);
     } catch (error) {
-      console.warn('Failed to cache sessions:', error);
     }
   }
 
@@ -87,9 +83,7 @@ class SessionsCacheService {
           localStorage.removeItem(key);
         }
       });
-      console.log(`[Cache Clear] All sessions for organization ${organizationId}`);
     } catch (error) {
-      console.warn('Failed to clear sessions cache:', error);
     }
   }
 
@@ -121,10 +115,8 @@ class SessionsCacheService {
       });
       
       if (clearedCount > 0) {
-        console.log(`[Cache Clear] Removed ${clearedCount} expired sessions cache entries`);
       }
     } catch (error) {
-      console.warn('Failed to clear expired sessions caches:', error);
     }
   }
 
@@ -157,7 +149,6 @@ class SessionsCacheService {
       
       return sessionsCaches;
     } catch (error) {
-      console.warn('Failed to get cache info:', error);
       return [];
     }
   }

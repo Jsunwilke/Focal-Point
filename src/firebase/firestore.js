@@ -108,11 +108,9 @@ const recalculateSessionColorsForDate = async (organizationID, date, orgData = n
     // Commit batch updates if there are any
     if (hasUpdates) {
       await batch.commit();
-      console.log(`Updated session colors for ${date}`);
     }
 
   } catch (error) {
-    console.warn("Failed to recalculate session colors for date:", date, error);
   }
 };
 
@@ -250,9 +248,7 @@ export const updateOrganization = async (organizationID, data) => {
       ...data,
       updatedAt: serverTimestamp(),
     });
-    console.log("Organization updated successfully");
   } catch (error) {
-    console.error("Error updating organization:", error);
     throw error;
   }
 };
@@ -290,7 +286,6 @@ export const getTeamMembers = async (organizationID) => {
     
     return sortedMembers;
   } catch (error) {
-    console.error("Error fetching team members:", error);
     throw error;
   }
 };
@@ -325,7 +320,6 @@ export const inviteUser = async (organizationID, inviteData) => {
 
     return tempUID;
   } catch (error) {
-    console.error("Error inviting user:", error);
     throw error;
   }
 };
@@ -358,7 +352,6 @@ export const getInvitationByEmail = async (email) => {
       organizationName: org?.name || "Unknown Organization",
     };
   } catch (error) {
-    console.error("Error fetching invitation:", error);
     throw error;
   }
 };
@@ -402,9 +395,7 @@ export const acceptInvitation = async (tempUserId, firebaseUid) => {
     // Clean up the temporary invitation document
     await deleteDoc(doc(firestore, "users", tempUserId));
     
-    console.log(`User migration successful: ${tempUserId} → ${firebaseUid}`);
   } catch (error) {
-    console.error("Error accepting invitation:", error);
     throw error;
   }
 };
@@ -417,7 +408,6 @@ export const updateUserRole = async (userId, newRole) => {
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error("Error updating user role:", error);
     throw error;
   }
 };
@@ -433,7 +423,6 @@ export const deleteUser = async (userId, organizationID) => {
     
     return { success: true };
   } catch (error) {
-    console.error("Error deleting user:", error);
     throw error;
   }
 };
@@ -466,12 +455,10 @@ export const cleanupTemporaryInvites = async (organizationID, olderThanDays = 30
       }
     });
     
-    console.log(`Found ${expiredInvites.length} expired temporary invites to clean up`);
     
     // Delete expired invites
     for (const invite of expiredInvites) {
       await deleteDoc(doc(firestore, "users", invite.id));
-      console.log(`Cleaned up expired invite for ${invite.email} (invited ${invite.invitedAt.toDateString()})`);
     }
     
     return {
@@ -479,7 +466,6 @@ export const cleanupTemporaryInvites = async (organizationID, olderThanDays = 30
       expiredInvites
     };
   } catch (error) {
-    console.error("Error cleaning up temporary invites:", error);
     throw error;
   }
 };
@@ -570,7 +556,6 @@ export const createDailyJobReport = async (reportData) => {
     const reportRef = await addDoc(collection(firestore, "dailyJobReports"), finalReportData);
     return reportRef.id;
   } catch (error) {
-    console.error("Error creating daily job report:", error);
     throw error;
   }
 };
@@ -602,7 +587,6 @@ export const getDailyJobReports = async (
     ];
     
     // Note: Date filtering will be done client-side to handle various date formats
-    console.log(`🔍 Querying all dailyJobReports for organization: ${organizationID}`);
     
     // Add ordering by timestamp (which is always consistent)
     queryConstraints.push(orderBy("timestamp", "desc"));
@@ -634,7 +618,6 @@ export const getDailyJobReports = async (
       lastDoc = doc;
     });
 
-    console.log(`📊 Total reports found: ${reports.length} (paginated)`);
 
     // Apply date filtering on client side since dates can be in different formats
     let filteredReports = reports;
@@ -651,7 +634,6 @@ export const getDailyJobReports = async (
       });
       
       if (needsClientFilter) {
-        console.log(`🔍 Additional client-side filtering needed for legacy timestamp formats`);
         
         filteredReports = reports.filter(report => {
           // If date is already a string and was caught by the query, include it
@@ -663,7 +645,6 @@ export const getDailyJobReports = async (
           const reportDate = parseReportDate(report.date);
           
           if (!reportDate) {
-            console.warn(`⚠️ Could not parse date for report ${report.id}:`, report.date);
             return false;
           }
           
@@ -678,7 +659,6 @@ export const getDailyJobReports = async (
           return true;
         });
         
-        console.log(`📊 Reports after additional filtering: ${filteredReports.length}`);
       }
     }
 
@@ -686,12 +666,10 @@ export const getDailyJobReports = async (
     if (filteredReports.length <= 10) {
       filteredReports.forEach(report => {
         const parsedDate = parseReportDate(report.date);
-        console.log(`📄 Report ${report.id}: original date=${report.date}, parsed=${parsedDate}, mileage=${report.totalMileage || 'N/A'}`);
       });
     }
 
     const reportsWithMileage = filteredReports.filter(r => r.totalMileage && r.totalMileage > 0);
-    console.log(`🚗 Reports with mileage: ${reportsWithMileage.length}`);
 
     // Return paginated results with metadata
     const result = {
@@ -708,7 +686,6 @@ export const getDailyJobReports = async (
     
     return result;
   } catch (error) {
-    console.error("Error fetching daily job reports:", error);
     throw error;
   }
 };
@@ -770,10 +747,8 @@ const parseReportDate = (dateValue) => {
       return fallbackDate;
     }
     
-    console.warn('Could not parse date value:', dateValue);
     return null;
   } catch (error) {
-    console.error('Error parsing report date:', error, 'Value:', dateValue);
     return null;
   }
 };
@@ -782,7 +757,6 @@ const convertToFirestoreTimestamp = (dateString, endOfDay = false) => {
   try {
     // Handle different input types for backwards compatibility
     if (!dateString) {
-      console.warn('No date string provided to convertToFirestoreTimestamp');
       return Timestamp.now();
     }
     
@@ -801,7 +775,6 @@ const convertToFirestoreTimestamp = (dateString, endOfDay = false) => {
     
     // Check if date is valid
     if (isNaN(date.getTime())) {
-      console.error('Invalid date string:', dateString);
       return Timestamp.now();
     }
     
@@ -815,7 +788,6 @@ const convertToFirestoreTimestamp = (dateString, endOfDay = false) => {
     
     return Timestamp.fromDate(date);
   } catch (error) {
-    console.error('Error converting date string to Firestore Timestamp:', error);
     // Fallback: return current timestamp
     return Timestamp.now();
   }
@@ -828,7 +800,6 @@ export const updateDailyJobReport = async (reportId, reportData) => {
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error("Error updating daily job report:", error);
     throw error;
   }
 };
@@ -838,10 +809,8 @@ export const deleteDailyJobReport = async (reportId) => {
   try {
     await deleteDoc(doc(firestore, "dailyJobReports", reportId));
     readCounter.recordRead('deleteDoc', 'dailyJobReports', 'DailyReports', 1);
-    console.log(`[DailyReports] Successfully deleted report ${reportId}`);
     return { success: true };
   } catch (error) {
-    console.error("Error deleting daily job report:", error);
     return { success: false, error: error.message };
   }
 };
@@ -858,10 +827,8 @@ export const deleteDailyJobReportsBatch = async (reportIds) => {
     
     await batch.commit();
     readCounter.recordRead('writeBatch', 'dailyJobReports', 'DailyReports', reportIds.length);
-    console.log(`[DailyReports] Successfully deleted ${reportIds.length} reports in batch`);
     return { success: true, deletedCount: reportIds.length };
   } catch (error) {
-    console.error("Error batch deleting daily job reports:", error);
     return { success: false, error: error.message };
   }
 };
@@ -870,7 +837,6 @@ export const deleteDailyJobReportsBatch = async (reportIds) => {
 export const subscribeToDailyJobReports = (organizationID, callback, errorCallback, startDate = null) => {
   // Load ALL reports for the organization to handle various date formats
   // Client-side filtering will handle date ranges
-  console.log(`[DailyReports] Loading ALL reports for organization ${organizationID}`);
 
   // Simple query without date filter to get all reports
   const q = query(
@@ -880,7 +846,6 @@ export const subscribeToDailyJobReports = (organizationID, callback, errorCallba
   );
 
   const listenerTag = `full-${Date.now()}`;
-  console.log(`[DailyReports-${listenerTag}] Subscribing to ALL reports for organization ${organizationID}`);
 
   return onSnapshot(
     q,
@@ -896,7 +861,6 @@ export const subscribeToDailyJobReports = (organizationID, callback, errorCallba
       
       if (!snapshot.metadata.fromCache) {
         // Note: Read count automatically tracked by firestoreWrapper
-        console.log(`[DailyReports] Loaded ${snapshot.size} reports`);
       }
       
       // Pass both reports and metadata
@@ -905,7 +869,6 @@ export const subscribeToDailyJobReports = (organizationID, callback, errorCallba
       });
     },
     (error) => {
-      console.error("Error in daily job reports listener:", error);
       if (errorCallback) errorCallback(error);
     }
   );
@@ -918,13 +881,10 @@ export const subscribeToNewDailyJobReports = (organizationID, callback, errorCal
   
   if (latestCachedTimestamp && latestCachedTimestamp instanceof Date && !isNaN(latestCachedTimestamp.getTime())) {
     effectiveTimestamp = latestCachedTimestamp;
-    console.log(`[DailyReports] Using cached timestamp: ${effectiveTimestamp.toISOString()}`);
   } else {
     effectiveTimestamp = new Date('2020-01-01');
     if (latestCachedTimestamp) {
-      console.warn('[DailyReports] ⚠️ Invalid cached timestamp provided, using fallback timestamp:', latestCachedTimestamp);
     } else {
-      console.log(`[DailyReports] No cached timestamp provided, using fallback timestamp: ${effectiveTimestamp.toISOString()}`);
     }
   }
 
@@ -942,19 +902,13 @@ export const subscribeToNewDailyJobReports = (organizationID, callback, errorCal
   const listenerTag = `optimized-${Date.now()}`;
   
   try {
-    console.log(`[DailyReports-${listenerTag}] Subscribing to NEW reports after ${effectiveTimestamp.toISOString()} for organization ${organizationID}`);
-    console.log(`[DailyReports-${listenerTag}] Query timestamp value: ${effectiveTimestamp.getTime()}ms`);
-    console.log(`[DailyReports-${listenerTag}] Firebase Timestamp query: ${timestampQuery.toDate().toISOString()}`);
-    console.log(`[DailyReports-${listenerTag}] Query will look for reports where timestamp > ${effectiveTimestamp.toISOString()}`);
   } catch (err) {
-    console.error(`[DailyReports-${listenerTag}] Error logging timestamp info:`, err);
   }
 
   return onSnapshot(
     q,
     { component: `DailyReports-${listenerTag}`, includeMetadataChanges: false },
     (snapshot) => {
-      console.log(`[DailyReports-${listenerTag}] Snapshot received - size: ${snapshot.size}, fromCache: ${snapshot.metadata.fromCache}`);
       
       const newReports = [];
       snapshot.forEach((doc) => {
@@ -964,37 +918,25 @@ export const subscribeToNewDailyJobReports = (organizationID, callback, errorCal
         });
       });
       
-      console.log(`[DailyReports-${listenerTag}] Processed ${newReports.length} documents from snapshot`);
       
       if (!snapshot.metadata.fromCache) {
         // Note: Read count automatically tracked by firestoreWrapper
-        console.log(`[DailyReports-${listenerTag}] Optimized listener: received ${snapshot.size} new reports (not from cache)`);
         
         // Log details about the new reports
         if (newReports.length > 0) {
-          console.log(`[DailyReports-${listenerTag}] New reports details:`, newReports.map(r => ({
-            id: r.id,
-            date: r.date,
-            timestamp: r.timestamp,
-            timestampType: typeof r.timestamp,
-            timestampValue: r.timestamp?.toDate ? r.timestamp.toDate().toISOString() : 'N/A'
-          })));
         }
       }
       
       // Only call callback if there are actually new reports
       if (newReports.length > 0) {
-        console.log(`[DailyReports-${listenerTag}] Calling callback with ${newReports.length} new reports`);
         callback(newReports, { 
           totalLoaded: snapshot.size,
           isIncremental: true
         });
       } else {
-        console.log(`[DailyReports-${listenerTag}] No new reports to process (snapshot.size: ${snapshot.size})`);
       }
     },
     (error) => {
-      console.error("Error in optimized daily job reports listener:", error);
       if (errorCallback) errorCallback(error);
     }
   );
@@ -1022,10 +964,8 @@ export const getDailyJobReportsOlder = async (organizationID, beforeDate, limit 
       });
     });
 
-    console.log(`[DailyReports] Loaded ${reports.length} older reports before ${beforeDate.toLocaleDateString()}`);
     return reports;
   } catch (error) {
-    console.error("Error loading older daily job reports:", error);
     throw error;
   }
 };
@@ -1064,7 +1004,6 @@ export const getSchools = async (organizationID) => {
 
     return schools;
   } catch (error) {
-    console.error("Error fetching schools:", error);
     throw error;
   }
 };
@@ -1081,7 +1020,6 @@ export const createSchool = async (organizationID, schoolData) => {
     });
     return schoolRef.id;
   } catch (error) {
-    console.error("Error creating school:", error);
     throw error;
   }
 };
@@ -1103,7 +1041,6 @@ export const updateSchool = async (schoolId, schoolData) => {
     
     await updateDoc(doc(firestore, "schools", schoolId), updateData);
   } catch (error) {
-    console.error("Error updating school:", error);
     throw error;
   }
 };
@@ -1130,7 +1067,6 @@ export const getSessions = async (organizationID, startDate = null, endDate = nu
       startDate = thirtyDaysAgo.toISOString().split('T')[0];
       endDate = thirtyDaysAhead.toISOString().split('T')[0];
       
-      console.log(`[Sessions] Using default date range: ${startDate} to ${endDate}`);
     }
     
     // Build query with date filtering
@@ -1157,14 +1093,12 @@ export const getSessions = async (organizationID, startDate = null, endDate = nu
       });
     });
     
-    console.log(`[Sessions] Fetched ${sessions.length} sessions for organization ${organizationID}`);
     
     // Cache the results
     sessionsCacheService.setCachedSessions(organizationID, sessions, startDate, endDate);
 
     return sessions;
   } catch (error) {
-    console.error("Error fetching sessions:", error);
     throw error;
   }
 };
@@ -1194,7 +1128,6 @@ export const getTodaySessions = async (organizationID) => {
     });
     return sessions;
   } catch (error) {
-    console.error("Error fetching today's sessions:", error);
     throw error;
   }
 };
@@ -1221,7 +1154,6 @@ export const getSessionsForSchool = async (schoolId, organizationID) => {
 
     return sessions;
   } catch (error) {
-    console.error("Error fetching sessions for school:", error);
     throw error;
   }
 };
@@ -1305,7 +1237,6 @@ export const createSession = async (organizationID, sessionData) => {
         }
         
       } catch (colorError) {
-        console.warn("Failed to calculate session color during creation:", colorError);
         // Set a default color for regular sessions if calculation fails
         sessionColor = "#3b82f6";
       }
@@ -1334,11 +1265,6 @@ export const createSession = async (organizationID, sessionData) => {
       const sessionTypes = sessionData.sessionTypes || 
                           (sessionData.sessionType ? [sessionData.sessionType] : ['other']);
       
-      console.log("🔄 SESSION CREATED - Starting multiple workflow creation process");
-      console.log("📋 Session ID:", sessionId);
-      console.log("🏢 Organization ID:", organizationID);
-      console.log("🎯 Session Types:", sessionTypes);
-      console.log("📝 Full Session Data:", sessionData);
       
       // Store session creation info for debugging
       localStorage.setItem('lastSessionCreated', JSON.stringify({
@@ -1353,7 +1279,6 @@ export const createSession = async (organizationID, sessionData) => {
       // Create a separate workflow for each session type
       for (let i = 0; i < sessionTypes.length; i++) {
         const sessionType = sessionTypes[i];
-        console.log(`🎯 Creating workflow ${i + 1}/${sessionTypes.length} for session type: "${sessionType}"`);
         
         try {
           const workflowId = await autoCreateWorkflowForSession(
@@ -1363,12 +1288,10 @@ export const createSession = async (organizationID, sessionData) => {
           );
           
           if (workflowId) {
-            console.log(`✅ SUCCESS: Workflow ${i + 1} created with ID: ${workflowId} for session type: "${sessionType}"`);
             
             // Verify workflow was created
             const workflowDoc = await getDoc(doc(firestore, "workflows", workflowId));
             if (workflowDoc.exists()) {
-              console.log(`✅ VERIFIED: Workflow ${i + 1} exists in Firestore`);
               workflowResults.push({
                 success: true,
                 workflowId,
@@ -1376,7 +1299,6 @@ export const createSession = async (organizationID, sessionData) => {
                 templateName: workflowDoc.data().templateName
               });
             } else {
-              console.error(`❌ ERROR: Workflow ${i + 1} ID returned but document doesn't exist!`);
               workflowResults.push({
                 success: false,
                 error: 'Workflow ID returned but document does not exist',
@@ -1384,7 +1306,6 @@ export const createSession = async (organizationID, sessionData) => {
               });
             }
           } else {
-            console.log(`❌ FAILED: No workflow created for session type: "${sessionType}"`);
             workflowResults.push({
               success: false,
               error: 'No workflow ID returned',
@@ -1392,7 +1313,6 @@ export const createSession = async (organizationID, sessionData) => {
             });
           }
         } catch (workflowError) {
-          console.error(`❌ ERROR: Failed to create workflow for session type "${sessionType}":`, workflowError);
           workflowResults.push({
             success: false,
             error: workflowError.message,
@@ -1405,12 +1325,9 @@ export const createSession = async (organizationID, sessionData) => {
       const successfulWorkflows = workflowResults.filter(r => r.success);
       const failedWorkflows = workflowResults.filter(r => !r.success);
       
-      console.log(`🎉 WORKFLOW CREATION COMPLETE: ${successfulWorkflows.length}/${sessionTypes.length} workflows created successfully`);
       if (successfulWorkflows.length > 0) {
-        console.log("✅ Successful workflows:", successfulWorkflows);
       }
       if (failedWorkflows.length > 0) {
-        console.log("❌ Failed workflows:", failedWorkflows);
       }
       
       localStorage.setItem('lastWorkflowResult', JSON.stringify({
@@ -1425,7 +1342,6 @@ export const createSession = async (organizationID, sessionData) => {
       
       // Continue with success if at least one workflow was created
       if (successfulWorkflows.length === 0) {
-        console.log("❌ CRITICAL: No workflows were created at all");
         localStorage.setItem('lastWorkflowResult', JSON.stringify({
           success: false,
           error: 'No workflows were created for any session type',
@@ -1434,8 +1350,6 @@ export const createSession = async (organizationID, sessionData) => {
         }));
       }
     } catch (workflowError) {
-      console.error("💥 ERROR: Failed to create workflows for new session:", sessionId);
-      console.error("Error details:", workflowError);
       localStorage.setItem('lastWorkflowResult', JSON.stringify({
         success: false,
         error: workflowError.message,
@@ -1447,7 +1361,6 @@ export const createSession = async (organizationID, sessionData) => {
     
     return sessionId;
   } catch (error) {
-    console.error("Error creating session:", error);
     throw error;
   }
 };
@@ -1487,16 +1400,13 @@ export const updateSession = async (sessionId, updateData) => {
         // Recalculate colors for new/current date
         await recalculateSessionColorsForDate(currentSession.organizationID, newDate);
       } catch (colorError) {
-        console.warn("Failed to recalculate session colors after update:", colorError);
       }
     }
 
     // Note: Workflow creation now happens when session is created, not when completed
 
-    console.log("Session updated successfully:", sessionId);
     return true;
   } catch (error) {
-    console.error("Error updating session:", error);
     throw new Error(`Failed to update session: ${error.message}`);
   }
 };
@@ -1510,10 +1420,8 @@ export const publishSession = async (sessionId) => {
       publishedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    console.log("Session published successfully:", sessionId);
     return true;
   } catch (error) {
-    console.error("Error publishing session:", error);
     throw new Error(`Failed to publish session: ${error.message}`);
   }
 };
@@ -1534,17 +1442,14 @@ export const publishMultipleSessions = async (sessionIds) => {
     });
     
     await batch.commit();
-    console.log(`Successfully published ${sessionIds.length} sessions`);
     return true;
   } catch (error) {
-    console.error("Error publishing multiple sessions:", error);
     throw new Error(`Failed to publish sessions: ${error.message}`);
   }
 };
 
 export const deleteSession = async (sessionId, organizationID = null) => {
   try {
-    console.log("🗑️ Starting session deletion process for:", sessionId);
     
     // Get session data before deletion for color recalculation
     let sessionData = null;
@@ -1554,27 +1459,20 @@ export const deleteSession = async (sessionId, organizationID = null) => {
         sessionData = sessionDoc.data();
       }
     } catch (error) {
-      console.warn("Could not fetch session data before deletion:", error);
     }
     
     // First, find and delete all workflows associated with this session
-    console.log("🔍 Finding workflows for session:", sessionId);
     const associatedWorkflows = await getWorkflowsForSession(sessionId, organizationID);
     
     if (associatedWorkflows.length > 0) {
-      console.log(`📋 Found ${associatedWorkflows.length} workflows to delete:`, 
-        associatedWorkflows.map(w => ({ id: w.id, sessionType: w.sessionType, templateName: w.templateName }))
-      );
       
       // Delete each workflow
       const deletionResults = [];
       for (const workflow of associatedWorkflows) {
         try {
           await deleteWorkflowInstance(workflow.id);
-          console.log(`✅ Deleted workflow: ${workflow.id} (${workflow.sessionType || 'unknown type'})`);
           deletionResults.push({ workflowId: workflow.id, success: true });
         } catch (workflowError) {
-          console.error(`❌ Failed to delete workflow: ${workflow.id}`, workflowError);
           deletionResults.push({ 
             workflowId: workflow.id, 
             success: false, 
@@ -1586,17 +1484,13 @@ export const deleteSession = async (sessionId, organizationID = null) => {
       const successfulDeletions = deletionResults.filter(r => r.success).length;
       const failedDeletions = deletionResults.filter(r => !r.success).length;
       
-      console.log(`🎯 Workflow deletion summary: ${successfulDeletions} successful, ${failedDeletions} failed`);
       
       if (failedDeletions > 0) {
-        console.warn("⚠️ Some workflows failed to delete, but continuing with session deletion");
       }
     } else {
-      console.log("📭 No workflows found for this session");
     }
     
     // Delete the session
-    console.log("🗑️ Deleting session document:", sessionId);
     await deleteDoc(doc(firestore, "sessions", sessionId));
     
     // Recalculate session colors for the date if we have session data
@@ -1604,13 +1498,10 @@ export const deleteSession = async (sessionId, organizationID = null) => {
       try {
         await recalculateSessionColorsForDate(sessionData.organizationID, sessionData.date);
       } catch (colorError) {
-        console.warn("Failed to recalculate session colors after deletion:", colorError);
       }
     }
     
-    console.log("✅ Session deletion completed successfully:", sessionId);
   } catch (error) {
-    console.error("💥 Error deleting session:", sessionId, error);
     throw error;
   }
 };
@@ -1636,7 +1527,6 @@ export const getSession = async (sessionId) => {
   } catch (error) {
     // Don't log permission errors - these are expected when accessing sessions from other orgs
     if (error.code !== 'permission-denied') {
-      console.error("Error fetching session:", error);
     }
     throw error;
   }
@@ -1695,7 +1585,6 @@ export const getSessionsBatch = async (sessionIds) => {
     
     return sessions;
   } catch (error) {
-    console.error("Error fetching sessions batch:", error);
     throw error;
   }
 };
@@ -1721,7 +1610,6 @@ export const getSportsJobs = async (organizationID, isArchived = false) => {
 
     return jobs;
   } catch (error) {
-    console.error("Error fetching sports jobs:", error);
     throw error;
   }
 };
@@ -1737,7 +1625,6 @@ export const createSportsJob = async (organizationID, jobData) => {
     });
     return jobRef.id;
   } catch (error) {
-    console.error("Error creating sports job:", error);
     throw error;
   }
 };
@@ -1754,10 +1641,8 @@ export const updateSportsJob = async (jobId, updateData) => {
 
     await updateDoc(jobRef, dataWithTimestamp);
 
-    console.log("Sports job updated successfully:", jobId);
     return true;
   } catch (error) {
-    console.error("Error updating sports job:", error);
     throw new Error(`Failed to update session: ${error.message}`);
   }
 };
@@ -1782,7 +1667,6 @@ export const getJobBoxes = async (organizationID) => {
 
     return boxes;
   } catch (error) {
-    console.error("Error fetching job boxes:", error);
     throw error;
   }
 };
@@ -1805,7 +1689,6 @@ export const updateJobBoxStatus = async (
 
     await updateDoc(doc(firestore, "jobBoxes", boxId), updateData);
   } catch (error) {
-    console.error("Error updating job box status:", error);
     throw error;
   }
 };
@@ -1829,7 +1712,6 @@ export const getSDCards = async (organizationID) => {
 
     return cards;
   } catch (error) {
-    console.error("Error fetching SD cards:", error);
     throw error;
   }
 };
@@ -1852,7 +1734,6 @@ export const updateSDCardStatus = async (
 
     await updateDoc(doc(firestore, "sdCards", cardId), updateData);
   } catch (error) {
-    console.error("Error updating SD card status:", error);
     throw error;
   }
 };
@@ -1860,7 +1741,6 @@ export const updateSDCardStatus = async (
 // Report Templates Functions
 export const getReportTemplates = async (organizationID, shootType = null) => {
   try {
-    console.log("Fetching report templates for organization:", organizationID);
     
     if (!organizationID) {
       throw new Error("Organization ID is required");
@@ -1886,19 +1766,14 @@ export const getReportTemplates = async (organizationID, shootType = null) => {
       });
     });
 
-    console.log("Found templates:", templates.length);
     return templates;
   } catch (error) {
-    console.error("Error fetching report templates:", error);
-    console.error("Error code:", error.code);
-    console.error("Error message:", error.message);
     throw error;
   }
 };
 
 export const createReportTemplate = async (templateData) => {
   try {
-    console.log("Creating report template:", templateData);
     
     // Validate required fields
     if (!templateData.name) {
@@ -1922,12 +1797,8 @@ export const createReportTemplate = async (templateData) => {
       }
     );
     
-    console.log("Template created with ID:", templateRef.id);
     return templateRef.id;
   } catch (error) {
-    console.error("Error creating report template:", error);
-    console.error("Error code:", error.code);
-    console.error("Error message:", error.message);
     throw error;
   }
 };
@@ -1935,7 +1806,6 @@ export const createReportTemplate = async (templateData) => {
 // Update report template
 export const updateReportTemplate = async (templateId, templateData) => {
   try {
-    console.log("Updating report template:", templateId, templateData);
     
     if (!templateId) {
       throw new Error("Template ID is required");
@@ -1946,11 +1816,7 @@ export const updateReportTemplate = async (templateId, templateData) => {
       updatedAt: serverTimestamp(),
     });
     
-    console.log("Report template updated successfully");
   } catch (error) {
-    console.error("Error updating report template:", error);
-    console.error("Error code:", error.code);
-    console.error("Error message:", error.message);
     throw error;
   }
 };
@@ -1958,18 +1824,13 @@ export const updateReportTemplate = async (templateId, templateData) => {
 // Delete report template
 export const deleteReportTemplate = async (templateId) => {
   try {
-    console.log("Deleting report template:", templateId);
     
     if (!templateId) {
       throw new Error("Template ID is required");
     }
     
     await deleteDoc(doc(firestore, "reportTemplates", templateId));
-    console.log("Report template deleted successfully");
   } catch (error) {
-    console.error("Error deleting report template:", error);
-    console.error("Error code:", error.code);
-    console.error("Error message:", error.message);
     throw error;
   }
 };
@@ -1983,7 +1844,6 @@ export const getReportTemplate = async (templateId) => {
     }
     return null;
   } catch (error) {
-    console.error("Error fetching report template:", error);
     throw error;
   }
 };
@@ -2015,9 +1875,7 @@ export const setDefaultTemplate = async (organizationID, shootType, templateId) 
       updatedAt: serverTimestamp(),
     });
     
-    console.log("Default template updated successfully");
   } catch (error) {
-    console.error("Error setting default template:", error);
     throw error;
   }
 };
@@ -2056,10 +1914,8 @@ export const clockIn = async (userId, organizationID, sessionId = null, notes = 
     }
 
     const docRef = await addDoc(collection(firestore, "timeEntries"), timeEntryData);
-    console.log("Clock in successful:", docRef.id);
     return docRef.id;
   } catch (error) {
-    console.error("Error clocking in:", error);
     throw error;
   }
 };
@@ -2084,10 +1940,8 @@ export const clockOut = async (userId, organizationID, notes = null) => {
     }
 
     await updateDoc(doc(firestore, "timeEntries", currentEntry.id), updateData);
-    console.log("Clock out successful:", currentEntry.id);
     return currentEntry.id;
   } catch (error) {
-    console.error("Error clocking out:", error);
     throw error;
   }
 };
@@ -2133,10 +1987,8 @@ export const clockOutManual = async (userId, organizationID, clockOutDateTime, n
     }
 
     await updateDoc(doc(firestore, "timeEntries", currentEntry.id), updateData);
-    console.log("Manual clock out successful:", currentEntry.id);
     return currentEntry.id;
   } catch (error) {
-    console.error("Error with manual clock out:", error);
     throw error;
   }
 };
@@ -2161,7 +2013,6 @@ export const getCurrentTimeEntry = async (userId, organizationID) => {
     const doc = querySnapshot.docs[0];
     return { id: doc.id, ...doc.data() };
   } catch (error) {
-    console.error("Error getting current time entry:", error);
     throw error;
   }
 };
@@ -2192,7 +2043,6 @@ export const getTimeEntries = async (userId, organizationID, startDate = null, e
 
     return entries;
   } catch (error) {
-    console.error("Error fetching time entries:", error);
     throw error;
   }
 };
@@ -2222,7 +2072,6 @@ export const getAllTimeEntries = async (organizationID, startDate = null, endDat
 
     return entries;
   } catch (error) {
-    console.error("Error fetching all time entries:", error);
     throw error;
   }
 };
@@ -2235,7 +2084,6 @@ export const getTodayTimeEntries = async (userId, organizationID) => {
     const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     return await getTimeEntries(userId, organizationID, todayString, todayString);
   } catch (error) {
-    console.error("Error fetching today's time entries:", error);
     throw error;
   }
 };
@@ -2252,7 +2100,6 @@ export const getWeekTimeEntries = async (userId, organizationID, startDate, endD
     
     return await getTimeEntries(userId, organizationID, startString, endString);
   } catch (error) {
-    console.error("Error fetching week's time entries:", error);
     throw error;
   }
 };
@@ -2300,7 +2147,6 @@ export const getUserUpcomingSessions = async (userId, organizationID, daysAhead 
     
     return sessions;
   } catch (error) {
-    console.error("Error fetching upcoming sessions:", error);
     throw error;
   }
 };
@@ -2369,7 +2215,6 @@ export const checkTimeOverlap = async (userId, organizationID, startTime, endTim
       conflictCount: overlapCount
     };
   } catch (error) {
-    console.error("Error checking time overlap:", error);
     throw error;
   }
 };
@@ -2397,10 +2242,8 @@ export const createManualTimeEntry = async (timeEntryData) => {
       updatedAt: serverTimestamp(),
     });
     
-    console.log("Manual time entry created:", docRef.id);
     return docRef.id;
   } catch (error) {
-    console.error("Error creating manual time entry:", error);
     throw error;
   }
 };
@@ -2413,9 +2256,7 @@ export const updateTimeEntry = async (entryId, updateData) => {
       updatedAt: serverTimestamp(),
     });
     
-    console.log("Time entry updated:", entryId);
   } catch (error) {
-    console.error("Error updating time entry:", error);
     throw error;
   }
 };
@@ -2424,9 +2265,7 @@ export const updateTimeEntry = async (entryId, updateData) => {
 export const deleteTimeEntry = async (entryId) => {
   try {
     await deleteDoc(doc(firestore, "timeEntries", entryId));
-    console.log("Time entry deleted:", entryId);
   } catch (error) {
-    console.error("Error deleting time entry:", error);
     throw error;
   }
 };
@@ -2462,7 +2301,6 @@ export const getSessionHours = async (sessionId, organizationID) => {
       entries
     };
   } catch (error) {
-    console.error("Error getting session hours:", error);
     throw error;
   }
 };
@@ -2552,7 +2390,6 @@ export const getSchoolHours = async (schoolId, organizationID, startDate = null,
       entries: schoolEntries
     };
   } catch (error) {
-    console.error("Error getting school hours:", error);
     throw error;
   }
 };
@@ -2618,7 +2455,6 @@ export const getUserSessionStats = async (userId, organizationID, startDate = nu
           });
         }
       } catch (error) {
-        console.warn(`Could not fetch session ${sessionId}:`, error);
       }
     }
 
@@ -2632,7 +2468,6 @@ export const getUserSessionStats = async (userId, organizationID, startDate = nu
       sessionStats: sessionStatsWithDetails
     };
   } catch (error) {
-    console.error("Error getting user session stats:", error);
     throw error;
   }
 };
@@ -2688,7 +2523,6 @@ export const getUserSchoolStats = async (userId, organizationID, startDate = nul
             schoolStats[schoolId].sessionCount.add(entry.sessionId);
           }
         } catch (error) {
-          console.warn(`Could not fetch session ${entry.sessionId}:`, error);
         }
       }
     }
@@ -2706,7 +2540,6 @@ export const getUserSchoolStats = async (userId, organizationID, startDate = nul
       schoolStats: schoolStatsArray
     };
   } catch (error) {
-    console.error("Error getting user school stats:", error);
     throw error;
   }
 };
@@ -2740,7 +2573,6 @@ export const getWorkflowTemplates = async (organizationID, sessionType = null) =
 
     return templates;
   } catch (error) {
-    console.error("Error fetching workflow templates:", error);
     throw error;
   }
 };
@@ -2756,7 +2588,6 @@ export const createWorkflowTemplate = async (templateData) => {
     });
     return templateRef.id;
   } catch (error) {
-    console.error("Error creating workflow template:", error);
     throw error;
   }
 };
@@ -2768,14 +2599,12 @@ export const updateWorkflowTemplate = async (templateId, templateData) => {
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error("Error updating workflow template:", error);
     throw error;
   }
 };
 
 export const deleteWorkflowTemplate = async (templateId) => {
   try {
-    console.log(`🗑️ Firestore: Permanently deleting template ${templateId}`);
     
     const templateRef = doc(firestore, "workflowTemplates", templateId);
     
@@ -2785,14 +2614,11 @@ export const deleteWorkflowTemplate = async (templateId) => {
       throw new Error(`Template with ID ${templateId} does not exist`);
     }
     
-    console.log(`📄 Template found:`, templateDoc.data());
     
     // Permanently delete the document from Firestore
     await deleteDoc(templateRef);
     
-    console.log(`✅ Template ${templateId} successfully deleted from Firestore`);
   } catch (error) {
-    console.error(`💥 Error deleting workflow template ${templateId}:`, error);
     throw error;
   }
 };
@@ -2807,10 +2633,8 @@ export const getWorkflowTemplate = async (templateId) => {
   } catch (error) {
     // Only log permission errors as warnings
     if (error.code === 'permission-denied') {
-      console.warn(`No permission to access workflow template ${templateId}`);
       return null;
     }
-    console.error("Error fetching workflow template:", error);
     throw error;
   }
 };
@@ -2832,7 +2656,6 @@ export const getWorkflowTemplatesForOrganization = async (organizationID) => {
 
     return templates;
   } catch (error) {
-    console.error("Error fetching workflow templates for organization:", error);
     throw error;
   }
 };
@@ -2848,7 +2671,6 @@ export const createWorkflowInstance = async (workflowData) => {
     });
     return workflowRef.id;
   } catch (error) {
-    console.error("Error creating workflow instance:", error);
     throw error;
   }
 };
@@ -2857,9 +2679,7 @@ export const createWorkflowInstance = async (workflowData) => {
 export const deleteWorkflowInstance = async (workflowId) => {
   try {
     await deleteDoc(doc(firestore, "workflows", workflowId));
-    console.log("Workflow instance deleted successfully:", workflowId);
   } catch (error) {
-    console.error("Error deleting workflow instance:", workflowId, error);
     throw error;
   }
 };
@@ -2873,7 +2693,6 @@ export const getWorkflow = async (workflowId) => {
     }
     return null;
   } catch (error) {
-    console.error("Error fetching workflow:", workflowId, error);
     throw error;
   }
 };
@@ -2913,7 +2732,6 @@ export const getWorkflowsForSession = async (sessionId, organizationID = null) =
 
     return workflows;
   } catch (error) {
-    console.error("Error fetching workflows for session:", error);
     throw error;
   }
 };
@@ -2954,7 +2772,6 @@ export const getWorkflowsForOrganization = async (organizationID, status = null)
 
     return workflows;
   } catch (error) {
-    console.error("Error fetching workflows for organization:", error);
     throw error;
   }
 };
@@ -3003,7 +2820,6 @@ export const getWorkflowsWithFilters = async (organizationID, filters = {}) => {
     
     return filteredWorkflows;
   } catch (error) {
-    console.error("Error fetching workflows with filters:", error);
     throw error;
   }
 };
@@ -3042,7 +2858,6 @@ export const getWorkflowsWithMetadata = async (organizationID, filters = {}) => 
               enhanced.schoolData = schoolDoc.data();
             }
           } catch (error) {
-            console.warn(`Could not fetch school data for ${workflow.schoolId}:`, error);
           }
         }
         
@@ -3054,7 +2869,6 @@ export const getWorkflowsWithMetadata = async (organizationID, filters = {}) => 
               enhanced.sessionData = sessionDoc.data();
             }
           } catch (error) {
-            console.warn(`Could not fetch session data for ${workflow.sessionId}:`, error);
           }
         }
         
@@ -3064,7 +2878,6 @@ export const getWorkflowsWithMetadata = async (organizationID, filters = {}) => 
     
     return enhancedWorkflows;
   } catch (error) {
-    console.error("Error fetching workflows with metadata:", error);
     throw error;
   }
 };
@@ -3115,7 +2928,6 @@ export const getWorkflowStatistics = async (organizationID) => {
     
     return stats;
   } catch (error) {
-    console.error("Error fetching workflow statistics:", error);
     throw error;
   }
 };
@@ -3146,7 +2958,6 @@ export const updateWorkflowStep = async (workflowId, stepId, stepData) => {
 
     return true;
   } catch (error) {
-    console.error("Error updating workflow step:", error);
     throw error;
   }
 };
@@ -3195,7 +3006,6 @@ export const completeWorkflowStep = async (workflowId, stepId, completionData = 
 
     return true;
   } catch (error) {
-    console.error("Error completing workflow step:", error);
     throw error;
   }
 };
@@ -3228,7 +3038,6 @@ export const assignWorkflowStep = async (workflowId, stepId, assigneeId) => {
 
     return true;
   } catch (error) {
-    console.error("Error assigning workflow step:", error);
     throw error;
   }
 };
@@ -3263,7 +3072,6 @@ export const getWorkflowsForUser = async (userId, organizationID, status = null)
     
     return userWorkflows;
   } catch (error) {
-    console.error("Error fetching workflows for user:", error);
     throw error;
   }
 };
@@ -3274,11 +3082,9 @@ export const initializeDefaultWorkflowTemplates = async (organizationID) => {
     // Check if templates already exist
     const existingTemplates = await getWorkflowTemplates(organizationID);
     if (existingTemplates.length > 0) {
-      console.log("Workflow templates already exist for organization:", organizationID);
       return existingTemplates;
     }
 
-    console.log("Creating default workflow templates for organization:", organizationID);
     
     // Import default templates
     const { getAllDefaultTemplates, createTemplateForOrganization } = await import('../utils/workflowTemplates');
@@ -3300,15 +3106,12 @@ export const initializeDefaultWorkflowTemplates = async (organizationID) => {
         const templateId = await createWorkflowTemplate(templateData);
         createdTemplates.push({ id: templateId, ...templateData });
         
-        console.log("Created default template:", template.name);
       } catch (error) {
-        console.warn("Failed to create template:", template.name, error);
       }
     }
     
     return createdTemplates;
   } catch (error) {
-    console.error("Error initializing default workflow templates:", error);
     return [];
   }
 };
@@ -3316,13 +3119,11 @@ export const initializeDefaultWorkflowTemplates = async (organizationID) => {
 // Create tracking workflow for school (not tied to a session)
 export const createTrackingWorkflowForSchool = async (schoolId, organizationID, templateId, academicYear, options = {}) => {
   try {
-    console.log(`🏗️ Creating tracking workflow for school: ${schoolId}, template: ${templateId}, year: ${academicYear}`);
     
     // Check if workflow already exists for this school and template combination
     const existingWorkflows = await getTrackingWorkflowsForSchool(schoolId, organizationID, templateId, academicYear);
     
     if (existingWorkflows.length > 0) {
-      console.log(`Tracking workflow already exists for school: ${schoolId} with template: ${templateId}`);
       return existingWorkflows[0].id;
     }
 
@@ -3334,7 +3135,6 @@ export const createTrackingWorkflowForSchool = async (schoolId, organizationID, 
     const schoolData = schoolDoc.data();
 
     // Get the specific tracking template by ID
-    console.log(`📊 Fetching tracking template: ${templateId}`);
     let trackingTemplate = null;
     
     // Check if it's a default template
@@ -3356,14 +3156,12 @@ export const createTrackingWorkflowForSchool = async (schoolId, organizationID, 
       throw new Error(`Template "${trackingTemplate.name}" is not a tracking template`);
     }
 
-    console.log(`🏗️ Creating tracking workflow using template: "${trackingTemplate.name}"`);
 
     // Calculate dates for due date calculation
     const trackingStartDate = options.trackingStartDate || new Date();
     const trackingEndDate = options.trackingEndDate || new Date(trackingStartDate.getTime() + (30 * 24 * 60 * 60 * 1000)); // 30 days default
     
     // Initialize step progress for all steps in template with calculated due dates
-    console.log(`📋 Initializing ${trackingTemplate.steps.length} workflow steps...`);
     const stepProgress = {};
     trackingTemplate.steps.forEach((step, index) => {
       // Calculate due date based on tracking start date and step's dueOffsetDays
@@ -3384,7 +3182,6 @@ export const createTrackingWorkflowForSchool = async (schoolId, organizationID, 
         createdAt: serverTimestamp(),
       };
       
-      console.log(`  ${index + 1}. "${step.title}" - Due: ${dueDate ? dueDate.toLocaleDateString() : 'Not set'}`);
     });
 
     // Create tracking workflow instance
@@ -3418,22 +3215,14 @@ export const createTrackingWorkflowForSchool = async (schoolId, organizationID, 
       Object.entries(workflowData).filter(([key, value]) => value !== undefined)
     );
 
-    console.log("🚀 Creating tracking workflow instance in Firestore...");
     const workflowId = await createWorkflowInstance(cleanWorkflowData);
     
     if (workflowId) {
-      console.log(`🎉 SUCCESS: Tracking workflow created!`);
-      console.log(`📋 Workflow ID: ${workflowId}`);
-      console.log(`📄 Template: "${trackingTemplate.name}"`);
-      console.log(`🏫 School: "${schoolData.name}"`);
-      console.log(`🆔 Template ID: "${templateId}"`);
     } else {
-      console.error("💥 FAILED: createWorkflowInstance returned null/undefined");
     }
     
     return workflowId;
   } catch (error) {
-    console.error("Error creating tracking workflow for school:", error);
     throw error;
   }
 };
@@ -3471,7 +3260,6 @@ export const getTrackingWorkflowsForSchool = async (schoolId, organizationID, te
 
     return workflows;
   } catch (error) {
-    console.error("Error fetching tracking workflows for school:", error);
     throw error;
   }
 };
@@ -3486,101 +3274,75 @@ export const autoCreateWorkflowForSession = async (sessionId, organizationID, se
     );
     
     if (existingWorkflowForType) {
-      console.log(`Workflow already exists for session: ${sessionId} and session type: ${sessionType}`);
       return existingWorkflowForType.id;
     }
 
     // Get session data to calculate step due dates
     const sessionData = await getSession(sessionId);
     if (!sessionData) {
-      console.log("Session not found:", sessionId);
       return null;
     }
 
     // Use fuzzy matching to determine the best workflow template
-    console.log("🧠 Starting intelligent template matching...");
     const { getRecommendedWorkflowTemplate, getWorkflowMappingExplanation } = await import('../utils/workflowTemplates');
     
     const recommendedTemplateKey = getRecommendedWorkflowTemplate(sessionType);
     const mappingInfo = getWorkflowMappingExplanation(sessionType);
     
-    console.log(`🎯 MAPPING RESULT: "${sessionType}" → "${mappingInfo.templateName}" (${mappingInfo.reason})`);
-    console.log("🔑 Recommended template key:", recommendedTemplateKey);
     
     // Get all templates for the organization first
-    console.log("📊 Fetching workflow templates for organization...");
     let allTemplates = await getWorkflowTemplates(organizationID);
-    console.log(`📋 Found ${allTemplates.length} total templates in organization`);
     
     if (allTemplates.length > 0) {
-      console.log("📄 Available templates:");
       allTemplates.forEach((template, index) => {
-        console.log(`  ${index + 1}. "${template.name}" - Session Types: [${template.sessionTypes?.join(', ') || 'none'}]`);
       });
     }
     
     // If no templates exist, initialize default ones
     if (allTemplates.length === 0) {
-      console.log("🏗️ No workflow templates found, initializing defaults...");
       await initializeDefaultWorkflowTemplates(organizationID);
       allTemplates = await getWorkflowTemplates(organizationID);
-      console.log(`✨ After initialization: Found ${allTemplates.length} templates`);
     }
     
     // Find the best matching template based on fuzzy mapping
-    console.log("🔍 Starting template selection process...");
     let defaultTemplate = null;
     
     // First try to find a template that supports the recommended template type
-    console.log(`🎯 Step 1: Looking for templates with session type "${recommendedTemplateKey}"`);
     defaultTemplate = allTemplates.find(template => 
       template.sessionTypes && template.sessionTypes.includes(recommendedTemplateKey)
     );
     
     if (defaultTemplate) {
-      console.log(`✅ FOUND: Template "${defaultTemplate.name}" matches recommended type "${recommendedTemplateKey}"`);
     } else {
-      console.log(`❌ No template found for recommended type "${recommendedTemplateKey}"`);
       
       // Fallback: try to find templates that match the original sessionType exactly
-      console.log(`🎯 Step 2: Looking for exact match with session type "${sessionType}"`);
       defaultTemplate = allTemplates.find(template => 
         template.sessionTypes && template.sessionTypes.includes(sessionType)
       );
       
       if (defaultTemplate) {
-        console.log(`✅ FOUND: Template "${defaultTemplate.name}" has exact match for session type "${sessionType}"`);
       } else {
-        console.log(`❌ No exact match found for session type "${sessionType}"`);
         
         // Last resort: use any available template, preferring default ones
-        console.log("🎯 Step 3: Using fallback template selection");
         defaultTemplate = allTemplates.find(t => t.isDefault);
         if (defaultTemplate) {
-          console.log(`✅ FOUND: Using default template "${defaultTemplate.name}"`);
         } else {
           defaultTemplate = allTemplates[0];
           if (defaultTemplate) {
-            console.log(`✅ FOUND: Using first available template "${defaultTemplate.name}"`);
           }
         }
       }
     }
     
     if (!defaultTemplate) {
-      console.error("💥 CRITICAL ERROR: No workflow template found at all!");
-      console.error("This shouldn't happen if default templates were initialized properly");
       return null;
     }
 
-    console.log(`🏗️ Creating workflow instance using template: "${defaultTemplate.name}"`);
-    console.log(`📅 Session date: ${sessionData.date}`);
 
     // Parse session date to calculate step due dates
     const sessionDate = new Date(sessionData.date);
     
     // Initialize step progress for all steps in template with calculated due dates
-    console.log(`📋 Initializing ${defaultTemplate.steps.length} workflow steps...`);
     const stepProgress = {};
     defaultTemplate.steps.forEach((step, index) => {
       // Calculate due date based on session date and step's dueOffsetDays
@@ -3601,7 +3363,6 @@ export const autoCreateWorkflowForSession = async (sessionId, organizationID, se
         createdAt: serverTimestamp(),
       };
       
-      console.log(`  ${index + 1}. "${step.title}" - Due: ${dueDate ? dueDate.toLocaleDateString() : 'Not set'}`);
     });
 
     // Create workflow instance
@@ -3618,21 +3379,14 @@ export const autoCreateWorkflowForSession = async (sessionId, organizationID, se
       sessionDate: sessionData.date,
     };
 
-    console.log("🚀 Creating workflow instance in Firestore...");
     const workflowId = await createWorkflowInstance(workflowData);
     
     if (workflowId) {
-      console.log(`🎉 SUCCESS: Workflow created!`);
-      console.log(`📋 Workflow ID: ${workflowId}`);
-      console.log(`📄 Template Used: "${defaultTemplate.name}"`);
-      console.log(`🎯 Session Type: "${sessionType}"`);
     } else {
-      console.error("💥 FAILED: createWorkflowInstance returned null/undefined");
     }
     
     return workflowId;
   } catch (error) {
-    console.error("Error auto-creating workflow for session:", error);
     throw error;
   }
 };

@@ -197,7 +197,6 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
 
       <nav className="sidebar__nav">
         <ul className="sidebar__nav-list">
-          {console.log('Sidebar rendering - isAccountant:', userProfile?.isAccountant, 'role:', userProfile?.role)}
           {navigationItems
             .filter(item => {
               // If user is an accountant, only show payroll and settings

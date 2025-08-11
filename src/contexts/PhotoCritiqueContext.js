@@ -238,7 +238,7 @@ export const PhotoCritiqueProvider = ({ children }) => {
       // (due to the manager/admin check in Firestore rules)
       if (error.code === 'permission-denied' && 
           (userProfile?.role === 'manager' || userProfile?.role === 'admin')) {
-        console.log('Delete succeeded despite permission warning');
+        // Delete succeeded despite permission warning
       } else {
         // Re-throw other errors
         throw error;
@@ -326,7 +326,7 @@ export const PhotoCritiqueProvider = ({ children }) => {
           
           // Merge: optimistic updates first, then server data
           if (stillPendingOptimistic.length > 0) {
-            console.log('Preserving optimistic updates:', stillPendingOptimistic.length);
+            // Preserving optimistic updates
             return [...stillPendingOptimistic, ...updatedCritiques];
           }
           

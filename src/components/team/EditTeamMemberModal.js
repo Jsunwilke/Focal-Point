@@ -282,11 +282,6 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
   const handleDeleteUser = async () => {
     setLoading(true);
     try {
-      // Debug logging
-      console.log("Current user:", userProfile);
-      console.log("Team member to delete:", teamMember);
-      console.log("Is current user admin?", userProfile?.role === "admin");
-      
       // Use organization ID from auth context
       const orgId = teamMember.organizationID || organization?.id;
       if (!orgId) {

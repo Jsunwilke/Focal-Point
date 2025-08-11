@@ -13,19 +13,8 @@ const MessageInput = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    console.log('[MessageInput] handleSubmit called:', {
-      message: message?.substring(0, 50) + '...',
-      messageLength: message?.trim()?.length,
-      sendingMessage,
-      hasActiveConversation: !!activeConversation
-    });
     
     if (!message.trim() || sendingMessage || !activeConversation) {
-      console.log('[MessageInput] Submit blocked:', {
-        emptyMessage: !message.trim(),
-        alreadySending: sendingMessage,
-        noConversation: !activeConversation
-      });
       return;
     }
 
@@ -39,12 +28,9 @@ const MessageInput = () => {
     }
 
     try {
-      console.log('[MessageInput] Calling sendMessage...');
       await sendMessage(messageText);
-      console.log('[MessageInput] Message sent successfully');
     } catch (error) {
       // Error handling is done in the context
-      console.error('[MessageInput] Failed to send message:', error);
       // Restore message on error
       setMessage(messageText);
     }
@@ -79,7 +65,6 @@ const MessageInput = () => {
 
     // TODO: Implement file upload to Firebase Storage
     // For now, just show a placeholder
-    console.log('File selected:', file.name);
     
     // Reset file input
     e.target.value = '';

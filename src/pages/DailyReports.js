@@ -97,19 +97,15 @@ const DailyReports = () => {
   
   // Component instance tracking
   const componentId = useMemo(() => `DailyReports-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, []);
-  console.log(`[${componentId}] Component mounted/rendered`);
   
   // Make cache inspection available globally for debugging
   useEffect(() => {
     if (organization?.id) {
       window.inspectDailyReportsCache = () => {
-        console.log(`[${componentId}] Manual cache inspection requested`);
         return dailyJobReportsCacheService.inspectCache(organization.id);
       };
       window.clearDailyReportsCache = () => {
-        console.log(`[${componentId}] Manual cache clear requested`);
         dailyJobReportsCacheService.clearAllReportsCache(organization.id);
-        console.log(`[${componentId}] Cache cleared`);
       };
     }
   }, [componentId, organization?.id]);
@@ -117,17 +113,14 @@ const DailyReports = () => {
   // Register this component instance
   useEffect(() => {
     globalComponentInstances.add(componentId);
-    console.log(`[${componentId}] Component registered. Total instances: ${globalComponentInstances.size}`);
     
     return () => {
       globalComponentInstances.delete(componentId);
-      console.log(`[${componentId}] Component unregistered. Remaining instances: ${globalComponentInstances.size}`);
       
       // Use setTimeout to handle React Strict Mode cleanup gracefully
       // If no instances remain after a brief delay, clean up the listener
       setTimeout(() => {
         if (globalComponentInstances.size === 0 && globalListener) {
-          console.log(`[${componentId}] No instances remaining after delay - cleaning up global listener`);
           globalListener();
           globalListener = null;
           globalListenerOrgId = null;
@@ -293,7 +286,6 @@ const DailyReports = () => {
         await loadAllReports();
       } catch (err) {
         setError("Failed to load data");
-        console.error("Error loading data:", err);
         setLoading(false);
       }
     };
@@ -311,7 +303,6 @@ const DailyReports = () => {
     
     // Clean up any existing global listeners since DataCacheContext handles this now
     if (globalListener) {
-      console.log(`[DailyReports] Cleaning up legacy global listener`);
       globalListener();
       globalListener = null;
       globalListenerOrgId = null;
@@ -389,7 +380,6 @@ const DailyReports = () => {
     
     // Validate the date
     if (isNaN(date.getTime())) {
-      console.warn('Invalid date in report:', reportDate);
       return true;
     }
     
@@ -688,7 +678,6 @@ const DailyReports = () => {
       setEditingReport(null);
       setSelectedReport(null);
     } catch (error) {
-      console.error("Error saving report:", error);
       showToast('Save Failed', 'Failed to save changes. Please try again.', 'error');
     }
   }, [editingReport]);
@@ -885,12 +874,10 @@ const DailyReports = () => {
       if (isBulkDelete) {
         // Handle bulk delete
         const reportIds = Array.from(selectedReports);
-        console.log('[DailyReports] Attempting bulk delete of reports:', reportIds);
         
         // Delete from Firestore using batch operation
         const result = await deleteDailyJobReportsBatch(reportIds);
         
-        console.log('[DailyReports] Bulk delete result:', result);
         
         if (result.success) {
           // Remove each report from cache
@@ -908,18 +895,15 @@ const DailyReports = () => {
           setShowBulkActions(false);
           
           showToast('Reports Deleted', `Successfully deleted ${result.deletedCount} reports`, 'success');
-          console.log(`[DailyReports] Successfully bulk deleted ${result.deletedCount} reports`);
         } else {
           throw new Error(result.error || 'Failed to delete reports');
         }
       } else {
         // Handle single delete
-        console.log('[DailyReports] Attempting to delete report:', reportToDelete.id);
         
         // Delete from Firestore
         const result = await deleteDailyJobReport(reportToDelete.id);
         
-        console.log('[DailyReports] Delete result:', result);
         
         if (result.success) {
           // Remove from cache
@@ -936,9 +920,7 @@ const DailyReports = () => {
           });
           
           showToast('Report Deleted', 'Report has been successfully deleted', 'success');
-          console.log(`[DailyReports] Successfully deleted report ${reportToDelete.id}`);
         } else {
-          console.error('[DailyReports] Delete failed:', result.error);
           throw new Error(result.error || 'Failed to delete report');
         }
       }
@@ -951,8 +933,6 @@ const DailyReports = () => {
         deleteCount: 0
       });
     } catch (error) {
-      console.error('[DailyReports] Error deleting report(s):', error);
-      console.error('[DailyReports] Error details:', error.message, error.code);
       showToast('Delete Failed', error.message || 'An error occurred while deleting', 'error');
     }
   }, [deleteModal, selectedReports, organization, showToast]);
@@ -2235,7 +2215,6 @@ const DailyReports = () => {
         <CreateReportModal
           onClose={() => setShowCreateModal(false)}
           onReportCreated={(reportData) => {
-            console.log("New report created:", reportData);
             // Refresh current page to show new report
             if (isSearchMode) {
               searchReports(currentPage, true);
@@ -2621,7 +2600,6 @@ const ReportDetailModal = ({
   // Component cleanup tracking
   useEffect(() => {
     return () => {
-      console.log(`[${componentId}] Component unmounting`);
     };
   }, [componentId]);
 };

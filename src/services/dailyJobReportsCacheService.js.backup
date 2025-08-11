@@ -16,22 +16,27 @@ class DailyJobReportsCacheService {
    */
   parseFirebaseDisplayString(displayString) {
     try {
+      console.log(`[Cache] 🔍 Parsing Firebase display string: "${displayString}"`);
       
       // Handle Firebase Timestamp display format: "July 28, 2025 at 9:37:12 PM UTC-5"
       if (typeof displayString === 'string' && displayString.includes(' at ')) {
         
         // Extract just the date part (e.g., "July 28, 2025")
         const datePart = displayString.split(' at ')[0];
+        console.log(`[Cache] 📅 Extracted date part: "${datePart}"`);
         
         // Parse just the date, ignoring time and timezone to prevent boundary issues
         const parsed = new Date(datePart);
         if (!isNaN(parsed.getTime())) {
           // Normalize to start of day in local timezone
           parsed.setHours(0, 0, 0, 0);
+          console.log(`[Cache] ✅ Date parsing successful: ${parsed.toISOString()}`);
+          console.log(`[Cache] 📅 Normalized to start of day: ${parsed.toDateString()}`);
           return parsed;
         }
         
         // Fallback: Try full parsing if date-only fails
+        console.log(`[Cache] 🔄 Date-only parsing failed, trying full format...`);
         const match = displayString.match(/^(.+?) at (.+?) (UTC[+-]\d+)$/);
         if (match) {
           const [, datePartAlt, timePart, timezonePart] = match;
@@ -40,15 +45,19 @@ class DailyJobReportsCacheService {
           const fullParsed = new Date(`${datePartAlt} ${timePart}`);
           if (!isNaN(fullParsed.getTime())) {
             fullParsed.setHours(0, 0, 0, 0);
+            console.log(`[Cache] ✅ Full parsing successful, normalized to: ${fullParsed.toDateString()}`);
             return fullParsed;
           }
         }
         
+        console.log(`[Cache] ❌ All Firebase display parsing attempts failed`);
       } else {
+        console.log(`[Cache] ❌ Not a Firebase display format (no ' at ' found)`);
       }
       
       return null;
     } catch (error) {
+      console.error('[Cache] ❌ Error parsing Firebase display string:', displayString, error);
       return null;
     }
   }
@@ -96,9 +105,11 @@ class DailyJobReportsCacheService {
         };
       }
       
+      console.warn(`[Cache] Report ${reportIndex}: Unable to standardize ${fieldName}:`, typeof dateValue, dateValue);
       return null;
       
     } catch (error) {
+      console.error(`[Cache] Report ${reportIndex}: Error standardizing ${fieldName}:`, error, dateValue);
       return null;
     }
   }
@@ -129,6 +140,7 @@ class DailyJobReportsCacheService {
             return { success: true, date, format: 'timestamp-object' };
           }
         } catch (error) {
+          console.warn(`[Cache] Report ${reportIndex}: Failed to convert timestamp object for ${fieldName}:`, cachedValue, error);
         }
       }
       
@@ -142,6 +154,7 @@ class DailyJobReportsCacheService {
               return { success: true, date, format: 'iso-string' };
             }
           } catch (error) {
+            console.warn(`[Cache] Report ${reportIndex}: Failed to parse ISO string for ${fieldName}:`, cachedValue, error);
           }
         }
         
@@ -160,13 +173,16 @@ class DailyJobReportsCacheService {
             return { success: true, date, format: 'general-string' };
           }
         } catch (error) {
+          console.warn(`[Cache] Report ${reportIndex}: Failed to parse general string for ${fieldName}:`, cachedValue, error);
         }
       }
       
       // Unknown format
+      console.warn(`[Cache] Report ${reportIndex}: Unknown ${fieldName} format:`, typeof cachedValue, cachedValue);
       return { success: false, date: null, format: 'unknown' };
       
     } catch (error) {
+      console.error(`[Cache] Report ${reportIndex}: Error converting ${fieldName}:`, error, cachedValue);
       return { success: false, date: null, format: 'error' };
     }
   }
@@ -191,25 +207,31 @@ class DailyJobReportsCacheService {
   getCachedFullDataset(organizationId) {
     try {
       const cacheKey = this.generateFullDatasetCacheKey(organizationId);
+      console.log(`[Cache] Checking cache for key: ${cacheKey}`);
       
       const cached = localStorage.getItem(cacheKey);
       if (!cached) {
+        console.log(`[Cache] Cache miss: No data found in localStorage for key ${cacheKey}`);
         return null;
       }
 
+      console.log(`[Cache] Cache found, size: ${(cached.length / 1024).toFixed(2)}KB`);
       const data = JSON.parse(cached);
       
       if (data.version !== this.CACHE_VERSION) {
+        console.log(`[Cache] Cache miss: Version mismatch. Found: ${data.version}, Expected: ${this.CACHE_VERSION}`);
         return null;
       }
       
       const age = Date.now() - data.timestamp;
       const maxAge = this.MAX_CACHE_AGE;
       if (age > maxAge) {
+        console.log(`[Cache] Cache miss: Expired. Age: ${(age / (24 * 60 * 60 * 1000)).toFixed(1)} days, Max: ${(maxAge / (24 * 60 * 60 * 1000)).toFixed(1)} days`);
         localStorage.removeItem(cacheKey);
         return null;
       }
       
+      console.log(`[Cache] Cache hit: ${data.reports.length} reports, age: ${(age / (60 * 60 * 1000)).toFixed(1)} hours`);
 
       // Convert Firebase Timestamp objects and ISO strings back to Date objects
       let isoStringCount = 0;
@@ -227,12 +249,17 @@ class DailyJobReportsCacheService {
             
             // Log date conversions for first few reports and any that might have issues
             if (index < 5 || convertedDate.format === 'firebase-display') {
+              console.log(`[Cache] 📅 Report ${index} date conversion:`);
+              console.log(`[Cache]   Original: ${typeof originalDate === 'string' ? `"${originalDate}"` : originalDate}`);
+              console.log(`[Cache]   Converted: ${convertedDate.date.toISOString()} (${convertedDate.format})`);
+              console.log(`[Cache]   Local time: ${convertedDate.date.toString()}`);
             }
             
             if (convertedDate.format === 'iso-string') isoStringCount++;
             else if (convertedDate.format === 'timestamp-object') timestampObjectCount++;
             else if (convertedDate.format === 'already-date') alreadyDateCount++;
           } else {
+            console.warn(`[Cache] ❌ Report ${index} date conversion failed:`, originalDate);
             unknownFormatCount++;
           }
         }
@@ -246,6 +273,7 @@ class DailyJobReportsCacheService {
         }
       });
       
+      console.log(`[Cache] Date conversion summary: ${isoStringCount} ISO strings, ${timestampObjectCount} Firebase objects, ${alreadyDateCount} already Date objects, ${unknownFormatCount} unknown formats`);
 
       return {
         reports: data.reports,
@@ -253,6 +281,7 @@ class DailyJobReportsCacheService {
         totalReports: data.reports.length
       };
     } catch (error) {
+      console.error('Error reading cached full dataset:', error);
       return null;
     }
   }
@@ -263,11 +292,14 @@ class DailyJobReportsCacheService {
   setCachedFullDataset(organizationId, reports) {
     try {
       const cacheKey = this.generateFullDatasetCacheKey(organizationId);
+      console.log(`[Cache] Attempting to cache ${reports.length} reports for organization ${organizationId}`);
       
       // Check localStorage space before caching
       const storageEstimate = this.getLocalStorageSize();
+      console.log(`[Cache] Current localStorage usage: ${(storageEstimate.used / (1024 * 1024)).toFixed(2)}MB`);
       
       // Serialize all date formats to standardized {seconds, nanoseconds} format
+      console.log(`[Cache] Standardizing date formats for storage...`);
       let dateFormatStats = { 
         dateConversions: 0, 
         timestampConversions: 0, 
@@ -287,6 +319,7 @@ class DailyJobReportsCacheService {
               dateFormatStats.dateConversions++;
             } else {
               dateFormatStats.dateFailures++;
+              console.warn(`[Cache] Report ${index}: Failed to convert date, keeping original:`, report.date);
               serialized.date = report.date; // Keep original as fallback
             }
           }
@@ -299,16 +332,21 @@ class DailyJobReportsCacheService {
               dateFormatStats.timestampConversions++;
             } else {
               dateFormatStats.timestampFailures++;
+              console.warn(`[Cache] Report ${index}: Failed to convert timestamp, keeping original:`, report.timestamp);
               serialized.timestamp = report.timestamp; // Keep original as fallback
             }
           }
           
           return serialized;
         } catch (err) {
+          console.error(`[Cache] Error serializing report ${index}:`, err, report);
+          console.error(`[Cache] Report date type:`, typeof report.date, report.date);
+          console.error(`[Cache] Report timestamp type:`, typeof report.timestamp, report.timestamp);
           throw err;
         }
       });
       
+      console.log(`[Cache] Standardization results: ${dateFormatStats.dateConversions} dates converted, ${dateFormatStats.timestampConversions} timestamps converted, ${dateFormatStats.dateFailures + dateFormatStats.timestampFailures} failures`);
 
       const data = {
         version: this.CACHE_VERSION,
@@ -318,19 +356,25 @@ class DailyJobReportsCacheService {
 
       const jsonString = JSON.stringify(data);
       const sizeKB = (jsonString.length / 1024).toFixed(2);
+      console.log(`[Cache] Serialized data size: ${sizeKB}KB`);
 
       localStorage.setItem(cacheKey, jsonString);
+      console.log(`[Cache] ✅ Successfully cached ${reports.length} reports for organization ${organizationId} (${sizeKB}KB)`);
       
       // Verify the cache was written
       const verification = localStorage.getItem(cacheKey);
       if (!verification) {
+        console.error(`[Cache] ❌ Cache verification failed - data not found after write`);
       } else {
+        console.log(`[Cache] ✅ Cache verification successful`);
       }
       
     } catch (error) {
+      console.error('[Cache] ❌ Error caching full dataset:', error);
       
       // Check if it's a quota exceeded error
       if (error.name === 'QuotaExceededError') {
+        console.error('[Cache] ❌ localStorage quota exceeded. Cleaning up old cache...');
         this.cleanupOldCache();
         
         // Try again after cleanup
@@ -341,7 +385,9 @@ class DailyJobReportsCacheService {
             reports: reports.slice(0, Math.min(1000, reports.length)) // Store fewer reports if needed
           };
           localStorage.setItem(this.generateFullDatasetCacheKey(organizationId), JSON.stringify(data));
+          console.log(`[Cache] ✅ Successfully cached ${data.reports.length} reports after cleanup`);
         } catch (retryError) {
+          console.error('[Cache] ❌ Failed to cache even after cleanup:', retryError);
         }
       }
     }
@@ -369,6 +415,7 @@ class DailyJobReportsCacheService {
       this.setCachedFullDataset(organizationId, reports);
       return true;
     } catch (error) {
+      console.error('Error updating report in cache:', error);
       return false;
     }
   }
@@ -378,13 +425,16 @@ class DailyJobReportsCacheService {
    */
   mergeNewReportsIntoCache(organizationId, newReports) {
     try {
+      console.log(`[Cache] Starting merge of ${newReports.length} new reports for org ${organizationId}`);
       
       const cached = this.getCachedFullDataset(organizationId);
       if (!cached) {
+        console.error('[Cache] No cached data found - cannot merge');
         return false;
       }
 
       const existingReports = cached.reports;
+      console.log(`[Cache] Found ${existingReports.length} existing reports in cache`);
       
       // Create a map for stronger duplicate detection based on multiple fields
       const existingReportMap = new Map();
@@ -412,6 +462,7 @@ class DailyJobReportsCacheService {
               dateStr = dateObj.toISOString().split('T')[0];
             }
           } catch (error) {
+            console.warn(`[Cache] Error parsing existing report date:`, error);
           }
         }
         
@@ -430,6 +481,7 @@ class DailyJobReportsCacheService {
       const uniqueNewReports = newReports.filter(report => {
         // Check by ID first
         if (report.id && existingReportMap.has(report.id)) {
+          console.log(`[Cache] Duplicate detected by ID: ${report.id}`);
           return false;
         }
         
@@ -450,12 +502,14 @@ class DailyJobReportsCacheService {
             } else if (typeof report.date === 'string') {
               dateObj = new Date(report.date);
             } else {
+              console.warn(`[Cache] Unknown date format for report:`, report.date);
             }
             
             if (dateObj && !isNaN(dateObj.getTime())) {
               dateStr = dateObj.toISOString().split('T')[0];
             }
           } catch (error) {
+            console.warn(`[Cache] Error parsing date for duplicate check:`, error);
           }
         }
         
@@ -464,6 +518,7 @@ class DailyJobReportsCacheService {
         const compositeKey = `${dateStr}_${userId}_${jobId}`;
         
         if (existingReportMap.has(compositeKey)) {
+          console.log(`[Cache] Duplicate detected by composite key: ${compositeKey}`);
           return false;
         }
         
@@ -471,9 +526,11 @@ class DailyJobReportsCacheService {
       });
       
       if (uniqueNewReports.length === 0) {
+        console.log('[Cache] No new unique reports to merge into cache');
         return true;
       }
       
+      console.log(`[Cache] Merging ${uniqueNewReports.length} new unique reports (filtered from ${newReports.length})`);
 
       // Merge new reports with existing (prepend new reports to maintain timestamp order)
       const mergedReports = [...uniqueNewReports, ...existingReports];
@@ -509,8 +566,11 @@ class DailyJobReportsCacheService {
       });
 
       this.setCachedFullDataset(organizationId, mergedReports);
+      console.log(`[Cache] Successfully merged ${uniqueNewReports.length} new reports into cache (total: ${mergedReports.length})`);
       return true;
     } catch (error) {
+      console.error('[Cache] Error merging new reports into cache:', error);
+      console.error('[Cache] Error details:', error.message, error.stack);
       return false;
     }
   }
@@ -527,6 +587,7 @@ class DailyJobReportsCacheService {
       this.setCachedFullDataset(organizationId, filteredReports);
       return true;
     } catch (error) {
+      console.error('Error removing report from cache:', error);
       return false;
     }
   }
@@ -563,6 +624,7 @@ class DailyJobReportsCacheService {
         lastUpdated: data.timestamp
       };
     } catch (error) {
+      console.error('Error reading cached browse reports:', error);
       return null;
     }
   }
@@ -615,6 +677,7 @@ class DailyJobReportsCacheService {
       this.updateMetadataCache(organizationId, page, pagination);
       
     } catch (error) {
+      console.error('Error caching browse reports:', error);
       // Clean up old cache entries if storage is full
       this.cleanupOldCache();
     }
@@ -635,6 +698,7 @@ class DailyJobReportsCacheService {
       };
       localStorage.setItem(metaKey, JSON.stringify(metadata));
     } catch (error) {
+      console.error('Error updating metadata cache:', error);
     }
   }
 
@@ -643,49 +707,70 @@ class DailyJobReportsCacheService {
    */
   getLatestTimestamp(organizationId) {
     try {
+      console.log(`[Cache] Getting latest timestamp for organization ${organizationId}`);
       const cachedData = this.getCachedFullDataset(organizationId);
       
       if (!cachedData) {
+        console.log(`[Cache] No cached data found for timestamp extraction`);
         return null;
       }
       
       if (!cachedData.reports || cachedData.reports.length === 0) {
+        console.log(`[Cache] No reports in cached data (length: ${cachedData.reports?.length || 0})`);
         return null;
       }
 
+      console.log(`[Cache] Extracting timestamp from ${cachedData.reports.length} cached reports`);
       
       // Find the most recent report timestamp (reports should be ordered by timestamp desc)
       const latestReport = cachedData.reports[0];
+      console.log(`[Cache] Latest report structure:`, {
+        id: latestReport.id,
+        timestamp: latestReport.timestamp,
+        timestampType: typeof latestReport.timestamp,
+        date: latestReport.date,
+        dateType: typeof latestReport.date
+      });
       
       if (latestReport && latestReport.timestamp) {
         // Handle both Date objects and Firebase Timestamp objects
         if (typeof latestReport.timestamp.toDate === 'function') {
           const result = latestReport.timestamp.toDate();
+          console.log(`[Cache] ✅ Extracted timestamp from Firebase Timestamp: ${result.toISOString()}`);
           return result;
         } else if (latestReport.timestamp instanceof Date) {
+          console.log(`[Cache] ✅ Using JavaScript Date timestamp: ${latestReport.timestamp.toISOString()}`);
           return latestReport.timestamp;
         } else if (typeof latestReport.timestamp === 'object' && latestReport.timestamp.seconds) {
           const result = new Date(latestReport.timestamp.seconds * 1000);
+          console.log(`[Cache] ✅ Converted serialized timestamp: ${result.toISOString()}`);
           return result;
         } else {
+          console.log(`[Cache] ⚠️ Unknown timestamp format:`, latestReport.timestamp);
         }
       }
       
       // Fallback: try to use the date field
       if (latestReport && latestReport.date) {
+        console.log(`[Cache] 🔄 Falling back to date field:`, latestReport.date);
         if (typeof latestReport.date.toDate === 'function') {
           const result = latestReport.date.toDate();
+          console.log(`[Cache] ✅ Extracted timestamp from Firebase Date: ${result.toISOString()}`);
           return result;
         } else if (latestReport.date instanceof Date) {
+          console.log(`[Cache] ✅ Using JavaScript Date from date field: ${latestReport.date.toISOString()}`);
           return latestReport.date;
         } else if (typeof latestReport.date === 'object' && latestReport.date.seconds) {
           const result = new Date(latestReport.date.seconds * 1000);
+          console.log(`[Cache] ✅ Converted serialized date: ${result.toISOString()}`);
           return result;
         }
       }
       
+      console.log(`[Cache] ❌ Could not extract timestamp from latest report`);
       return null;
     } catch (error) {
+      console.error('[Cache] ❌ Error getting latest timestamp:', error);
       return null;
     }
   }
@@ -740,6 +825,7 @@ class DailyJobReportsCacheService {
       
       return true;
     } catch (error) {
+      console.error('Error prepending new reports to cache:', error);
       return false;
     }
   }
@@ -752,6 +838,7 @@ class DailyJobReportsCacheService {
       const cacheKey = this.generateBrowseCacheKey(organizationId, page, limit, sortBy, sortOrder);
       localStorage.removeItem(cacheKey);
     } catch (error) {
+      console.error('Error clearing page cache:', error);
     }
   }
 
@@ -767,7 +854,9 @@ class DailyJobReportsCacheService {
         key.startsWith(`${this.CACHE_PREFIX}full_${organizationId}`)
       );
       reportsCacheKeys.forEach(key => localStorage.removeItem(key));
+      console.log(`[Cache] Cleared ${reportsCacheKeys.length} cached entries for organization ${organizationId}`);
     } catch (error) {
+      console.error('[Cache] Error clearing reports cache:', error);
     }
   }
 
@@ -790,6 +879,7 @@ class DailyJobReportsCacheService {
         }
       });
     } catch (error) {
+      console.error('Error cleaning up cache:', error);
     }
   }
 
@@ -834,6 +924,7 @@ class DailyJobReportsCacheService {
         maxAgeHours: this.MAX_CACHE_AGE / (60 * 60 * 1000)
       };
     } catch (error) {
+      console.error('Error getting cache stats:', error);
       return null;
     }
   }
@@ -878,6 +969,7 @@ class DailyJobReportsCacheService {
    * Test date format handling with sample data
    */
   testDateFormatHandling() {
+    console.log('[Cache] Testing date format handling...');
     
     const testCases = [
       { type: 'ISO string (old format)', value: '2025-02-08T00:00:00.000Z' },
@@ -890,21 +982,26 @@ class DailyJobReportsCacheService {
     ];
     
     testCases.forEach((testCase, index) => {
+      console.log(`\n[Test ${index + 1}] ${testCase.type}:`, testCase.value);
       
       // Test standardization for caching
       const standardized = this.standardizeDateForCache(testCase.value, 'testField', index);
+      console.log('  Standardized for cache:', standardized);
       
       // Test conversion from cache
       if (standardized) {
         const converted = this.convertCachedDateToDate(standardized, 'testField', index);
+        console.log('  Converted from cache:', converted);
       }
       
       // Test Firebase display parsing if applicable
       if (testCase.type === 'Firebase display') {
         const parsed = this.parseFirebaseDisplayString(testCase.value);
+        console.log('  Firebase display parsed:', parsed);
       }
     });
     
+    console.log('\n[Cache] Date format testing complete.');
   }
 
   /**
@@ -914,20 +1011,32 @@ class DailyJobReportsCacheService {
     const cacheKey = this.generateFullDatasetCacheKey(organizationId);
     const cached = localStorage.getItem(cacheKey);
     
+    console.log(`[Cache] Inspection for organization ${organizationId}:`);
+    console.log(`[Cache] Key: ${cacheKey}`);
     
     if (!cached) {
+      console.log(`[Cache] ❌ No cache found`);
       return null;
     }
     
     try {
       const data = JSON.parse(cached);
+      console.log(`[Cache] ✅ Cache found:`);
+      console.log(`[Cache]   Version: ${data.version} (expected: ${this.CACHE_VERSION})`);
+      console.log(`[Cache]   Timestamp: ${new Date(data.timestamp).toISOString()}`);
+      console.log(`[Cache]   Reports: ${data.reports?.length || 0}`);
+      console.log(`[Cache]   Size: ${(cached.length / 1024).toFixed(2)}KB`);
+      console.log(`[Cache]   Age: ${((Date.now() - data.timestamp) / (60 * 60 * 1000)).toFixed(1)} hours`);
       
       if (data.reports?.length > 0) {
         const firstReport = data.reports[0];
+        console.log(`[Cache]   First report date: ${firstReport.date}`);
+        console.log(`[Cache]   First report timestamp: ${firstReport.timestamp}`);
       }
       
       return data;
     } catch (error) {
+      console.error(`[Cache] ❌ Error parsing cache:`, error);
       return null;
     }
   }
@@ -940,10 +1049,16 @@ export const dailyJobReportsCacheService = new DailyJobReportsCacheService();
 if (typeof window !== 'undefined') {
   window.testDateFormatHandling = () => dailyJobReportsCacheService.testDateFormatHandling();
   window.testFirebaseDisplayParsing = (displayString) => {
+    console.log(`[Test] Testing Firebase display string parsing for: "${displayString}"`);
     const result = dailyJobReportsCacheService.parseFirebaseDisplayString(displayString);
+    console.log(`[Test] Result:`, result);
+    console.log(`[Test] Date in your timezone: ${result ? result.toString() : 'null'}`);
+    console.log(`[Test] Date only: ${result ? result.toDateString() : 'null'}`);
+    console.log(`[Test] YYYY-MM-DD format: ${result ? result.toISOString().split('T')[0] : 'null'}`);
     return result;
   };
   window.debugJuly26Issue = () => {
+    console.log('[Test] 🔍 Debugging the July 26th date issue...');
     
     // Test various July 26th formats that might be in your data
     const testDates = [
@@ -954,9 +1069,11 @@ if (typeof window !== 'undefined') {
     ];
     
     testDates.forEach(dateString => {
+      console.log(`\n[Test] Testing: "${dateString}"`);
       const parsed = dailyJobReportsCacheService.parseFirebaseDisplayString(dateString);
       if (parsed) {
         const dateOnly = parsed.toISOString().split('T')[0];
+        console.log(`[Test] Parsed to: ${dateOnly} (${dateOnly === '2025-07-26' ? '✅ CORRECT' : '❌ WRONG - should be 2025-07-26'})`);
       }
     });
   };
@@ -964,12 +1081,15 @@ if (typeof window !== 'undefined') {
     if (organizationId) {
       return dailyJobReportsCacheService.inspectCache(organizationId);
     } else {
+      console.log('[Cache] Please provide organizationId: inspectDailyReportsCache("org-id")');
     }
   };
   window.clearDailyReportsCache = (organizationId) => {
     if (organizationId) {
       dailyJobReportsCacheService.clearAllReportsCache(organizationId);
+      console.log(`[Cache] Cleared daily reports cache for organization ${organizationId}`);
     } else {
+      console.log('[Cache] Please provide organizationId: clearDailyReportsCache("org-id")');
     }
   };
 }

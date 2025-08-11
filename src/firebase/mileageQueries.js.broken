@@ -243,7 +243,6 @@ export const getMileageData = async (organizationID, startDate, endDate, userIds
         const dateStr = new Date(report.date).toISOString().split('T')[0];
         dateDistribution[dateStr] = (dateDistribution[dateStr] || 0) + 1;
       });
-      
     } else {
       readCounter.recordCacheMiss('dailyJobReports', 'getMileageData');
       
@@ -422,6 +421,7 @@ const validateDateInSinglePeriod = async (organizationID, payPeriodSettings, tar
     });
     
     if (periodsContainingDate.length > 1) {
+        periodsContainingDate.map(p => `${p.start} to ${p.end}`));
     }
     
     return {

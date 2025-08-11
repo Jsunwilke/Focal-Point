@@ -36,7 +36,6 @@ class ChatService {
         throw new Error('No valid participants provided');
       }
       
-      console.log('[ChatService] Creating conversation with validated participants:', validParticipants);
       
       // Generate default name based on type and participants
       const defaultName = type === 'direct' 
@@ -60,24 +59,14 @@ class ChatService {
       // Use addDoc to create a new conversation with auto-generated ID
       const conversationRef = await addDoc(collection(firestore, 'conversations'), conversationData);
       
-      console.log('[ChatService] Conversation created with ID:', conversationRef.id);
       return conversationRef.id;
     } catch (error) {
-      console.error('Error creating conversation:', error);
       throw error;
     }
   }
 
   // Send a message to a conversation
   async sendMessage(conversationId, senderId, text, type = 'text', fileUrl = null, senderName = 'Unknown User') {
-    console.log('[ChatService] Attempting to send message:', {
-      conversationId,
-      senderId,
-      textLength: text?.length,
-      type,
-      senderName,
-      timestamp: new Date().toISOString()
-    });
 
     try {
       // Debug: Check if conversationId is valid
@@ -85,7 +74,6 @@ class ChatService {
         throw new Error('conversationId is empty or undefined');
       }
       
-      console.log('[ChatService] Creating message for conversation:', conversationId);
       
       // Create message data
       const messageData = {
@@ -98,27 +86,16 @@ class ChatService {
         createdAt: serverTimestamp()
       };
       
-      console.log('[ChatService] Message data prepared:', { 
-        messageData: { ...messageData, timestamp: 'serverTimestamp()' }
-      });
       
       // Create a new document reference in the subcollection
       let messageRef;
       try {
-        console.log('[ChatService] About to create message doc ref with:', {
-          firestore: !!firestore,
-          conversationId,
-          path: `messages/${conversationId}/messages`
-        });
         
         const messagesCollectionRef = collection(firestore, 'messages', conversationId, 'messages');
-        console.log('[ChatService] Messages collection ref created, adding document...');
         
         // Use addDoc to create a new document with auto-generated ID
         messageRef = await addDoc(messagesCollectionRef, messageData);
-        console.log('[ChatService] Message added successfully with ID:', messageRef.id);
       } catch (collectionError) {
-        console.error('[ChatService] Error creating message:', collectionError);
         throw collectionError;
       }
       
@@ -130,13 +107,11 @@ class ChatService {
         timestamp: serverTimestamp()
       };
       
-      console.log('[ChatService] Fetching conversation for unread count update...');
       
       // Get current conversation to update unread counts
       const conversationDoc = await getDoc(conversationRef, 'chatService.sendMessage');
       if (conversationDoc.exists()) {
         const conversation = conversationDoc.data();
-        console.log('[ChatService] Conversation found, participants:', conversation.participants);
         
         const unreadCounts = { ...conversation.unreadCounts };
         
@@ -147,7 +122,6 @@ class ChatService {
           }
         });
         
-        console.log('[ChatService] Updated unread counts:', unreadCounts);
         
         // Update conversation document
         await updateDoc(conversationRef, {
@@ -156,22 +130,12 @@ class ChatService {
           unreadCounts
         });
         
-        console.log('[ChatService] Conversation updated successfully');
       } else {
-        console.error('[ChatService] Conversation not found:', conversationId);
         throw new Error(`Conversation ${conversationId} not found`);
       }
       
-      console.log('[ChatService] Message sent successfully:', messageRef.id);
       return messageRef.id;
     } catch (error) {
-      console.error('[ChatService] Error sending message:', {
-        error: error.message,
-        code: error.code,
-        stack: error.stack,
-        conversationId,
-        senderId
-      });
       throw error;
     }
   }
@@ -192,7 +156,6 @@ class ChatService {
         ...doc.data()
       }));
     } catch (error) {
-      console.error('Error getting user conversations:', error);
       throw error;
     }
   }
@@ -222,7 +185,6 @@ class ChatService {
         hasMore: querySnapshot.docs.length === limitCount
       };
     } catch (error) {
-      console.error('Error getting conversation messages:', error);
       throw error;
     }
   }
@@ -241,7 +203,6 @@ class ChatService {
         await updateDoc(conversationRef, { unreadCounts });
       }
     } catch (error) {
-      console.error('Error marking messages as read:', error);
       throw error;
     }
   }
@@ -254,7 +215,6 @@ class ChatService {
         name: newName
       });
     } catch (error) {
-      console.error('Error updating conversation name:', error);
       throw error;
     }
   }
@@ -262,12 +222,6 @@ class ChatService {
   // Toggle pin status for a conversation
   async togglePinConversation(conversationId, userId, isCurrentlyPinned) {
     try {
-      console.log('[chatService] togglePinConversation called with:', {
-        conversationId,
-        userId,
-        isCurrentlyPinned,
-        action: isCurrentlyPinned ? 'UNPIN' : 'PIN'
-      });
       
       const conversationRef = doc(firestore, 'conversations', conversationId);
       
@@ -277,29 +231,24 @@ class ChatService {
       
       if (!conversationData.pinnedBy) {
         // Initialize pinnedBy array if it doesn't exist
-        console.log('[chatService] Initializing pinnedBy array');
         await updateDoc(conversationRef, {
           pinnedBy: isCurrentlyPinned ? [] : [userId]
         });
       } else {
         if (isCurrentlyPinned) {
           // Remove user from pinnedBy array (unpin)
-          console.log('[chatService] Removing user from pinnedBy array (unpinning)');
           await updateDoc(conversationRef, {
             pinnedBy: arrayRemove(userId)
           });
         } else {
           // Add user to pinnedBy array (pin)
-          console.log('[chatService] Adding user to pinnedBy array (pinning)');
           await updateDoc(conversationRef, {
             pinnedBy: arrayUnion(userId)
           });
         }
       }
       
-      console.log('[chatService] Pin toggle completed successfully');
     } catch (error) {
-      console.error('Error toggling pin status:', error);
       throw error;
     }
   }
@@ -346,7 +295,6 @@ class ChatService {
       
       await addDoc(messagesCollectionRef, systemMessageData);
     } catch (error) {
-      console.error('Error adding participants:', error);
       throw error;
     }
   }
@@ -389,7 +337,6 @@ class ChatService {
       
       await addDoc(messagesCollectionRef, systemMessageData);
     } catch (error) {
-      console.error('Error removing participant:', error);
       throw error;
     }
   }
@@ -444,7 +391,6 @@ class ChatService {
       
       await addDoc(messagesCollectionRef, systemMessageData);
     } catch (error) {
-      console.error('Error leaving conversation:', error);
       throw error;
     }
   }
@@ -452,7 +398,6 @@ class ChatService {
   // Admin delete conversation - permanently deletes conversation and all messages
   async adminDeleteConversation(conversationId, userId, userRole) {
     try {
-      console.log(`[ChatService] Starting admin delete for conversation ${conversationId}`);
       
       // Check if user is admin
       if (userRole !== 'admin') {
@@ -462,7 +407,6 @@ class ChatService {
       const conversationRef = doc(firestore, 'conversations', conversationId);
       
       // Get conversation to verify it exists
-      console.log(`[ChatService] Checking if conversation exists: ${conversationId}`);
       const conversationDoc = await getDoc(conversationRef, 'chatService.adminDeleteConversation');
       if (!conversationDoc.exists()) {
         throw new Error('Conversation not found');
@@ -473,31 +417,24 @@ class ChatService {
       
       // Delete all messages in the conversation
       try {
-        console.log(`[ChatService] Deleting messages for conversation: ${conversationId}`);
         const messagesRef = collection(firestore, 'messages', conversationId, 'messages');
         const messagesSnapshot = await getDocs(messagesRef, 'chatService.adminDelete');
         
-        console.log(`[ChatService] Found ${messagesSnapshot.size} messages to delete`);
         messagesSnapshot.docs.forEach((messageDoc) => {
           batch.delete(messageDoc.ref);
         });
       } catch (msgError) {
-        console.log(`[ChatService] Error fetching messages (might not exist):`, msgError);
         // Continue even if messages collection doesn't exist
       }
       
       // Delete the conversation document itself
-      console.log(`[ChatService] Adding conversation document to batch delete`);
       batch.delete(conversationRef);
       
       // Commit all deletions
-      console.log(`[ChatService] Committing batch delete`);
       await batch.commit();
       
-      console.log(`[ChatService] Successfully deleted conversation ${conversationId}`);
       return { success: true };
     } catch (error) {
-      console.error('[ChatService] Error in admin delete conversation:', error);
       throw error;
     }
   }
@@ -524,14 +461,12 @@ class ChatService {
       await this.leaveConversation(conversationId, userId, userName);
       return { success: true, action: 'left' };
     } catch (error) {
-      console.error('Error deleting conversation:', error);
       throw error;
     }
   }
 
   // Real-time listeners
   subscribeToUserConversations(userId, callback) {
-    console.log('[ChatService] Setting up conversations listener for user:', userId);
     
     const q = query(
       collection(firestore, 'conversations'),
@@ -542,33 +477,16 @@ class ChatService {
     
     return onSnapshot(q, 
       (querySnapshot) => {
-        console.log('[ChatService] Conversations snapshot received:', {
-          size: querySnapshot.size,
-          fromCache: querySnapshot.metadata.fromCache,
-          hasPendingWrites: querySnapshot.metadata.hasPendingWrites
-        });
         
         const conversations = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
         
-        console.log('[ChatService] Processed conversations:', 
-          conversations.map(c => ({ 
-            id: c.id, 
-            participants: c.participants,
-            lastActivity: c.lastActivity?.toDate?.() || c.lastActivity 
-          }))
-        );
         
         callback(conversations);
       }, 
       (error) => {
-        console.error('[ChatService] Error in conversations listener:', {
-          error: error.message,
-          code: error.code,
-          userId
-        });
       }
     );
   }
@@ -595,7 +513,6 @@ class ChatService {
       
       callback(messages, startAfterTimestamp !== null);
     }, (error) => {
-      console.error('Error in messages listener:', error);
     });
   }
 
@@ -624,7 +541,6 @@ class ChatService {
         callback(newMessages, true); // true indicates these are incremental messages
       }
     }, (error) => {
-      console.error('Error in new messages listener:', error);
     });
   }
 
@@ -650,7 +566,6 @@ class ChatService {
           conversationId
         });
       } else {
-        console.error('Error updating user presence:', error);
         throw error;
       }
     }
@@ -662,16 +577,13 @@ class ChatService {
       // First check if we have cached users
       const cachedUsers = dataCacheService.getCachedUsers(organizationId);
       if (cachedUsers && cachedUsers.length > 0) {
-        console.log('[ChatService] Using cached users:', cachedUsers.length, 'users');
         return cachedUsers;
       }
       
       // Fall back to direct query if no cache
-      console.log('[ChatService] No cached users, fetching from Firebase');
       const users = await getTeamMembers(organizationId);
       return users;
     } catch (error) {
-      console.error('Error getting organization users:', error);
       throw error;
     }
   }

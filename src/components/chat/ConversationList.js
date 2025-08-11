@@ -72,12 +72,8 @@ const ConversationList = ({ onNewConversation }) => {
     e.stopPropagation();
     e.preventDefault();
     
-    console.log('Delete clicked for conversation:', conversation.id);
-    console.log('Current confirmDelete state:', confirmDelete);
-    
     if (confirmDelete === conversation.id) {
       // Double-click to confirm
-      console.log('Confirming delete for conversation:', conversation.id);
       try {
         await deleteConversation(conversation.id);
         setConfirmDelete(null);
@@ -87,7 +83,6 @@ const ConversationList = ({ onNewConversation }) => {
       }
     } else {
       // First click - show confirmation state
-      console.log('Setting confirmation state for conversation:', conversation.id);
       setConfirmDelete(conversation.id);
       // Reset confirmation after 3 seconds
       setTimeout(() => {
