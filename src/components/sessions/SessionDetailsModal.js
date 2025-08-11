@@ -748,33 +748,75 @@ const SessionDetailsModal = ({
         {/* Modal Footer */}
         <div
           style={{
-            padding: "1rem 1.5rem",
+            padding: "0.75rem 1rem",
             borderTop: "1px solid #dee2e6",
             display: "flex",
             justifyContent: "space-between",
+            alignItems: "center",
             backgroundColor: "#f8f9fa",
+            gap: "0.5rem",
           }}
         >
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
+          <button 
+            type="button" 
+            onClick={onClose}
+            style={{
+              padding: "0.375rem 0.75rem",
+              border: "1px solid #6c757d",
+              backgroundColor: "#6c757d",
+              color: "white",
+              borderRadius: "0.25rem",
+              cursor: "pointer",
+              fontSize: "0.8125rem",
+              fontWeight: "500",
+              transition: "all 0.2s",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.375rem",
+              whiteSpace: "nowrap",
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = "#5a6268";
+              e.target.style.borderColor = "#5a6268";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = "#6c757d";
+              e.target.style.borderColor = "#6c757d";
+            }}
+          >
             Close
           </button>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
             {showRescheduleOption && (
               <button
                 type="button"
-                className="btn btn-warning"
                 onClick={handleRescheduleToNextYear}
                 style={{
+                  padding: "0.375rem 0.75rem",
+                  border: "1px solid #ffc107",
+                  backgroundColor: "#ffc107",
+                  color: "#212529",
+                  borderRadius: "0.25rem",
+                  cursor: "pointer",
+                  fontSize: "0.8125rem",
+                  fontWeight: "500",
+                  transition: "all 0.2s",
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.5rem",
-                  backgroundColor: "#ffc107",
-                  borderColor: "#ffc107",
-                  color: "#212529",
+                  gap: "0.375rem",
+                  whiteSpace: "nowrap",
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = "#e0a800";
+                  e.target.style.borderColor = "#e0a800";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = "#ffc107";
+                  e.target.style.borderColor = "#ffc107";
                 }}
               >
-                <CalendarDays size={16} />
-                Duplicate to Next Year
+                <CalendarDays size={14} />
+                Next Year
               </button>
             )}
             {/* Publish Button - Only visible for unpublished sessions to admins/managers */}
@@ -782,7 +824,6 @@ const SessionDetailsModal = ({
              (userProfile?.role === 'admin' || userProfile?.role === 'manager') && (
               <button
                 type="button"
-                className="btn btn-success"
                 onClick={async () => {
                   try {
                     await publishSession(fullSessionData.id);
@@ -794,50 +835,99 @@ const SessionDetailsModal = ({
                   }
                 }}
                 style={{
+                  padding: "0.375rem 0.75rem",
+                  border: "1px solid #28a745",
+                  backgroundColor: "#28a745",
+                  color: "white",
+                  borderRadius: "0.25rem",
+                  cursor: "pointer",
+                  fontSize: "0.8125rem",
+                  fontWeight: "500",
+                  transition: "all 0.2s",
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.5rem",
-                  backgroundColor: "#28a745",
-                  borderColor: "#28a745",
-                  color: "white",
+                  gap: "0.375rem",
+                  whiteSpace: "nowrap",
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = "#218838";
+                  e.target.style.borderColor = "#218838";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = "#28a745";
+                  e.target.style.borderColor = "#28a745";
                 }}
               >
-                <Check size={16} />
+                <Check size={14} />
                 Publish Session
               </button>
             )}
             {!hideEditButton && (
               <button
                 type="button"
-                className="btn btn-primary"
                 onClick={() => {
                   onEditSession(); // Parent will handle closing this modal and opening edit modal
                 }}
                 style={{
+                  padding: "0.375rem 0.75rem",
+                  border: "1px solid #007bff",
+                  backgroundColor: "#007bff",
+                  color: "white",
+                  borderRadius: "0.25rem",
+                  cursor: "pointer",
+                  fontSize: "0.8125rem",
+                  fontWeight: "500",
+                  transition: "all 0.2s",
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.5rem",
+                  gap: "0.375rem",
+                  whiteSpace: "nowrap",
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = "#0056b3";
+                  e.target.style.borderColor = "#0056b3";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = "#007bff";
+                  e.target.style.borderColor = "#007bff";
                 }}
               >
-                <Edit3 size={16} />
+                <Edit3 size={14} />
                 Edit Session
               </button>
             )}
             {session?.schoolId && (
               <button
                 type="button"
-                className="btn btn-secondary"
                 onClick={() => {
                   // Small delay to ensure proper modal stacking
                   setTimeout(() => setShowYearbookModal(true), 100);
                 }}
                 style={{
+                  padding: "0.375rem 0.75rem",
+                  border: "1px solid #6c757d",
+                  backgroundColor: "#6c757d",
+                  color: "white",
+                  borderRadius: "0.25rem",
+                  cursor: "pointer",
+                  fontSize: "0.8125rem",
+                  fontWeight: "500",
+                  transition: "all 0.2s",
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.5rem",
+                  gap: "0.375rem",
+                  whiteSpace: "nowrap",
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = "#5a6268";
+                  e.target.style.borderColor = "#5a6268";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = "#6c757d";
+                  e.target.style.borderColor = "#6c757d";
                 }}
               >
-                <Camera size={16} />
+                <Camera size={14} />
                 Yearbook Checklist
               </button>
             )}

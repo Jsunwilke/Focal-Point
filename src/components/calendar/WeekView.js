@@ -235,7 +235,7 @@ const WeekView = ({
   const displayMembers =
     scheduleType === "my"
       ? teamMembers.filter((member) => member.id === userProfile?.id)
-      : teamMembers.filter((member) => member.isActive);
+      : teamMembers.filter((member) => member.isActive && !member.isAccountant);
 
   // Create virtual "unassigned" member for unassigned sessions
   const unassignedMember = {

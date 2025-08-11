@@ -308,16 +308,19 @@ export const getMileageData = async (organizationID, startDate, endDate, userIds
       }
     }
     
-    // Get all team members to get their names and mileage rates - check cache first
-    let teamMembers = [];
+    // Get all team members to get their names and mileage rates - check cache first (excluding accountants)
+    let allMembers = [];
     const cachedUsers = dataCacheService.getCachedUsers(organizationID);
     if (cachedUsers && cachedUsers.length > 0) {
       readCounter.recordCacheHit('users', 'MileageQueries', cachedUsers.length);
-      teamMembers = cachedUsers;
+      allMembers = cachedUsers;
     } else {
       readCounter.recordCacheMiss('users', 'MileageQueries');
-      teamMembers = await getTeamMembers(organizationID);
+      allMembers = await getTeamMembers(organizationID);
     }
+    
+    // Filter out accountants from mileage data
+    const teamMembers = allMembers.filter(member => !member.isAccountant);
     
     // Filter by specific users if provided
     const filteredReports = userIds 

@@ -344,7 +344,7 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
             onClick={handleClose}
             aria-label="Close"
           >
-            <X size={20} />
+            <X size={24} />
           </button>
         </div>
 
@@ -576,7 +576,7 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
               <div className="photographers-container">
                 <div className="photographers-grid">
                   {teamMembers
-                    .filter((member) => member.isActive)
+                    .filter((member) => member.isActive && !member.isAccountant)
                     .map((member) => (
                       <div
                         key={member.id}
@@ -593,8 +593,13 @@ const CreateSessionModal = ({ isOpen, onClose, teamMembers, organization, userPr
                             getInitials(member.firstName, member.lastName)
                           )}
                         </div>
-                        <div className="photographer-name">
-                          {member.firstName} {member.lastName}
+                        <div className={`photographer-name ${
+                          (member.firstName + member.lastName).length > 12 ? 'long-name' : ''
+                        } ${
+                          (member.firstName + member.lastName).length > 16 ? 'very-long-name' : ''
+                        }`}>
+                          <div>{member.firstName}</div>
+                          <div>{member.lastName}</div>
                         </div>
                         {formData.photographerIds.includes(member.id) && (
                           <div className="photographer-check">

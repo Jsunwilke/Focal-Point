@@ -277,9 +277,12 @@ const DailyReports = () => {
         const schoolsData = await getSchools(organization.id);
         setSchools(schoolsData.map((s) => s.value || s.name));
         
-        // Use teamMembers from DataCacheContext
+        // Use teamMembers from DataCacheContext (excluding accountants)
         setPhotographers(
-          teamMembers.map((p) => p.firstName).filter(Boolean)
+          teamMembers
+            .filter((p) => !p.isAccountant)
+            .map((p) => p.firstName)
+            .filter(Boolean)
         );
 
         // Load all reports with cache-first approach

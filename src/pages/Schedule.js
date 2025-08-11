@@ -263,7 +263,7 @@ const Schedule = () => {
     setEmployeeOrder(savedOrder);
 
     // Load saved photographer preferences or initialize with all active members
-    const activeMembers = teamMembers.filter((member) => member.isActive);
+    const activeMembers = teamMembers.filter((member) => member.isActive && !member.isAccountant);
     const savedPreferences = loadPhotographerPreferences(organization.id);
 
     if (savedPreferences && Array.isArray(savedPreferences) && savedPreferences.length > 0) {
@@ -491,7 +491,7 @@ const Schedule = () => {
 
   // Handle show/hide all photographers
   const handleShowAllPhotographers = () => {
-    const activeMembers = teamMembers.filter((member) => member.isActive);
+    const activeMembers = teamMembers.filter((member) => member.isActive && !member.isAccountant);
     const allIds = new Set(activeMembers.map((member) => member.id));
 
     setVisiblePhotographers(allIds);
@@ -582,8 +582,12 @@ const Schedule = () => {
     try {
       // Get unpublished session IDs from current view only
       const sessionsInView = filteredSessions.filter(session => {
-        const sessionDate = new Date(session.date);
-        return sessionDate >= dateRange.start && sessionDate <= dateRange.end;
+        // session.date is in "YYYY-MM-DD" format
+        const sessionDateStr = session.date;
+        const rangeStartStr = formatLocalDate(dateRange.start);
+        const rangeEndStr = formatLocalDate(dateRange.end);
+        
+        return sessionDateStr >= rangeStartStr && sessionDateStr <= rangeEndStr;
       });
       
       const unpublishedSessionIds = sessionsInView
@@ -871,9 +875,13 @@ const Schedule = () => {
 
   // Get unpublished sessions in current date range only
   const unpublishedSessionsInView = filteredSessions.filter(session => {
-    const sessionDate = new Date(session.date);
-    return sessionDate >= dateRange.start && 
-           sessionDate <= dateRange.end && 
+    // session.date is in "YYYY-MM-DD" format
+    const sessionDateStr = session.date;
+    const rangeStartStr = formatLocalDate(dateRange.start);
+    const rangeEndStr = formatLocalDate(dateRange.end);
+    
+    return sessionDateStr >= rangeStartStr && 
+           sessionDateStr <= rangeEndStr && 
            session.isPublished === false;
   });
 
@@ -934,7 +942,7 @@ const Schedule = () => {
   // Filter team members for display in calendar
   const filteredTeamMembers = teamMembers.filter((member) => {
     const isActiveAndVisible =
-      member.isActive && visiblePhotographers.has(member.id);
+      member.isActive && !member.isAccountant && visiblePhotographers.has(member.id);
 
     if (scheduleType === "my") {
       return member.id === userProfile?.id && isActiveAndVisible;
@@ -1295,7 +1303,7 @@ const Schedule = () => {
             {/* Filter List */}
             <div className="schedule__filter-list">
               {teamMembers
-                .filter((member) => member.isActive)
+                .filter((member) => member.isActive && !member.isAccountant)
                 .map((member) => (
                   <div
                     key={member.id}

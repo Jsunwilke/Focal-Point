@@ -323,11 +323,13 @@ const WorkflowStepModal = ({
                 }}
               >
                 <option value="">Select team member...</option>
-                {teamMembers.map(member => (
-                  <option key={member.id} value={member.id}>
-                    {member.firstName} {member.lastName} ({member.role})
-                  </option>
-                ))}
+                {teamMembers
+                  .filter(member => !member.isAccountant)
+                  .map(member => (
+                    <option key={member.id} value={member.id}>
+                      {member.firstName} {member.lastName} ({member.role})
+                    </option>
+                  ))}
               </select>
             </div>
           )}

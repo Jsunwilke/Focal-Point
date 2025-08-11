@@ -29,16 +29,19 @@ export const getPayrollData = async (organizationID, startDate, endDate, userIds
     // Get all time entries for the period
     const timeEntries = await getAllTimeEntries(organizationID, startDate, endDate);
     
-    // Get all team members - check cache first
-    let teamMembers = [];
+    // Get all team members - check cache first (excluding accountants from payroll)
+    let allMembers = [];
     const cachedUsers = dataCacheService.getCachedUsers(organizationID);
     if (cachedUsers && cachedUsers.length > 0) {
       readCounter.recordCacheHit('users', 'PayrollQueries', cachedUsers.length);
-      teamMembers = cachedUsers;
+      allMembers = cachedUsers;
     } else {
       readCounter.recordCacheMiss('users', 'PayrollQueries');
-      teamMembers = await getTeamMembers(organizationID);
+      allMembers = await getTeamMembers(organizationID);
     }
+    
+    // Filter out accountants from payroll data
+    const teamMembers = allMembers.filter(member => !member.isAccountant);
     
     // Filter by specific users if provided
     const filteredEntries = userIds 

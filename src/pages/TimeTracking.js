@@ -586,11 +586,13 @@ const TimeTracking = () => {
                   <label>Team Member</label>
                   <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
                     <option value="">All Members</option>
-                    {teamMembers.map(member => (
-                      <option key={member.id} value={member.id}>
-                        {member.firstName} {member.lastName}
-                      </option>
-                    ))}
+                    {teamMembers
+                      .filter(member => !member.isAccountant)
+                      .map(member => (
+                        <option key={member.id} value={member.id}>
+                          {member.firstName} {member.lastName}
+                        </option>
+                      ))}
                   </select>
                 </div>
               )}
