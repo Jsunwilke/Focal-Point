@@ -41,8 +41,8 @@ const PayrollTimesheets = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [activeTab, setActiveTab] = useState('time'); // 'time' or 'mileage'
 
-  // Check if user has admin/manager permissions or is an accountant
-  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager';
+  // Check if user has admin permissions (managers no longer have access)
+  const isAdmin = userProfile?.role === 'admin';
   const isAccountant = userProfile?.isAccountant === true;
 
   useEffect(() => {

@@ -204,8 +204,8 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
               if (userProfile && userProfile.isAccountant === true) {
                 return item.id === 'payroll' || item.id === 'settings';
               }
-              // Otherwise, use existing logic
-              return !item.adminOnly || isAdminOnly || isAdminOrManager;
+              // Otherwise, use existing logic (payroll is adminOnly, so only admins see it)
+              return !item.adminOnly || isAdminOnly;
             })
             .map((item) => {
             const IconComponent = item.icon;
