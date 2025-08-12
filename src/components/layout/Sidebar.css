@@ -142,6 +142,32 @@
   margin-left: auto;
 }
 
+.sidebar__nav-badge--unread {
+  background-color: #dc3545;
+  color: white;
+  font-weight: var(--font-weight-bold);
+  min-width: 20px;
+  height: 20px;
+  padding: 2px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 .sidebar__nav-icon {
   width: 1.25rem;
   height: 1.25rem;
@@ -155,6 +181,21 @@
 .sidebar--collapsed .sidebar__nav-label,
 .sidebar--collapsed .sidebar__nav-badge {
   display: none;
+}
+
+/* Show unread indicator as a dot when collapsed */
+.sidebar--collapsed .sidebar__nav-badge--unread {
+  display: block;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 10px;
+  height: 10px;
+  min-width: 10px;
+  padding: 0;
+  font-size: 0;
+  border-radius: 50%;
+  background-color: #dc3545;
 }
 
 .sidebar__footer {
