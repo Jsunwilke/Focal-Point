@@ -117,14 +117,17 @@ class ChatService {
         const conversation = conversationDoc.data();
         
         const unreadCounts = { ...conversation.unreadCounts };
+        console.log('ChatService.sendMessage: Current unread counts:', unreadCounts);
         
         // Increment unread count for all participants except sender
         conversation.participants.forEach(participantId => {
           if (participantId !== senderId) {
             unreadCounts[participantId] = (unreadCounts[participantId] || 0) + 1;
+            console.log(`ChatService.sendMessage: Incremented unread for ${participantId} to ${unreadCounts[participantId]}`);
           }
         });
         
+        console.log('ChatService.sendMessage: New unread counts to save:', unreadCounts);
         
         // Update conversation document
         await updateDoc(conversationRef, {
@@ -478,8 +481,16 @@ class ChatService {
       limit(50)
     );
     
+    // Don't use includeMetadataChanges as it might be causing issues
     return onSnapshot(q, 
       (querySnapshot) => {
+        // Log metadata to understand where data is coming from
+        console.log('ChatService: Snapshot received:', {
+          fromCache: querySnapshot.metadata.fromCache,
+          hasPendingWrites: querySnapshot.metadata.hasPendingWrites,
+          docCount: querySnapshot.size,
+          timestamp: new Date().toISOString()
+        });
         
         const conversations = querySnapshot.docs.map(doc => ({
           id: doc.id,
@@ -490,6 +501,7 @@ class ChatService {
         callback(conversations);
       }, 
       (error) => {
+        console.error('ChatService: Error in conversations listener:', error);
       }
     );
   }

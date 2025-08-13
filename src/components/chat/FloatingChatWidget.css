@@ -389,10 +389,92 @@
   max-height: none;
 }
 
-/* Override MessageInput styles when in floating widget */
-.floating-chat-widget__input .message-input {
-  border-top: none;
-  padding: 12px;
+/* Override InputBar styles when in floating widget */
+.floating-chat-widget__input {
+  border-top: 1px solid #e5e7eb;
+  background: white;
+  padding: 8px;
+}
+
+.floating-chat-widget__input .input-bar {
+  padding: 0;
+}
+
+/* Main container - use grid for 2 rows */
+.floating-chat-widget__input .input-bar__container {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  grid-template-rows: auto auto;
+  gap: 6px;
+  height: auto;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+.floating-chat-widget__input .input-bar__container:focus-within {
+  box-shadow: none;
+}
+
+/* Text input - spans full width on first row */
+.floating-chat-widget__input .input-bar__input-wrapper {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  width: 100%;
+  background: #f0f2f5;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 4px 12px;
+}
+
+.floating-chat-widget__input .input-bar__input {
+  line-height: 24px;
+  height: 24px;
+  font-size: 14px;
+}
+
+/* Format buttons - left side of row 2 */
+.floating-chat-widget__input .input-bar__actions--left {
+  grid-column: 1;
+  grid-row: 2;
+  border: none;
+  padding: 0;
+  gap: 2px;
+}
+
+/* Spacer for middle */
+.floating-chat-widget__input .input-bar__actions--left::after {
+  content: '';
+  flex: 1;
+}
+
+/* Action buttons - right side of row 2 */
+.floating-chat-widget__input .input-bar__actions--right {
+  grid-column: 3;
+  grid-row: 2;
+  border: none;
+  padding: 0;
+  gap: 2px;
+}
+
+/* Send button - far right of row 2 */
+.floating-chat-widget__input .input-bar__send {
+  grid-column: 4;
+  grid-row: 2;
+  height: 24px;
+  padding: 0 10px;
+  font-size: 11px;
+  margin: 0;
+}
+
+.floating-chat-widget__input .input-bar__action {
+  width: 24px;
+  height: 24px;
+}
+
+.floating-chat-widget__input .input-bar__action svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* Scrollbar styling */

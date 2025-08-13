@@ -79,7 +79,8 @@
       "Bash(python3:*)",
       "Bash(timeout 30s npm start)",
       "Bash(PORT=3001 timeout 30s npm start)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "WebSearch"
     ],
     "deny": []
   }

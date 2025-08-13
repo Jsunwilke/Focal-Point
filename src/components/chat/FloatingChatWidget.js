@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { useChat } from '../../contexts/ChatContext';
 import { useAuth } from '../../contexts/AuthContext';
 import MessageThread from './MessageThread';
-import MessageInput from './MessageInput';
+import InputBar from './InputBar';
 import EmployeeSelector from './EmployeeSelector';
 import UserAvatar from '../shared/UserAvatar';
 import { MessageCircle, Minus, ChevronLeft, Users, Pin, Loader } from 'lucide-react';
@@ -23,6 +23,7 @@ const FloatingChatWidget = () => {
   const [floatingActiveConversation, setFloatingActiveConversation] = useState(null);
   const [pinningConversationId, setPinningConversationId] = useState(null);
   const [optimisticPinStates, setOptimisticPinStates] = useState({});
+  const [lastViewedConversationId, setLastViewedConversationId] = useState(null);
   
   // Refs for auto-open functionality
   const previousUnreadCounts = useRef({});
@@ -52,10 +53,12 @@ const FloatingChatWidget = () => {
   
   // Monitor unread counts for auto-open functionality
   useEffect(() => {
+    console.log('FloatingChatWidget: unreadCounts changed', unreadCounts);
+    console.log('FloatingChatWidget: previousUnreadCounts', previousUnreadCounts.current);
     
     // Skip if widget is already open or on chat page
     if (isOpen || location.pathname === '/chat') {
-      previousUnreadCounts.current = unreadCounts;
+      // Don't update previous counts here - we're already open
       return;
     }
     
@@ -63,7 +66,7 @@ const FloatingChatWidget = () => {
     if (lastClosedTime.current) {
       const timeSinceClose = Date.now() - lastClosedTime.current;
       if (timeSinceClose < COOLDOWN_DURATION) {
-        previousUnreadCounts.current = unreadCounts;
+        // Don't update previous counts during cooldown
         return;
       }
     }
@@ -72,24 +75,30 @@ const FloatingChatWidget = () => {
     let conversationWithNewMessage = null;
     Object.entries(unreadCounts).forEach(([convId, count]) => {
       const previousCount = previousUnreadCounts.current[convId] || 0;
+      console.log(`FloatingChatWidget: Conversation ${convId} - previous: ${previousCount}, current: ${count}`);
       if (count > previousCount && count > 0) {
-        conversationWithNewMessage = conversations.find(c => c.id === convId);
+        // Don't auto-open for the conversation that was just viewed
+        if (convId !== lastViewedConversationId) {
+          conversationWithNewMessage = conversations.find(c => c.id === convId);
+        }
       }
     });
     
     // Auto-open to the conversation with new message
     if (conversationWithNewMessage) {
+      console.log('FloatingChatWidget: Auto-opening for new message in', conversationWithNewMessage.id);
       setIsOpen(true);
       setFloatingActiveConversation(conversationWithNewMessage);
       setActiveConversation(conversationWithNewMessage);
+      setLastViewedConversationId(conversationWithNewMessage.id);
+      // Only update previous counts when we actually take action
+      previousUnreadCounts.current = unreadCounts;
     }
-    
-    // Update previous counts
-    previousUnreadCounts.current = unreadCounts;
-  }, [unreadCounts, isOpen, conversations, location.pathname, setActiveConversation]);
+  }, [unreadCounts, isOpen, conversations, location.pathname, setActiveConversation, lastViewedConversationId]);
 
   // Calculate total unread messages
   const totalUnread = Object.entries(unreadCounts || {}).reduce((total, [convId, count]) => {
+    // Only exclude the currently active conversation, not the last viewed one
     if (convId !== floatingActiveConversation?.id) {
       return total + (count || 0);
     }
@@ -99,24 +108,42 @@ const FloatingChatWidget = () => {
 
   const handleToggle = () => {
     if (!isOpen) {
+      console.log('FloatingChatWidget: Opening widget manually');
       setIsOpen(true);
       setIsMinimized(false);
+      // Update previous counts when opening
+      previousUnreadCounts.current = unreadCounts;
     } else {
+      console.log('FloatingChatWidget: Closing widget');
+      // Remember what conversation was being viewed when closing
+      if (floatingActiveConversation) {
+        setLastViewedConversationId(floatingActiveConversation.id);
+      }
       setIsOpen(false);
       setIsMinimized(false);
       setFloatingActiveConversation(null);
+      // Update previous counts when closing
+      previousUnreadCounts.current = unreadCounts;
     }
   };
 
   const handleMinimize = () => {
+    console.log('FloatingChatWidget: Minimizing widget');
+    // Remember what conversation was being viewed
+    if (floatingActiveConversation) {
+      setLastViewedConversationId(floatingActiveConversation.id);
+    }
     setIsOpen(false);
     setIsMinimized(false);
     setFloatingActiveConversation(null);
     lastClosedTime.current = Date.now(); // Record close time for cooldown
+    // Update previous counts when minimizing
+    previousUnreadCounts.current = unreadCounts;
   };
 
   const handleConversationSelect = useCallback((conversation) => {
     setFloatingActiveConversation(conversation);
+    setLastViewedConversationId(conversation.id);
     // Set as active conversation in the main context
     setActiveConversation(conversation);
     
@@ -131,6 +158,10 @@ const FloatingChatWidget = () => {
   };
 
   const handleBackToList = () => {
+    // Remember what was being viewed
+    if (floatingActiveConversation) {
+      setLastViewedConversationId(floatingActiveConversation.id);
+    }
     setFloatingActiveConversation(null);
     setActiveConversation(null);
   };
@@ -358,7 +389,7 @@ const FloatingChatWidget = () => {
                       <MessageThread />
                     </div>
                     <div className="floating-chat-widget__input">
-                      <MessageInput />
+                      <InputBar />
                     </div>
                   </div>
                 </FloatingChatContext.Provider>

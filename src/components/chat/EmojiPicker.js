@@ -27,7 +27,7 @@ const EMOJI_CATEGORIES = {
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '👏', '🔥'];
 
-export const EmojiPicker = ({ onSelect, isReaction = false }) => {
+export const EmojiPicker = ({ onSelect, onClose, isReaction = false, isInline = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('smileys');
 
@@ -35,6 +35,7 @@ export const EmojiPicker = ({ onSelect, isReaction = false }) => {
     onSelect(emoji);
     if (!isReaction) {
       setIsOpen(false);
+      if (onClose) onClose();
     }
   };
 
@@ -51,6 +52,40 @@ export const EmojiPicker = ({ onSelect, isReaction = false }) => {
             {emoji}
           </button>
         ))}
+      </div>
+    );
+  }
+
+  // If inline mode, just render the picker dropdown
+  if (isInline) {
+    return (
+      <div className="emoji-picker-dropdown">
+        <div className="emoji-picker-header">
+          {Object.keys(EMOJI_CATEGORIES).map(category => (
+            <button
+              key={category}
+              className={`emoji-category-btn ${selectedCategory === category ? 'active' : ''}`}
+              onClick={() => setSelectedCategory(category)}
+            >
+              {EMOJI_CATEGORIES[category].name}
+            </button>
+          ))}
+        </div>
+        
+        <div className="emoji-picker-body">
+          <div className="emoji-grid">
+            {EMOJI_CATEGORIES[selectedCategory].emojis.map(emoji => (
+              <button
+                key={emoji}
+                className="emoji-btn"
+                onClick={() => handleEmojiClick(emoji)}
+                type="button"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

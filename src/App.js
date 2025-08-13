@@ -32,6 +32,7 @@ import WorkflowDashboard from "./components/workflow/WorkflowDashboard";
 import WorkflowSettings from "./pages/WorkflowSettings";
 import Tracking from "./pages/Tracking";
 import Chat from "./pages/Chat";
+import ChatNew from "./pages/ChatNew";
 import Proofing from "./pages/Proofing";
 import ProofingReview from "./pages/ProofingReview";
 import Orders from "./pages/Orders";
@@ -140,7 +141,8 @@ const AppContent = () => {
                       <Route path="/test-captura" element={<TestCaptura />} />
                       <Route path="/stats" element={<CapturaStats />} />
                       <Route path="/test-backfill" element={<TestCapturaBackfill />} />
-                      <Route path="/chat" element={<Chat />} />
+                      <Route path="/chat" element={<ChatNew />} />
+                      <Route path="/chat-old" element={<Chat />} />
                       <Route path="/daily-reports" element={<DailyReports />} />
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/settings/templates" element={<TemplatesList />} />

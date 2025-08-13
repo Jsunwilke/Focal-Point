@@ -73,16 +73,30 @@ export const ChatProvider = ({ children }) => {
   const forceRefreshConversations = useCallback(async () => {
     if (!userProfile?.id) return;
     
+    console.log('ChatContext: Force refreshing conversations');
+    
     try {
       // Clear cache first
       chatCacheService.clearConversationsCache();
       
       // Reload conversations directly
       const conversations = await chatService.getUserConversations(userProfile.id);
+      
+      // Extract fresh unread counts
+      const freshUnreadCounts = {};
+      conversations.forEach(conv => {
+        if (conv.unreadCounts && conv.unreadCounts[userProfile.id] !== undefined) {
+          freshUnreadCounts[conv.id] = conv.unreadCounts[userProfile.id];
+        }
+      });
+      
+      console.log('ChatContext: Force refresh - setting unread counts to:', freshUnreadCounts);
       setConversations(conversations);
+      setUnreadCounts(freshUnreadCounts);
       chatCacheService.setCachedConversations(conversations);
       
     } catch (error) {
+      console.error('ChatContext: Error force refreshing:', error);
       showToast('Failed to refresh conversations', 'error');
     }
   }, [userProfile?.id, showToast]);
@@ -93,6 +107,7 @@ export const ChatProvider = ({ children }) => {
       return;
     }
 
+    console.log('ChatContext: Setting up conversations listener for user', userProfile.id);
 
     // Load conversations from cache first for instant display
     const cachedConversations = chatCacheService.getCachedConversations();
@@ -116,19 +131,27 @@ export const ChatProvider = ({ children }) => {
       readCounter.recordCacheMiss('conversations', 'ChatContext');
     }
 
+    let updateCount = 0;
     const unsubscribe = chatService.subscribeToUserConversations(
       userProfile.id,
       (updatedConversations) => {
+        updateCount++;
+        console.log(`ChatContext: Listener update #${updateCount} - Received ${updatedConversations.length} conversations`);
         setConversations(updatedConversations);
         setLoading(false);
         
         // Extract unread counts for current user
         const newUnreadCounts = {};
         updatedConversations.forEach(conv => {
+          console.log(`ChatContext: Conv ${conv.id} full unreadCounts object:`, JSON.stringify(conv.unreadCounts));
           if (conv.unreadCounts && conv.unreadCounts[userProfile.id] !== undefined) {
             newUnreadCounts[conv.id] = conv.unreadCounts[userProfile.id];
+            if (conv.unreadCounts[userProfile.id] > 0) {
+              console.log(`ChatContext: ✅ Conversation ${conv.id} has ${conv.unreadCounts[userProfile.id]} unread messages`);
+            }
           }
         });
+        console.log('ChatContext: Final unread counts being set:', newUnreadCounts);
         setUnreadCounts(newUnreadCounts);
         
         // Cache the updated conversations
@@ -136,18 +159,28 @@ export const ChatProvider = ({ children }) => {
       }
     );
 
+    console.log('ChatContext: Listener created successfully');
     setConversationsUnsubscribe(() => unsubscribe);
 
+    // Set up periodic refresh as a workaround for listener issues
+    const refreshInterval = setInterval(() => {
+      console.log('ChatContext: Periodic refresh check');
+      forceRefreshConversations();
+    }, 10000); // Refresh every 10 seconds
+
     return () => {
+      console.log('ChatContext: Cleaning up conversations listener');
+      clearInterval(refreshInterval);
       if (unsubscribe) {
         unsubscribe();
       }
     };
-  }, [userProfile?.id]);
+  }, [userProfile?.id, forceRefreshConversations]);
 
   // Update browser tab title with unread count
   useEffect(() => {
     const totalUnread = Object.values(unreadCounts || {}).reduce((sum, count) => sum + count, 0);
+    console.log('ChatContext: unreadCounts state changed, total unread:', totalUnread, 'counts:', unreadCounts);
     notificationService.updateTabTitle(totalUnread);
   }, [unreadCounts]);
 
@@ -259,41 +292,6 @@ export const ChatProvider = ({ children }) => {
     };
   }, [activeConversation?.id, userProfile?.id, isMainChatView]);
 
-  // Mark messages as read when opening a conversation in main chat view
-  useEffect(() => {
-    if (activeConversation?.id && userProfile?.id && isMainChatView) {
-      
-      // Small delay to ensure UI has updated
-      const timer = setTimeout(() => {
-        chatService.markMessagesAsRead(activeConversation.id, userProfile.id)
-          .then(() => {
-            // Update local unread count immediately
-            setUnreadCounts(prev => ({
-              ...prev,
-              [activeConversation.id]: 0
-            }));
-            
-            // Also update the conversations array for immediate UI update
-            setConversations(prev => prev.map(conv => {
-              if (conv.id === activeConversation.id) {
-                return {
-                  ...conv,
-                  unreadCounts: {
-                    ...conv.unreadCounts,
-                    [userProfile.id]: 0
-                  }
-                };
-              }
-              return conv;
-            }));
-          })
-          .catch(error => {
-          });
-      }, 100);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [activeConversation?.id, userProfile?.id, isMainChatView]);
 
   // Create new conversation
   const createConversation = useCallback(async (participantIds, type = 'direct', customName = null) => {
@@ -681,17 +679,21 @@ export const ChatProvider = ({ children }) => {
     }
   }, [activeConversation?.id, organizationUsers, userProfile?.id, userProfile?.firstName, userProfile?.lastName, showToast]);
 
-  // Mark messages as read with optimistic updates
+  // Mark messages as read with careful optimistic updates
   const markConversationAsRead = useCallback(async (conversationId) => {
     if (!userProfile?.id || !conversationId) return;
     
+    console.log(`ChatContext: Marking conversation ${conversationId} as read`);
+    
     try {
-      // Optimistically update local state immediately
-      setUnreadCounts(prev => ({
-        ...prev,
-        [conversationId]: 0
-      }));
+      // Immediately update local state for instant UI feedback
+      setUnreadCounts(prev => {
+        const newCounts = { ...prev, [conversationId]: 0 };
+        console.log('ChatContext: Optimistically setting unread counts to:', newCounts);
+        return newCounts;
+      });
       
+      // Also update conversations state for consistency
       setConversations(prev => prev.map(conv => {
         if (conv.id === conversationId) {
           return {
@@ -707,10 +709,23 @@ export const ChatProvider = ({ children }) => {
       
       // Then update Firebase
       await chatService.markMessagesAsRead(conversationId, userProfile.id);
+      console.log(`ChatContext: Successfully marked ${conversationId} as read in Firestore`);
+      
+      // The real-time listener will confirm this update or correct it if needed
     } catch (error) {
-      // Optionally revert optimistic update on error
+      console.error('ChatContext: Error marking conversation as read:', error);
     }
   }, [userProfile?.id]);
+
+  // Mark messages as read when opening a conversation in main chat view
+  useEffect(() => {
+    if (activeConversation?.id && userProfile?.id && isMainChatView) {
+      console.log(`ChatContext: Main chat view opened for conversation ${activeConversation.id}`);
+      
+      // Use markConversationAsRead for consistency
+      markConversationAsRead(activeConversation.id);
+    }
+  }, [activeConversation?.id, userProfile?.id, isMainChatView, markConversationAsRead]);
 
   // Leave a conversation
   const leaveConversation = useCallback(async (conversationId) => {

@@ -30,7 +30,18 @@ const UserAvatar = ({
     setImageError(true);
   };
 
-  const sizeClass = `user-avatar--${size}`;
+  // Handle both string size names and numeric sizes
+  let sizeClass;
+  if (typeof size === 'number') {
+    // Convert numeric sizes to named sizes
+    if (size <= 24) sizeClass = 'user-avatar--xsmall';
+    else if (size <= 32) sizeClass = 'user-avatar--small';
+    else if (size <= 40) sizeClass = 'user-avatar--medium';
+    else if (size <= 48) sizeClass = 'user-avatar--large';
+    else sizeClass = 'user-avatar--xlarge';
+  } else {
+    sizeClass = `user-avatar--${size}`;
+  }
   const avatarClasses = `user-avatar ${sizeClass} ${className}`;
 
   return (
