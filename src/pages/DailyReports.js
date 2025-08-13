@@ -889,7 +889,7 @@ const DailyReports = () => {
           });
           
           // Update local state to immediately reflect the deletion
-          setAllReports(prevReports => 
+          setReports(prevReports => 
             prevReports.filter(report => !reportIds.includes(report.id))
           );
           
@@ -913,7 +913,7 @@ const DailyReports = () => {
           dailyJobReportsCacheService.removeReportFromCache(organization.id, reportToDelete.id);
           
           // Update local state to immediately reflect the deletion
-          setAllReports(prevReports => prevReports.filter(r => r.id !== reportToDelete.id));
+          setReports(prevReports => prevReports.filter(r => r.id !== reportToDelete.id));
           
           // Clear from selection if it was selected
           setSelectedReports(prev => {

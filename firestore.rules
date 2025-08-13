@@ -46,6 +46,12 @@ service cloud.firestore {
       return userId in conversationDoc.data.participants;
     }
     
+    // Helper function to check if two users belong to the same organization
+    function usersInSameOrg(userId1, userId2) {
+      let user1Doc = get(/databases/$(database)/documents/users/$(userId1));
+      let user2Doc = get(/databases/$(database)/documents/users/$(userId2));
+      return user1Doc.data.organizationID == user2Doc.data.organizationID;
+    }
 
     // Organizations collection
     match /organizations/{orgId} {
@@ -274,14 +280,21 @@ service cloud.firestore {
       allow delete: if request.auth != null && 
                        belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
                        (
+                         // Admins and managers can delete any report (check first for short-circuit)
+                         isAdminOrManager(request.auth.uid) ||
                          // Check if userId field exists and matches
                          (resource.data.keys().hasAny(['userId']) && 
                           resource.data.userId == request.auth.uid) ||
                          // Check if user's display name matches yourName field (for legacy reports)
+                         // Handle missing displayName gracefully
                          (resource.data.keys().hasAny(['yourName']) && 
+                          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.keys().hasAny(['displayName']) &&
                           resource.data.yourName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName) ||
-                         // Admins and managers can delete any report
-                         isAdminOrManager(request.auth.uid)
+                         // Also check against firstName + lastName combination
+                         (resource.data.keys().hasAny(['yourName']) && 
+                          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                          resource.data.yourName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.firstName + ' ' + get(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastName)
                        );
     }
 
@@ -1632,6 +1645,36 @@ service cloud.firestore {
         // Only Cloud Functions can write
         allow write: if false;
       }
+    }
+    
+    // User presence tracking for online status
+    match /presence/{userId} {
+      // Users can read their own presence or presence of users in same org
+      allow read: if request.auth != null && 
+                     (request.auth.uid == userId || 
+                      usersInSameOrg(request.auth.uid, userId));
+      
+      // Users can only create/update their own presence data
+      allow create, update: if request.auth != null && 
+                               request.auth.uid == userId &&
+                               // Validate required fields
+                               request.resource.data.keys().hasAll(['online', 'lastSeen']) &&
+                               // Validate data types
+                               request.resource.data.online is bool &&
+                               request.resource.data.lastSeen is timestamp &&
+                               // Optional fields validation
+                               (!request.resource.data.keys().hasAny(['customStatus']) || 
+                                request.resource.data.customStatus is string) &&
+                               (!request.resource.data.keys().hasAny(['statusEmoji']) || 
+                                request.resource.data.statusEmoji is string) &&
+                               (!request.resource.data.keys().hasAny(['status']) || 
+                                request.resource.data.status is string) &&
+                               (!request.resource.data.keys().hasAny(['statusUpdatedAt']) || 
+                                request.resource.data.statusUpdatedAt is timestamp);
+      
+      // Users can delete their own presence
+      allow delete: if request.auth != null && 
+                       request.auth.uid == userId;
     }
     
     // Captura Order Sync Status - Track sync operations

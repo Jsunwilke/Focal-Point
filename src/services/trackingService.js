@@ -552,22 +552,22 @@ export const addBatchRecords = async (organizationID, batchData) => {
           status: 'Packed', // Default status for batch created job boxes
           organizationID: organizationID,
           timestamp: timestamp,
-          shiftUid: shiftData?.id || null
+          shiftUid: shiftData?.sessionId || null
         });
 
         const jobBoxDocRef = await addDoc(collection(firestore, 'jobBoxes'), jobBoxRecord);
         results.jobBox = { success: true, id: jobBoxDocRef.id };
         
         // Update session with job box assignment if shiftData exists
-        if (shiftData?.id && jobBoxDocRef.id) {
+        if (shiftData?.sessionId && jobBoxDocRef.id) {
           try {
-            await updateSession(shiftData.id, {
+            await updateSession(shiftData.sessionId, {
               hasJobBoxAssigned: true,
               jobBoxRecordId: jobBoxDocRef.id
             });
           } catch (sessionUpdateError) {
             secureLogger.error('Error updating session with job box assignment', {
-              sessionId: shiftData.id,
+              sessionId: shiftData.sessionId,
               error: sessionUpdateError.message
             });
             // Don't fail the whole operation if session update fails

@@ -66,7 +66,7 @@ class ChatService {
   }
 
   // Send a message to a conversation
-  async sendMessage(conversationId, senderId, text, type = 'text', fileUrl = null, senderName = 'Unknown User') {
+  async sendMessage(conversationId, senderId, text, type = 'text', fileUrl = null, senderName = 'Unknown User', fileData = null) {
 
     try {
       // Debug: Check if conversationId is valid
@@ -82,8 +82,11 @@ class ChatService {
         text,
         type,
         fileUrl,
+        fileData,
         timestamp: serverTimestamp(),
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        status: 'sent',
+        readBy: [senderId]
       };
       
       
@@ -102,7 +105,7 @@ class ChatService {
       // Update conversation with last message and activity
       const conversationRef = doc(firestore, 'conversations', conversationId);
       const lastMessageData = {
-        text: type === 'file' ? '📎 File' : text,
+        text: type === 'file' ? '📎 File' : type === 'gif' ? '🎬 GIF' : text,
         senderId,
         timestamp: serverTimestamp()
       };
@@ -584,6 +587,156 @@ class ChatService {
       const users = await getTeamMembers(organizationId);
       return users;
     } catch (error) {
+      throw error;
+    }
+  }
+
+  // Update typing status
+  async updateTypingStatus(conversationId, userId, isTyping) {
+    try {
+      const conversationRef = doc(firestore, 'conversations', conversationId);
+      const typingData = {
+        [`typingUsers.${userId}`]: isTyping ? serverTimestamp() : null
+      };
+      
+      await updateDoc(conversationRef, typingData);
+    } catch (error) {
+      console.error('Error updating typing status:', error);
+      throw error;
+    }
+  }
+
+  // Subscribe to typing status
+  subscribeToTypingStatus(conversationId, callback) {
+    const conversationRef = doc(firestore, 'conversations', conversationId);
+    
+    return onSnapshot(conversationRef, (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        const typingUsers = data.typingUsers || {};
+        
+        // Filter out users who haven't typed in last 5 seconds
+        const activeTyping = {};
+        const now = Date.now();
+        
+        Object.entries(typingUsers).forEach(([userId, timestamp]) => {
+          if (timestamp && timestamp.toMillis) {
+            const typingTime = timestamp.toMillis();
+            if (now - typingTime < 5000) {
+              activeTyping[userId] = typingTime;
+            }
+          }
+        });
+        
+        callback(activeTyping);
+      }
+    });
+  }
+
+  // Update message status
+  async updateMessageStatus(conversationId, messageId, status, userId = null) {
+    try {
+      const messageRef = doc(firestore, 'messages', conversationId, 'messages', messageId);
+      const updates = { status };
+      
+      if (status === 'read' && userId) {
+        updates.readBy = arrayUnion(userId);
+      }
+      
+      await updateDoc(messageRef, updates);
+    } catch (error) {
+      console.error('Error updating message status:', error);
+      throw error;
+    }
+  }
+
+  // Edit message
+  async editMessage(conversationId, messageId, newText) {
+    try {
+      const messageRef = doc(firestore, 'messages', conversationId, 'messages', messageId);
+      await updateDoc(messageRef, {
+        text: newText,
+        edited: true,
+        editedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error editing message:', error);
+      throw error;
+    }
+  }
+
+  // Delete message
+  async deleteMessage(conversationId, messageId, soft = true) {
+    try {
+      const messageRef = doc(firestore, 'messages', conversationId, 'messages', messageId);
+      
+      if (soft) {
+        // Soft delete - mark as deleted
+        await updateDoc(messageRef, {
+          deleted: true,
+          deletedAt: serverTimestamp(),
+          text: 'This message was deleted'
+        });
+      } else {
+        // Hard delete - remove from database
+        await deleteDoc(messageRef);
+      }
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      throw error;
+    }
+  }
+
+  // Add reaction to message
+  async addReaction(conversationId, messageId, emoji, userId) {
+    try {
+      const messageRef = doc(firestore, 'messages', conversationId, 'messages', messageId);
+      await updateDoc(messageRef, {
+        [`reactions.${emoji}`]: arrayUnion(userId)
+      });
+    } catch (error) {
+      console.error('Error adding reaction:', error);
+      throw error;
+    }
+  }
+
+  // Remove reaction from message
+  async removeReaction(conversationId, messageId, emoji, userId) {
+    try {
+      const messageRef = doc(firestore, 'messages', conversationId, 'messages', messageId);
+      await updateDoc(messageRef, {
+        [`reactions.${emoji}`]: arrayRemove(userId)
+      });
+    } catch (error) {
+      console.error('Error removing reaction:', error);
+      throw error;
+    }
+  }
+
+  // Reply to message
+  async replyToMessage(conversationId, messageId, replyData) {
+    try {
+      const originalMessageRef = doc(firestore, 'messages', conversationId, 'messages', messageId);
+      const originalMessage = await getDoc(originalMessageRef, 'chatService.replyToMessage');
+      
+      if (originalMessage.exists()) {
+        const messageData = {
+          ...replyData,
+          replyTo: {
+            messageId: messageId,
+            text: originalMessage.data().text,
+            senderId: originalMessage.data().senderId,
+            senderName: originalMessage.data().senderName
+          },
+          timestamp: serverTimestamp(),
+          createdAt: serverTimestamp()
+        };
+        
+        const messagesCollectionRef = collection(firestore, 'messages', conversationId, 'messages');
+        return await addDoc(messagesCollectionRef, messageData);
+      }
+    } catch (error) {
+      console.error('Error replying to message:', error);
       throw error;
     }
   }

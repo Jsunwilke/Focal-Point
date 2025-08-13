@@ -2,9 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useChat } from '../../contexts/ChatContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { format, isToday, isYesterday } from 'date-fns';
-import { Settings } from 'lucide-react';
+import { Settings, Check, CheckCheck, Image, FileText, Download, Circle } from 'lucide-react';
 import ConversationSettingsModal from './ConversationSettingsModal';
 import UserAvatar from '../shared/UserAvatar';
+import fileUploadService from '../../services/fileUploadService';
+import presenceService from '../../services/presenceService';
 import './MessageThread.css';
 
 const MessageThread = () => {
@@ -15,12 +17,41 @@ const MessageThread = () => {
     loadMoreMessages,
     getConversationDisplayName,
     activeConversation,
-    organizationUsers
+    organizationUsers,
+    typingUsers
   } = useChat();
   const { userProfile } = useAuth();
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [participantPresence, setParticipantPresence] = useState({});
+
+  // Track presence for conversation participants
+  useEffect(() => {
+    if (!activeConversation?.participants) return;
+    
+    const presenceUnsubscribes = [];
+    
+    activeConversation.participants.forEach(participantId => {
+      if (participantId !== userProfile?.id) {
+        const unsubscribe = presenceService.subscribeToUserPresence(
+          participantId,
+          (presence) => {
+            setParticipantPresence(prev => ({
+              ...prev,
+              [participantId]: presence
+            }));
+          }
+        );
+        presenceUnsubscribes.push(unsubscribe);
+      }
+    });
+    
+    return () => {
+      presenceUnsubscribes.forEach(unsubscribe => unsubscribe());
+    };
+  }, [activeConversation?.participants, userProfile?.id]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -132,6 +163,54 @@ const MessageThread = () => {
     return organizationUsers.find(u => u.id === userId) || null;
   };
 
+  const getTypingUsers = () => {
+    if (!activeConversation || !typingUsers) return [];
+    
+    const conversationTyping = typingUsers[activeConversation.id] || {};
+    return Object.keys(conversationTyping)
+      .filter(userId => userId !== userProfile?.id)
+      .map(userId => getUserName(userId));
+  };
+
+  const renderMessageStatus = (message) => {
+    if (!message || message.senderId !== userProfile?.id) return null;
+    
+    const isRead = message.readBy && message.readBy.length > 1;
+    const isDelivered = message.status === 'delivered' || isRead;
+    
+    return (
+      <span className="message-bubble__status">
+        {isRead ? (
+          <CheckCheck size={14} className="message-bubble__status--read" />
+        ) : isDelivered ? (
+          <CheckCheck size={14} className="message-bubble__status--delivered" />
+        ) : (
+          <Check size={14} className="message-bubble__status--sent" />
+        )}
+      </span>
+    );
+  };
+
+  const getOnlineParticipants = () => {
+    if (!activeConversation?.participants) return [];
+    
+    return activeConversation.participants.filter(participantId => {
+      if (participantId === userProfile?.id) return false;
+      return participantPresence[participantId]?.online || false;
+    });
+  };
+
+  const getOnlineStatusText = () => {
+    const onlineUsers = getOnlineParticipants();
+    if (onlineUsers.length === 0) return null;
+    
+    if (activeConversation.type === 'direct') {
+      return 'Active now';
+    }
+    
+    return `${onlineUsers.length} online`;
+  };
+
   const renderSystemMessage = (message) => {
     let content = '';
     
@@ -171,9 +250,20 @@ const MessageThread = () => {
           <h3 className="message-thread__title">
             {getConversationDisplayName(activeConversation)}
           </h3>
-          <span className="message-thread__participant-count">
-            {activeConversation.participants?.length || 0} participants
-          </span>
+          <div className="message-thread__status">
+            {getOnlineStatusText() ? (
+              <>
+                <Circle size={8} fill="#10b981" color="#10b981" />
+                <span className="message-thread__online-status">
+                  {getOnlineStatusText()}
+                </span>
+              </>
+            ) : (
+              <span className="message-thread__participant-count">
+                {activeConversation.participants?.length || 0} participants
+              </span>
+            )}
+          </div>
         </div>
         <button 
           className="message-thread__settings-btn"
@@ -271,23 +361,76 @@ const MessageThread = () => {
                       }`}>{message.text || ''}</p>
                     )}
                     
-                    {message.type === 'file' && (
+                    {message.type === 'gif' && message.fileData && (
+                      <div className="message-bubble__gif">
+                        <img 
+                          src={message.fileData.preview || message.fileData.url}
+                          alt={message.fileData.title || 'GIF'}
+                          className="message-bubble__gif-image"
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
+                    
+                    {message.type === 'file' && message.fileData && (
+                      <div className="message-bubble__file">
+                        {message.fileData.isImage ? (
+                          <div className="message-bubble__image">
+                            <img 
+                              src={message.fileData.url || message.fileUrl}
+                              alt={message.fileData.name || 'Image'}
+                              onClick={() => setImagePreview(message.fileData.url || message.fileUrl)}
+                              className="message-bubble__image-preview"
+                            />
+                            <div className="message-bubble__image-info">
+                              <span>{message.fileData.name}</span>
+                              <span className="message-bubble__file-size">
+                                {fileUploadService.formatFileSize(message.fileData.size)}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="message-bubble__document">
+                            <div className="message-bubble__file-icon">
+                              <FileText size={24} />
+                            </div>
+                            <div className="message-bubble__file-info">
+                              <span className="message-bubble__file-name">
+                                {message.fileData.name || 'File'}
+                              </span>
+                              <span className="message-bubble__file-size">
+                                {fileUploadService.formatFileSize(message.fileData.size)}
+                              </span>
+                            </div>
+                            <a 
+                              href={message.fileData.url || message.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="message-bubble__download-btn"
+                              title="Download"
+                            >
+                              <Download size={18} />
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {message.type === 'file' && !message.fileData && message.fileUrl && (
                       <div className="message-bubble__file">
                         <div className="message-bubble__file-icon">📎</div>
                         <div className="message-bubble__file-info">
                           <span className="message-bubble__file-name">
                             {message.text || 'File'}
                           </span>
-                          {message.fileUrl && (
-                            <a 
-                              href={message.fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="message-bubble__file-link"
-                            >
-                              Download
-                            </a>
-                          )}
+                          <a 
+                            href={message.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="message-bubble__file-link"
+                          >
+                            Download
+                          </a>
                         </div>
                       </div>
                     )}
@@ -297,6 +440,7 @@ const MessageThread = () => {
                       <span className="message-bubble__time">
                         {formatMessageTime(message.timestamp)}
                       </span>
+                      {renderMessageStatus(message)}
                     </div>
                   </div>
                 </div>
@@ -305,8 +449,36 @@ const MessageThread = () => {
           })
         )}
         
+        {getTypingUsers().length > 0 && (
+          <div className="message-thread__typing-indicator">
+            <div className="typing-dots">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <span className="typing-text">
+              {getTypingUsers().join(', ')} {getTypingUsers().length === 1 ? 'is' : 'are'} typing...
+            </span>
+          </div>
+        )}
+        
         <div ref={messagesEndRef} />
       </div>
+
+      {imagePreview && (
+        <div 
+          className="message-thread__image-modal"
+          onClick={() => setImagePreview(null)}
+        >
+          <img src={imagePreview} alt="Preview" />
+          <button 
+            className="message-thread__image-modal-close"
+            onClick={() => setImagePreview(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <ConversationSettingsModal
         isOpen={showSettings}

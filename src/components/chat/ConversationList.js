@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useChat } from '../../contexts/ChatContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
 import { RefreshCw, Pin, Users, Trash2, LogOut, MoreVertical } from 'lucide-react';
 import UserAvatar from '../shared/UserAvatar';
+import presenceService from '../../services/presenceService';
 import './ConversationList.css';
 
 const ConversationList = ({ onNewConversation }) => {
@@ -23,6 +24,7 @@ const ConversationList = ({ onNewConversation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [showOptionsFor, setShowOptionsFor] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [userPresence, setUserPresence] = useState({});
 
   const formatLastSeen = (timestamp) => {
     if (!timestamp) return '';
@@ -89,6 +91,50 @@ const ConversationList = ({ onNewConversation }) => {
         setConfirmDelete((current) => current === conversation.id ? null : current);
       }, 3000);
     }
+  };
+
+  // Initialize presence tracking for conversation participants
+  useEffect(() => {
+    if (!userProfile?.id) return;
+    
+    // Initialize user's own presence
+    presenceService.initializePresence(userProfile.id);
+    
+    // Track presence for all organization users
+    const presenceUnsubscribes = [];
+    
+    if (organizationUsers && organizationUsers.length > 0) {
+      organizationUsers.forEach(user => {
+        if (user.id !== userProfile.id) {
+          const unsubscribe = presenceService.subscribeToUserPresence(
+            user.id,
+            (presence) => {
+              setUserPresence(prev => ({
+                ...prev,
+                [user.id]: presence
+              }));
+            }
+          );
+          presenceUnsubscribes.push(unsubscribe);
+        }
+      });
+    }
+    
+    return () => {
+      presenceUnsubscribes.forEach(unsubscribe => unsubscribe());
+      presenceService.cleanup();
+    };
+  }, [userProfile?.id, organizationUsers]);
+
+  // Get online status for direct conversations
+  const getDirectConversationOnlineStatus = (conversation) => {
+    if (conversation.type !== 'direct') return false;
+    
+    const otherUserId = conversation.participants?.find(id => id !== userProfile?.id);
+    if (!otherUserId) return false;
+    
+    const presence = userPresence[otherUserId];
+    return presence?.online || false;
   };
 
   // Close options dropdown when clicking outside
@@ -215,8 +261,11 @@ const ConversationList = ({ onNewConversation }) => {
                 }
               }}
             >
-              <div className="conversation-item__avatar">
+              <div className="conversation-item__avatar" style={{ position: 'relative' }}>
                 {getConversationAvatar(conversation)}
+                {getDirectConversationOnlineStatus(conversation) && (
+                  <span className="conversation-item__online-indicator" />
+                )}
               </div>
               
               <div className="conversation-item__content">

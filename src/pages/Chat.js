@@ -5,13 +5,16 @@ import ConversationList from "../components/chat/ConversationList";
 import MessageThread from "../components/chat/MessageThread";
 import MessageInput from "../components/chat/MessageInput";
 import EmployeeSelector from "../components/chat/EmployeeSelector";
-import { WifiOff } from "lucide-react";
+import MessageSearch from "../components/chat/MessageSearch";
+import ParticipantStatus from "../components/chat/ParticipantStatus";
+import { WifiOff, Search } from "lucide-react";
 import "./Chat.css";
 
 const Chat = () => {
   const { activeConversation, setIsMainChatView } = useChat();
   const { isConnected } = useFirebaseConnection();
   const [showNewConversationModal, setShowNewConversationModal] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
   
   // Set main chat view flag
   React.useEffect(() => {
@@ -49,12 +52,21 @@ const Chat = () => {
         <div className="chat-sidebar">
           <div className="chat-sidebar__header">
             <h2>Conversations</h2>
-            <button 
-              className="chat-sidebar__new-btn"
-              onClick={handleNewConversation}
-            >
-              New Chat
-            </button>
+            <div className="chat-sidebar__header-actions">
+              <button 
+                className="chat-sidebar__search-btn"
+                onClick={() => setShowSearchModal(true)}
+                title="Search messages"
+              >
+                <Search size={18} />
+              </button>
+              <button 
+                className="chat-sidebar__new-btn"
+                onClick={handleNewConversation}
+              >
+                New Chat
+              </button>
+            </div>
           </div>
           <div className="chat-sidebar__list">
             <ConversationList onNewConversation={handleNewConversation} />
@@ -65,6 +77,7 @@ const Chat = () => {
           {activeConversation ? (
             <div className="chat-main__conversation">
               <MessageThread />
+              <ParticipantStatus conversationId={activeConversation.id} />
               <MessageInput />
             </div>
           ) : (
@@ -81,6 +94,11 @@ const Chat = () => {
       <EmployeeSelector
         isOpen={showNewConversationModal}
         onClose={() => setShowNewConversationModal(false)}
+      />
+      
+      <MessageSearch
+        isOpen={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
       />
     </div>
   );

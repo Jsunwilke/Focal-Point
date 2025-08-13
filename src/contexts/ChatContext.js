@@ -5,6 +5,7 @@ import { useDataCache } from './DataCacheContext';
 import chatService from '../services/chatService';
 import chatCacheService from '../services/chatCacheService';
 import { readCounter } from '../services/readCounter';
+import notificationService from '../services/notificationService';
 
 const ChatContext = createContext();
 
@@ -30,6 +31,8 @@ export const ChatProvider = ({ children }) => {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [unreadCounts, setUnreadCounts] = useState({});
   const [isMainChatView, setIsMainChatView] = useState(false);
+  const [typingUsers, setTypingUsers] = useState({});
+  const [messageStatuses, setMessageStatuses] = useState({});
   
   // Pagination state for messages
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -142,6 +145,12 @@ export const ChatProvider = ({ children }) => {
     };
   }, [userProfile?.id]);
 
+  // Update browser tab title with unread count
+  useEffect(() => {
+    const totalUnread = Object.values(unreadCounts || {}).reduce((sum, count) => sum + count, 0);
+    notificationService.updateTabTitle(totalUnread);
+  }, [unreadCounts]);
+
   // Set up messages listener for active conversation with cache-first loading
   useEffect(() => {
     if (!activeConversation?.id) {
@@ -181,6 +190,17 @@ export const ChatProvider = ({ children }) => {
             // Update conversation's lastMessage if we have new messages
             if (newMessages.length > 0) {
               const latestMessage = newMessages[newMessages.length - 1];
+              
+              // Notify for new messages from others
+              if (latestMessage.senderId !== userProfile?.id && !document.hasFocus()) {
+                const conversationName = getConversationDisplayName(activeConversation);
+                notificationService.notifyNewMessage(
+                  latestMessage,
+                  conversationName,
+                  latestMessage.senderName || 'Someone'
+                );
+              }
+              
               setConversations(prev => prev.map(conv => {
                 if (conv.id === activeConversation.id) {
                   return {
@@ -324,9 +344,10 @@ export const ChatProvider = ({ children }) => {
   }, [userProfile?.id, conversations, showToast]);
 
   // Send message
-  const sendMessage = useCallback(async (text, type = 'text', fileUrl = null) => {
+  const sendMessage = useCallback(async (text, type = 'text', fileData = null) => {
 
-    if (!activeConversation?.id || !userProfile?.id || !text.trim()) {
+    // For GIF messages, text can be empty
+    if (!activeConversation?.id || !userProfile?.id || (type !== 'gif' && !text.trim())) {
       return;
     }
 
@@ -338,20 +359,23 @@ export const ChatProvider = ({ children }) => {
                         userProfile.email || 
                         'Unknown User';
 
+      // For GIF messages, use a placeholder text
+      const messageText = type === 'gif' ? 'GIF' : text.trim();
 
       await chatService.sendMessage(
         activeConversation.id,
         userProfile.id,
-        text.trim(),
+        messageText,
         type,
-        fileUrl,
-        senderName
+        fileData?.url || null,
+        senderName,
+        fileData
       );
 
       
       // Update local conversation state immediately for instant UI update
       const messagePreview = {
-        text: text.trim(),
+        text: type === 'gif' ? '🎬 GIF' : messageText,
         senderId: userProfile.id,
         senderName: senderName,
         timestamp: new Date()
@@ -402,6 +426,87 @@ export const ChatProvider = ({ children }) => {
       setSendingMessage(false);
     }
   }, [activeConversation?.id, userProfile?.id, userProfile?.displayName, userProfile?.firstName, userProfile?.lastName, userProfile?.email, showToast]);
+
+  // Send file message
+  const sendFileMessage = useCallback(async (fileData, fileName) => {
+    if (!activeConversation?.id || !userProfile?.id) {
+      showToast('No active conversation', 'error');
+      return;
+    }
+
+    setSendingMessage(true);
+    try {
+      const senderName = userProfile.displayName || 
+                        `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim() || 
+                        userProfile.email?.split('@')[0] || 
+                        'Unknown User';
+
+      // Create file message text
+      const messageText = fileData.isImage 
+        ? `📷 Image: ${fileName}` 
+        : `📎 File: ${fileName}`;
+
+      // Send message with file data
+      await chatService.sendMessage(
+        activeConversation.id, 
+        userProfile.id, 
+        messageText,
+        'file',
+        fileData.url,
+        senderName,
+        fileData
+      );
+
+      // Update local state
+      const fileMessage = {
+        text: messageText,
+        senderId: userProfile.id,
+        senderName: senderName,
+        type: 'file',
+        fileData: fileData,
+        timestamp: new Date()
+      };
+
+      setConversations(prev => prev.map(conv => {
+        if (conv.id === activeConversation.id) {
+          return {
+            ...conv,
+            lastMessage: fileMessage,
+            lastActivity: new Date()
+          };
+        }
+        return conv;
+      }));
+    } catch (error) {
+      showToast(`Failed to send file: ${error.message}`, 'error');
+      throw error;
+    } finally {
+      setSendingMessage(false);
+    }
+  }, [activeConversation?.id, userProfile, showToast]);
+
+  // Set user typing status
+  const setUserTyping = useCallback(async (conversationId, userId, isTyping) => {
+    if (!conversationId || !userId) return;
+
+    try {
+      // Update local state immediately
+      setTypingUsers(prev => {
+        const convTyping = prev[conversationId] || {};
+        if (isTyping) {
+          convTyping[userId] = Date.now();
+        } else {
+          delete convTyping[userId];
+        }
+        return { ...prev, [conversationId]: convTyping };
+      });
+
+      // Update Firebase
+      await chatService.updateTypingStatus(conversationId, userId, isTyping);
+    } catch (error) {
+      console.error('Error updating typing status:', error);
+    }
+  }, []);
 
   // Load more messages (pagination) with cache integration
   const loadMoreMessages = useCallback(async () => {
@@ -725,11 +830,15 @@ export const ChatProvider = ({ children }) => {
     hasMoreMessages,
     unreadCounts,
     isMainChatView,
+    typingUsers,
+    messageStatuses,
 
     // Actions
     setActiveConversation,
     createConversation,
     sendMessage,
+    sendFileMessage,
+    setUserTyping,
     loadMoreMessages,
     updateConversationName,
     getConversationDisplayName,
