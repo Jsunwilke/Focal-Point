@@ -4,7 +4,6 @@ import { useLocation } from "react-router-dom";
 import { ToastProvider } from "../../contexts/ToastContext";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
-import FloatingChatWidget from "../chat/FloatingChatWidget";
 import "./Layout.css";
 
 const Layout = ({ children }) => {
@@ -70,9 +69,8 @@ const Layout = ({ children }) => {
             onMenuToggle={toggleMobileMenu}
             isMobile={isMobile}
           />
-          <main className={`layout__content ${location.pathname === '/schedule' ? 'layout__content--schedule' : ''}`}>{children}</main>
+          <main className={`layout__content ${location.pathname === '/schedule' ? 'layout__content--schedule' : ''} ${location.pathname === '/chat' ? 'layout__content--chat' : ''}`}>{children}</main>
         </div>
-        <FloatingChatWidget />
       </div>
     </ToastProvider>
   );

@@ -5,8 +5,8 @@ import { loadEmailJS } from "./services/emailService";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { WorkflowProvider } from "./contexts/WorkflowContext";
 import { ToastProvider } from "./contexts/ToastContext";
-import { ChatProvider } from "./contexts/ChatContext";
 import { DataCacheProvider } from "./contexts/DataCacheContext";
+import { StreamChatProvider } from "./contexts/StreamChatContext";
 import { DistrictProvider } from "./contexts/DistrictContext";
 import { YearbookProvider } from "./contexts/YearbookContext";
 import { OrdersProvider } from "./contexts/OrdersContext";
@@ -31,8 +31,7 @@ import TemplateBuilder from "./pages/TemplateBuilder";
 import WorkflowDashboard from "./components/workflow/WorkflowDashboard";
 import WorkflowSettings from "./pages/WorkflowSettings";
 import Tracking from "./pages/Tracking";
-import Chat from "./pages/Chat";
-import ChatNew from "./pages/ChatNew";
+import ChatStream from "./pages/ChatStream";
 import Proofing from "./pages/Proofing";
 import ProofingReview from "./pages/ProofingReview";
 import Orders from "./pages/Orders";
@@ -141,8 +140,8 @@ const AppContent = () => {
                       <Route path="/test-captura" element={<TestCaptura />} />
                       <Route path="/stats" element={<CapturaStats />} />
                       <Route path="/test-backfill" element={<TestCapturaBackfill />} />
-                      <Route path="/chat" element={<ChatNew />} />
-                      <Route path="/chat-old" element={<Chat />} />
+                      <Route path="/chat" element={<ChatStream />} />
+                      <Route path="/chat-stream" element={<ChatStream />} />
                       <Route path="/daily-reports" element={<DailyReports />} />
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/settings/templates" element={<TemplatesList />} />
@@ -170,19 +169,19 @@ const App = () => {
     <AuthProvider>
       <ToastProvider>
         <DataCacheProvider>
-          <ChatProvider>
+          <StreamChatProvider>
             <DistrictProvider>
               <YearbookProvider>
                 <OrdersProvider>
                   <WorkflowProvider>
-                    <div className="app">
-                      <AppContent />
-                    </div>
-                  </WorkflowProvider>
-                </OrdersProvider>
-              </YearbookProvider>
-            </DistrictProvider>
-          </ChatProvider>
+                      <div className="app">
+                        <AppContent />
+                      </div>
+                    </WorkflowProvider>
+                  </OrdersProvider>
+                </YearbookProvider>
+              </DistrictProvider>
+            </StreamChatProvider>
         </DataCacheProvider>
       </ToastProvider>
     </AuthProvider>

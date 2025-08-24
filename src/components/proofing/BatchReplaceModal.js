@@ -6,6 +6,8 @@ import { batchReplaceProofImages } from "../../services/proofingService";
 import { useToast } from "../../contexts/ToastContext";
 import { compressImages } from "../../utils/imageCompression";
 import { generateThumbnail, cleanupThumbnails } from "../../utils/thumbnailGenerator";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "../../firebase/config";
 import "./BatchReplaceModal.css";
 
 const BatchReplaceModal = ({ isOpen, onClose, gallery, deniedImages, onSuccess, userEmail }) => {
@@ -248,14 +250,39 @@ const BatchReplaceModal = ({ isOpen, onClose, gallery, deniedImages, onSuccess, 
       // Reset compression progress and start upload
       setCompressionProgress(null);
       
-      await batchReplaceProofImages(
+      const result = await batchReplaceProofImages(
         gallery.id,
         filesToUpload,
         userEmail,
         (progressData) => setProgress(progressData)
       );
       
-      showToast(`Successfully replaced ${filesToUpload.length} image(s)`, "success");
+      // Send email notifications to users who denied the replaced images
+      if (result.notificationEmails && result.notificationEmails.length > 0) {
+        try {
+          const sendReplacementNotifications = httpsCallable(functions, 'sendReplacementNotificationEmails');
+          const emailResult = await sendReplacementNotifications({
+            galleryId: gallery.id,
+            notificationEmails: result.notificationEmails,
+            uploadedBy: userEmail || 'Studio'
+          });
+          
+          console.log('Email notifications sent:', emailResult.data);
+          showToast(
+            `Successfully replaced ${filesToUpload.length} image(s) and notified ${result.notificationEmails.length} reviewer(s)`, 
+            "success"
+          );
+        } catch (emailError) {
+          console.warn('Failed to send email notifications:', emailError);
+          showToast(
+            `Successfully replaced ${filesToUpload.length} image(s) (email notification failed)`, 
+            "success"
+          );
+        }
+      } else {
+        showToast(`Successfully replaced ${filesToUpload.length} image(s)`, "success");
+      }
+      
       if (onSuccess) onSuccess();
       onClose();
     } catch (error) {

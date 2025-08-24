@@ -45,6 +45,19 @@ class CapturaOrdersService {
     } catch (error) {
       console.error('Error fetching Captura orders:', error);
       readCounter.recordError('captura-api', 'CapturaOrdersService', error.message);
+      
+      // Return empty result instead of throwing to prevent app crashes
+      if (error.code === 'functions/internal' || error.message.includes('INTERNAL')) {
+        console.warn('Captura API temporarily unavailable, returning empty results');
+        return {
+          success: true,
+          data: [],
+          orders: [],
+          pagination: { total: 0, start: 1, end: 0 },
+          message: 'Captura API temporarily unavailable'
+        };
+      }
+      
       throw error;
     }
   }

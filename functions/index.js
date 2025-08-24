@@ -1029,7 +1029,7 @@ exports.searchDailyReports = onCall({
 
     } catch (error) {
         console.error('Error in searchDailyReports:', error);
-        throw new Error(`Search failed: ${error.message}`);
+        throw new Error(`Search failed: ${error?.message || String(error) || 'Unknown error'}`);
     }
 });
 
@@ -1090,7 +1090,7 @@ exports.sendFlagNotificationCallable = onCall({
 
     } catch (error) {
         logger.error('Error in sendFlagNotificationCallable:', error);
-        throw new Error(error.message);
+        throw new Error(error?.message || String(error) || 'Unknown error');
     }
 });
 
@@ -1146,7 +1146,7 @@ exports.sendChatNotificationCallable = onCall({
 
     } catch (error) {
         logger.error('Error in sendChatNotificationCallable:', error);
-        throw new Error(error.message);
+        throw new Error(error?.message || String(error) || 'Unknown error');
     }
 });
 
@@ -1206,7 +1206,7 @@ exports.sendSessionNotificationCallable = onCall({
 
     } catch (error) {
         logger.error('Error in sendSessionNotificationCallable:', error);
-        throw new Error(error.message);
+        throw new Error(error?.message || String(error) || 'Unknown error');
     }
 });
 
@@ -1280,7 +1280,7 @@ exports.clockInReminder = onSchedule('*/5 * * * *', async (event) => {
                             })
                             .catch(error => {
                                 logger.error(`Failed to send clock-in reminder to user ${photographerId}:`, error);
-                                return { success: false, error: error.message };
+                                return { success: false, error: error?.message || String(error) || 'Unknown error' };
                             })
                     );
                 }
@@ -1947,10 +1947,10 @@ exports.getCapturaOrders = onCall({
     } catch (error) {
         // Log detailed error information
         logger.error('Error in getCapturaOrders:', {
-            status: error.response?.status,
-            statusText: error.response?.statusText,
-            data: error.response?.data,
-            message: error.message,
+            status: error?.response?.status,
+            statusText: error?.response?.statusText,
+            data: error?.response?.data,
+            message: error?.message || String(error),
             url: url
         });
         
@@ -1964,7 +1964,7 @@ exports.getCapturaOrders = onCall({
             throw new Error(`Orders endpoint not found. The API endpoint may be incorrect: ${url}`);
         }
         
-        throw new Error(error.response?.data?.message || error.message || 'Failed to fetch orders');
+        throw new Error(error?.response?.data?.message || error?.message || 'Failed to fetch orders');
     }
 });
 
@@ -2031,7 +2031,7 @@ exports.getCapturaOrder = onCall({
             statusText: error.response?.statusText,
             data: error.response?.data,
             headers: error.response?.headers,
-            message: error.message,
+            message: error?.message || String(error),
             url: url
         });
         
@@ -2074,7 +2074,7 @@ exports.getCapturaOrderStats = onCall({
         // 3. Return computed statistics
 
     } catch (error) {
-        logger.error('Error in getCapturaOrderStats:', error.message);
+        logger.error('Error in getCapturaOrderStats:', error?.message || String(error) || 'Unknown error');
         throw error;
     }
 });
@@ -2162,7 +2162,7 @@ exports.testCapturaEndpoints = onCall({
         
     } catch (error) {
         logger.error('Error in testCapturaEndpoints:', error);
-        throw new Error(error.message || 'Failed to test endpoints');
+        throw new Error(error?.message || String(error) || 'Failed to test endpoints');
     }
 });
 
@@ -2220,7 +2220,7 @@ exports.getCapturaOrdersSimple = onCall({
             statusText: error.response?.statusText,
             data: error.response?.data,
             headers: error.response?.headers,
-            message: error.message,
+            message: error?.message || String(error),
             url: url
         });
         
@@ -2399,7 +2399,98 @@ exports.sendProofingApprovalEmailManual = onCall({
         };
     } catch (error) {
         logger.error('Error in sendProofingApprovalEmailManual:', error);
-        throw new Error(`Failed to send approval emails: ${error.message}`);
+        throw new Error(`Failed to send approval emails: ${error?.message || String(error) || 'Unknown error'}`);
+    }
+});
+
+/**
+ * Send replacement notification emails
+ */
+exports.sendReplacementNotificationEmails = onCall({
+    region: 'us-central1',
+    cors: true
+}, async (request) => {
+    try {
+        // Verify authentication
+        if (!request.auth) {
+            logger.warn('Unauthenticated request to sendReplacementNotificationEmails');
+            throw new HttpsError('unauthenticated', 'Authentication required');
+        }
+
+        const { galleryId, notificationEmails, uploadedBy } = request.data;
+        
+        if (!galleryId || !notificationEmails || !Array.isArray(notificationEmails)) {
+            logger.error('Invalid parameters:', { galleryId, notificationEmails });
+            throw new HttpsError('invalid-argument', 'Gallery ID and notification emails are required');
+        }
+
+        if (notificationEmails.length === 0) {
+            logger.info('No notification emails to send');
+            return { success: true, message: 'No recipients to notify', count: 0 };
+        }
+
+        // Get gallery details
+        const galleryDoc = await db.collection('proofGalleries').doc(galleryId).get();
+        if (!galleryDoc.exists) {
+            throw new HttpsError('not-found', 'Gallery not found');
+        }
+        
+        const galleryData = galleryDoc.data();
+        
+        // Get proofs to count replaced images
+        const proofsSnapshot = await db.collection('proofs')
+            .where('galleryId', '==', galleryId)
+            .where('currentVersion', '>', 1)
+            .get();
+        
+        const replacedImages = [];
+        proofsSnapshot.forEach(doc => {
+            const proofData = doc.data();
+            replacedImages.push({
+                filename: proofData.filename,
+                newVersion: proofData.currentVersion
+            });
+        });
+
+        // Prepare gallery details for email
+        const galleryDetails = {
+            id: galleryId,
+            name: galleryData.name,
+            schoolName: galleryData.schoolName,
+            replacedCount: replacedImages.length,
+            uploadedBy: uploadedBy || 'Studio',
+            uploadDate: new Date().toISOString(),
+            replacedImages: replacedImages
+        };
+
+        // Convert emails to recipient objects
+        const recipients = notificationEmails.map(email => ({
+            email: email,
+            displayName: email.split('@')[0] // Use email prefix as fallback name
+        }));
+
+        // Send emails
+        const results = await proofingEmailService.sendBatchProofingReplacementEmails(
+            recipients,
+            galleryDetails
+        );
+
+        logger.info(`Replacement notification results:`, {
+            galleryId,
+            successful: results.successful,
+            failed: results.failed,
+            recipients: notificationEmails
+        });
+
+        return {
+            success: true,
+            message: `Replacement notifications sent to ${results.successful} recipients`,
+            results: results
+        };
+
+    } catch (error) {
+        logger.error('Error in sendReplacementNotificationEmails:', error);
+        throw new Error(`Failed to send replacement notifications: ${error?.message || String(error) || 'Unknown error'}`);
     }
 });
 
@@ -2536,10 +2627,115 @@ exports.onPhotoCritiqueCreated = onDocumentCreated('photoCritiques/{critiqueId}'
             critiqueId: critiqueId,
             recipientId: critique.targetPhotographerId,
             status: 'error',
-            error: error.message,
+            error: error?.message || String(error) || 'Unknown error',
             timestamp: admin.firestore.FieldValue.serverTimestamp()
         });
         
-        return { success: false, error: error.message };
+        return { success: false, error: error?.message || String(error) || 'Unknown error' };
+    }
+});
+
+// ======================================
+// STREAM CHAT TOKEN GENERATION
+// ======================================
+
+// Stream Chat Token Generation (Production Implementation)
+exports.generateStreamChatToken = onCall({
+    cors: true,
+    enforceAppCheck: false,
+}, async (request) => {
+    console.log('Starting Stream Chat token generation with enhanced user sync v2.0');
+    
+    try {
+        // Validate authentication
+        if (!request?.auth?.uid) {
+            console.error('No authentication provided');
+            return { success: false, error: 'Authentication required' };
+        }
+        
+        const userId = request.data?.userId;
+        if (!userId) {
+            console.error('No userId provided in request data');
+            return { success: false, error: 'User ID is required' };
+        }
+        
+        // Security check: user can only generate tokens for themselves
+        if (request.auth.uid !== userId) {
+            console.error(`User ${request.auth.uid} attempted to generate token for ${userId}`);
+            return { success: false, error: 'Cannot generate token for different user' };
+        }
+        
+        console.log(`Generating Stream Chat token for user: ${userId}`);
+        
+        // Initialize Stream Chat with production credentials
+        const { StreamChat } = require('stream-chat');
+        const apiKey = 'fgxkbmk4kp9f';
+        const apiSecret = 'bh9rb2p38b9xcv3gm2t2fe9s7htv6wxv5gcpkb2dc6v4e85zxpptmc5h4m4fjs23';
+        
+        const serverClient = StreamChat.getInstance(apiKey, apiSecret);
+        
+        // Get user data from Firebase to sync with Stream Chat
+        let userData = null;
+        try {
+            console.log(`Attempting to fetch user profile for: ${userId} from collection 'users'`);
+            const userDoc = await db.collection('users').doc(userId).get();
+            console.log(`Document exists check: ${userDoc.exists}`);
+            
+            if (userDoc.exists) {
+                userData = userDoc.data();
+                console.log(`Firebase user data retrieved for: ${userId}`);
+                console.log(`User data keys:`, Object.keys(userData || {}));
+                console.log(`Full user data:`, JSON.stringify(userData, null, 2));
+            } else {
+                console.log(`Firebase user profile not found for: ${userId}, using auth data only`);
+                console.log(`Available auth data:`, JSON.stringify(request.auth.token, null, 2));
+            }
+        } catch (dbError) {
+            console.error(`Failed to fetch user profile for ${userId}:`, dbError.message);
+            console.error(`Error details:`, dbError);
+            // Continue without profile data - we'll use auth data only
+        }
+        
+        // Create/update user in Stream Chat
+        try {
+            const streamUserData = {
+                id: userId,
+                name: userData?.displayName || userData?.name || request.auth.token.name || request.auth.token.email?.split('@')[0] || 'User',
+                email: userData?.email || request.auth.token.email,
+                image: userData?.photoURL || userData?.profilePicture || userData?.avatar || request.auth.token.picture,
+                role: userData?.role || 'user',
+                organizationID: userData?.organizationID || userData?.orgId,
+                isActive: userData?.isActive !== false, // Default to true if not specified
+                // Add debug info to help troubleshoot
+                firebaseFields: Object.keys(userData || {})
+            };
+            
+            console.log(`Stream Chat user data:`, JSON.stringify(streamUserData, null, 2));
+            
+            console.log(`Creating/updating Stream Chat user for: ${userId}`);
+            await serverClient.upsertUser(streamUserData);
+            console.log(`Stream Chat user synchronized for: ${userId}`);
+        } catch (upsertError) {
+            console.error(`Failed to upsert Stream Chat user for ${userId}:`, upsertError.message);
+            // Continue anyway - token generation can still work without user sync
+        }
+        
+        // Generate the token
+        const token = serverClient.createToken(userId);
+        
+        console.log(`Stream Chat token generated successfully for user: ${userId}`);
+        
+        return {
+            success: true,
+            token: token,
+            apiKey: apiKey
+        };
+        
+    } catch (error) {
+        console.error('Error in Stream Chat token generation:', error);
+        return {
+            success: false,
+            error: `Token generation failed: ${error?.message || String(error) || 'Unknown error'}`
+        };
     }
 });

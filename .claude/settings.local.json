@@ -80,7 +80,19 @@
       "Bash(timeout 30s npm start)",
       "Bash(PORT=3001 timeout 30s npm start)",
       "Bash(wc:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(sudo npm install stream-chat-react --force)",
+      "Bash(claude --version)",
+      "Bash(echo:*)",
+      "Bash(echo $PATH)",
+      "Bash(sudo rm:*)",
+      "Bash(firebase functions:config:set:*)",
+      "Bash(PORT=3001 npm start)",
+      "Bash(firebase functions:log:*)",
+      "Bash(firebase functions:delete:*)",
+      "WebFetch(domain:getstream.io)",
+      "Bash(firebase login:*)",
+      "Bash(firebase functions:list:*)"
     ],
     "deny": []
   }

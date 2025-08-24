@@ -238,6 +238,16 @@ const GalleryDetailsModal = ({ isOpen, onClose, gallery, organization, userEmail
                 </button>
               </div>
               
+              {hasDeniedImages && activeTab === 'images' && (
+                <button
+                  className="btn-replace-compact"
+                  onClick={() => setShowReplaceModal(true)}
+                  title="Upload replacement images for denied photos"
+                >
+                  Upload New ({deniedImages.length})
+                </button>
+              )}
+              
               <button
                 className="icon-btn danger"
                 onClick={() => setShowDeleteConfirm(true)}

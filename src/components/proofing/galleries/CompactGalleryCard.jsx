@@ -53,10 +53,10 @@ const CompactGalleryCard = ({ gallery, onView, isArchived }) => {
     }
   };
 
-  // Calculate progress percentage
+  // Calculate progress percentage (based on approved images only)
   const totalImages = gallery.totalImages || 0;
-  const reviewedImages = (gallery.approvedCount || 0) + (gallery.deniedCount || 0);
-  const progressPercentage = totalImages > 0 ? Math.round((reviewedImages / totalImages) * 100) : 0;
+  const approvedImages = gallery.approvedCount || 0;
+  const progressPercentage = totalImages > 0 ? Math.round((approvedImages / totalImages) * 100) : 0;
 
   return (
     <div className={`compact-job-card ${isArchived ? 'archived-job' : ''}`}>

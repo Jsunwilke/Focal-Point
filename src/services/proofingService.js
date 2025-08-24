@@ -444,13 +444,20 @@ export const updateProofStatus = async (galleryId, proofId, status, denialNotes,
     
     // Update proof
     const proofRef = doc(firestore, "proofs", proofId);
-    batch.update(proofRef, {
+    const proofUpdate = {
       status,
       denialNotes: status === "denied" ? denialNotes : null,
       reviewedAt: serverTimestamp(),
       reviewedBy: reviewerEmail || "Anonymous",
-      updatedAt: serverTimestamp()
-    });
+    };
+    
+    // Track who denied the image specifically
+    if (status === "denied") {
+      proofUpdate.deniedBy = reviewerEmail;
+      proofUpdate.deniedAt = serverTimestamp();
+    }
+    
+    batch.update(proofRef, proofUpdate);
     
     // Update gallery counts
     const galleryRef = doc(firestore, "proofGalleries", galleryId);
@@ -781,6 +788,22 @@ export const batchReplaceProofImages = async (galleryId, replacements, userEmail
     // Clear cache for this gallery
     proofingCacheService.clearGalleryCache(galleryId);
     
+    // Collect unique emails of users who denied the replaced images
+    const deniedByEmails = new Set();
+    replacements.forEach(replacement => {
+      if (replacement.oldProof?.deniedBy) {
+        deniedByEmails.add(replacement.oldProof.deniedBy);
+      }
+    });
+    
+    // Return result with email recipients for notification
+    const result = {
+      uploadedVersions,
+      notificationEmails: Array.from(deniedByEmails),
+      galleryId,
+      replacedCount: uploadedVersions.length
+    };
+    
     if (onProgress) {
       onProgress({
         percentage: 100,
@@ -790,7 +813,7 @@ export const batchReplaceProofImages = async (galleryId, replacements, userEmail
       });
     }
     
-    return uploadedVersions;
+    return result;
   } catch (error) {
     console.error("Error in batch versioning:", error);
     throw error;

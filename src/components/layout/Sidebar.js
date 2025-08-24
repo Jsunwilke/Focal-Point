@@ -2,7 +2,6 @@
 import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { useChat } from "../../contexts/ChatContext";
 import {
   LayoutDashboard,
   Calendar,
@@ -30,10 +29,9 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
   const navigate = useNavigate();
   const location = useLocation();
   const { userProfile, organization } = useAuth();
-  const { unreadCounts } = useChat();
   
-  // Calculate total unread count
-  const totalUnreadCount = Object.values(unreadCounts || {}).reduce((sum, count) => sum + count, 0);
+  // Note: Unread counts will be handled by Stream Chat in the future
+  const totalUnreadCount = 0;
 
   // Check if user has admin/manager permissions
   const isAdminOrManager = userProfile?.role === 'admin' || userProfile?.role === 'manager';

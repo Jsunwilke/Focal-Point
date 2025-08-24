@@ -46,6 +46,13 @@
   height: calc(100vh - var(--header-height));
 }
 
+/* Chat page specific layout override */
+.layout__content--chat {
+  padding: 0;
+  overflow: hidden;
+  height: calc(100vh - var(--header-height));
+}
+
 /* Mobile backdrop */
 .layout__backdrop {
   position: fixed;

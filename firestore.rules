@@ -280,8 +280,6 @@ service cloud.firestore {
       allow delete: if request.auth != null && 
                        belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
                        (
-                         // Admins and managers can delete any report (check first for short-circuit)
-                         isAdminOrManager(request.auth.uid) ||
                          // Check if userId field exists and matches
                          (resource.data.keys().hasAny(['userId']) && 
                           resource.data.userId == request.auth.uid) ||
@@ -294,7 +292,9 @@ service cloud.firestore {
                          // Also check against firstName + lastName combination
                          (resource.data.keys().hasAny(['yourName']) && 
                           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-                          resource.data.yourName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.firstName + ' ' + get(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastName)
+                          resource.data.yourName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.firstName + ' ' + get(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastName) ||
+                         // Admins and managers can delete any report
+                         isAdminOrManager(request.auth.uid)
                        );
     }
 
@@ -1209,7 +1209,7 @@ service cloud.firestore {
         // Case 2: Public users updating status only
         (// Only allow updating specific fields
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['status', 'denialNotes', 'reviewedAt', 'reviewedBy', 'updatedAt']) &&
+           .hasOnly(['status', 'denialNotes', 'reviewedAt', 'reviewedBy', 'deniedBy', 'deniedAt', 'updatedAt']) &&
          // Validate status
          request.resource.data.status in ['pending', 'approved', 'denied'] &&
          // If denied, must have notes
