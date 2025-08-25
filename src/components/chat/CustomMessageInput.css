@@ -1,39 +1,53 @@
 /* Custom Message Input Styles */
 .custom-message-input-container {
   display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
-  padding: 1rem;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: 10px;
   background: white;
-  border-top: 1px solid #e5e7eb;
+  border: 1px solid #d1d5db;
+  border-radius: 20px;
   position: relative;
+}
+
+/* Container for all actions on second row */
+.input-actions-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
 }
 
 .input-actions-left,
 .input-actions-right {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 8px;
 }
 
 .input-action-button {
   background: transparent;
   border: none;
   color: #6b7280;
-  padding: 0.5rem;
-  border-radius: 8px;
+  padding: 0;
+  margin: 0;
+  width: auto;
+  height: 18px;
+  min-width: 18px;
+  border-radius: 0;
   cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
+  transition: color 0.2s;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   font-weight: 500;
-  font-size: 0.875rem;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .input-action-button:hover {
-  background: #f3f4f6;
-  color: #1f2937;
+  color: #374151;
 }
 
 .input-action-button:disabled {
@@ -85,29 +99,31 @@
 
 /* Input Wrapper */
 .input-wrapper {
-  flex: 1;
+  width: 100%;
   position: relative;
 }
 
 .message-input-field {
   width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid #d1d5db;
-  border-radius: 12px;
-  font-size: 0.9375rem;
-  line-height: 1.5;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1.4;
   resize: none;
   outline: none;
-  transition: all 0.2s;
-  max-height: 120px;
-  overflow-y: auto;
-  background: #f9fafb;
+  transition: height 0.1s ease;
+  height: 20px;
+  min-height: 20px;
+  max-height: 80px;
+  overflow-y: hidden;
 }
 
 .message-input-field:focus {
-  border-color: var(--primary-color, #6366f1);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-  background: white;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  outline: none;
 }
 
 .message-input-field::placeholder {
@@ -116,34 +132,46 @@
 
 /* Send Button */
 .send-button {
-  background: var(--primary-color, #6366f1);
-  color: white;
+  padding: 0;
+  margin: 0;
+  width: 24px;
+  height: 20px;
+  border-radius: 4px;
+  background: transparent;
   border: none;
-  border-radius: 8px;
-  padding: 0.625rem;
-  cursor: pointer;
-  transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #6b7280;
 }
 
 .send-button:hover:not(:disabled) {
-  background: #5856eb;
-  transform: scale(1.05);
+  color: #374151;
 }
 
 .send-button:disabled {
-  background: #d1d5db;
+  opacity: 0.5;
   cursor: not-allowed;
-  transform: scale(1);
+}
+
+/* Icon sizing for buttons */
+.input-action-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.send-button svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* Emoji Picker Wrapper */
 .emoji-picker-wrapper {
   position: absolute;
-  bottom: calc(100% + 0.5rem);
-  right: 0;
+  bottom: calc(100% + 10px);
+  left: 20px; /* Position over emoji button */
   z-index: 1000;
   animation: slideUp 0.2s ease-out;
 }
@@ -156,9 +184,8 @@
 /* Giphy Selector Wrapper */
 .giphy-selector-wrapper {
   position: absolute;
-  bottom: calc(100% + 0.5rem);
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: calc(100% + 10px);
+  left: 50px; /* Position over GIF button */
   z-index: 1000;
   width: 380px;
   animation: slideUp 0.2s ease-out;
@@ -167,11 +194,11 @@
 @keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(10px) translateX(-50%);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) translateX(-50%);
+    transform: translateY(0);
   }
 }
 

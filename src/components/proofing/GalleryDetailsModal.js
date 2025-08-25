@@ -265,25 +265,6 @@ const GalleryDetailsModal = ({ isOpen, onClose, gallery, organization, userEmail
               </button>
             </div>
           </div>
-          
-          {((hasDeniedImages && activeTab === 'images') || gallery.password) && (
-            <div className="header-row secondary">
-              {hasDeniedImages && activeTab === 'images' && (
-                <button
-                  className="btn-replace-compact"
-                  onClick={() => setShowReplaceModal(true)}
-                >
-                  Upload New Versions ({deniedImages.length})
-                </button>
-              )}
-              {gallery.password && (
-                <span className="password-note-compact">
-                  <AlertCircle size={12} />
-                  Password protected
-                </span>
-              )}
-            </div>
-          )}
         </div>
 
         <div className="modal-body">

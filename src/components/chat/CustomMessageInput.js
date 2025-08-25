@@ -24,6 +24,12 @@ const CustomMessageInput = () => {
   // File input refs
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
+  
+  // Picker refs for click-outside detection
+  const emojiPickerRef = useRef(null);
+  const giphyPickerRef = useRef(null);
+  const emojiButtonRef = useRef(null);
+  const giphyButtonRef = useRef(null);
 
   // Toggle emoji picker
   const toggleEmojiPicker = useCallback(() => {
@@ -45,6 +51,41 @@ const CustomMessageInput = () => {
     setShowEmojiPicker(false);
     setShowGiphy(false);
   }, [showActions]);
+  
+  // Handle click outside to close pickers
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Close emoji picker if clicking outside
+      if (showEmojiPicker && 
+          emojiPickerRef.current && 
+          !emojiPickerRef.current.contains(event.target) &&
+          emojiButtonRef.current &&
+          !emojiButtonRef.current.contains(event.target)) {
+        setShowEmojiPicker(false);
+      }
+      
+      // Close GIF picker if clicking outside
+      if (showGiphy && 
+          giphyPickerRef.current && 
+          !giphyPickerRef.current.contains(event.target) &&
+          giphyButtonRef.current &&
+          !giphyButtonRef.current.contains(event.target)) {
+        setShowGiphy(false);
+      }
+      
+      // Close actions menu if clicking outside
+      if (showActions && !event.target.closest('.actions-menu') && !event.target.closest('.input-action-button')) {
+        setShowActions(false);
+      }
+    };
+
+    if (showEmojiPicker || showGiphy || showActions) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showEmojiPicker, showGiphy, showActions]);
   
   // Handle file upload
   const handleFileUpload = async (event) => {
@@ -187,7 +228,7 @@ const CustomMessageInput = () => {
           
           {/* Emoji picker */}
           {showEmojiPicker && (
-            <div className="emoji-picker-wrapper">
+            <div ref={emojiPickerRef} className="emoji-picker-wrapper">
               <Picker 
                 data={data}
                 onEmojiSelect={handleEmojiSelect}
@@ -200,7 +241,7 @@ const CustomMessageInput = () => {
           
           {/* Giphy selector */}
           {showGiphy && (
-            <div className="giphy-selector-wrapper">
+            <div ref={giphyPickerRef} className="giphy-selector-wrapper">
               <GiphySelector 
                 onGifSelect={(gif) => {
                   // Send as a giphy attachment
@@ -229,6 +270,7 @@ const CustomMessageInput = () => {
             </button>
             
             <button 
+              ref={emojiButtonRef}
               className="input-action-button"
               onClick={toggleEmojiPicker}
               title="Add emoji"
@@ -237,6 +279,7 @@ const CustomMessageInput = () => {
             </button>
             
             <button 
+              ref={giphyButtonRef}
               className="input-action-button"
               onClick={toggleGiphy}
               title="Send GIF"
