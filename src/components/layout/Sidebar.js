@@ -2,6 +2,7 @@
 import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { useStreamChat } from "../../contexts/StreamChatContext";
 import {
   LayoutDashboard,
   Calendar,
@@ -29,9 +30,7 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
   const navigate = useNavigate();
   const location = useLocation();
   const { userProfile, organization } = useAuth();
-  
-  // Note: Unread counts will be handled by Stream Chat in the future
-  const totalUnreadCount = 0;
+  const { totalUnreadCount = 0 } = useStreamChat() || {};
 
   // Check if user has admin/manager permissions
   const isAdminOrManager = userProfile?.role === 'admin' || userProfile?.role === 'manager';

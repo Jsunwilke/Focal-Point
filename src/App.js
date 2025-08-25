@@ -33,6 +33,7 @@ import WorkflowSettings from "./pages/WorkflowSettings";
 import Tracking from "./pages/Tracking";
 import ChatStream from "./pages/ChatStream";
 import ChatStreamPro from "./pages/ChatStreamPro";
+import ChatWidget from "./components/chat/ChatWidget";
 import Proofing from "./pages/Proofing";
 import ProofingReview from "./pages/ProofingReview";
 import Orders from "./pages/Orders";
@@ -149,6 +150,7 @@ const AppContent = () => {
                       <Route path="/settings/templates" element={<TemplatesList />} />
                     </Routes>
                   </Layout>
+                  <ChatWidget />
                 </ProtectedRoute>
               }
             />

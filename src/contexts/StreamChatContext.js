@@ -22,6 +22,27 @@ export const StreamChatProvider = ({ children }) => {
   const [retryCount, setRetryCount] = useState(0);
   const [connectionReady, setConnectionReady] = useState(false);
   const [listeners, setListeners] = useState(new Set());
+  const [totalUnreadCount, setTotalUnreadCount] = useState(0);
+
+  // Set up unread count listener
+  useEffect(() => {
+    if (client && connectionReady) {
+      const handleUnreadCountChanged = (event) => {
+        setTotalUnreadCount(event.total_unread_count || 0);
+      };
+      
+      // Listen for unread count changes
+      client.on('notification.mark_read', handleUnreadCountChanged);
+      client.on('notification.message_new', handleUnreadCountChanged);
+      client.on('message.new', handleUnreadCountChanged);
+      
+      return () => {
+        client.off('notification.mark_read', handleUnreadCountChanged);
+        client.off('notification.message_new', handleUnreadCountChanged);
+        client.off('message.new', handleUnreadCountChanged);
+      };
+    }
+  }, [client, connectionReady]);
 
   // Connect to Stream Chat when user logs in
   useEffect(() => {
@@ -68,6 +89,11 @@ export const StreamChatProvider = ({ children }) => {
         setClient(streamClient);
         setConnectionReady(true);
         setRetryCount(0);
+        
+        // Get initial unread count
+        if (streamClient.user) {
+          setTotalUnreadCount(streamClient.user.total_unread_count || 0);
+        }
         
         console.log('Stream Chat connected successfully');
       } catch (error) {
@@ -209,6 +235,7 @@ export const StreamChatProvider = ({ children }) => {
     addListener,
     removeListener,
     streamChatService,
+    totalUnreadCount,
     // User management functions
     syncUserProfile,
     getOrganizationUsers

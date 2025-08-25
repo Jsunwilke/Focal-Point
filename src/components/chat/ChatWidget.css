@@ -1,0 +1,671 @@
+/* Chat Widget Button */
+.chat-widget-button {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #6366f1;
+  border: none;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s ease;
+  z-index: 9998;
+}
+
+.chat-widget-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  background: #5558e3;
+}
+
+.chat-widget-button:active {
+  transform: scale(0.95);
+}
+
+/* Notification Badge */
+.widget-notification-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ef4444;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Expanded Widget Container */
+.chat-widget-expanded {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 380px;
+  height: 600px;
+  max-height: calc(100vh - 48px);
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  z-index: 9999;
+  animation: slideUp 0.3s ease;
+  overflow: hidden;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Widget Header */
+.widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #6366f1;
+  color: white;
+  border-radius: 12px 12px 0 0;
+}
+
+.widget-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.widget-title svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+.widget-title .unread-badge {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.widget-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.widget-control-btn {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.widget-control-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Widget Body */
+.widget-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #f9fafb;
+  border-radius: 12px 12px 12px 12px;
+}
+
+/* When showing a channel, body takes full height */
+.chat-widget-expanded:has(.widget-channel-header) .widget-body {
+  height: 100%;
+}
+
+/* Channel List in Widget */
+.widget-channel-list {
+  height: 100%;
+  overflow-y: auto;
+  width: 100%;
+}
+
+.widget-channel-list .str-chat__channel-list {
+  height: 100%;
+  background: transparent;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Force channel list to be single column */
+.widget-channel-list .str-chat__channel-list-messenger {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.widget-channel-list .str-chat__channel-list-messenger__main {
+  width: 100% !important;
+}
+
+.widget-channel-list .custom-channel-preview {
+  margin: 4px 8px;
+  border-radius: 8px;
+  background: white;
+  transition: all 0.2s;
+}
+
+.widget-channel-list .custom-channel-preview:hover {
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Chat Area in Widget */
+.widget-chat-area {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Force single column layout - no thread panel */
+.widget-chat-area .str-chat__channel {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.widget-chat-area .str-chat__main-panel {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.widget-chat-area .str-chat__thread {
+  display: none !important;
+}
+
+/* Override all CustomMessageInput.css styles for widget */
+.chat-widget-expanded .widget-chat-area .custom-message-input-container,
+.widget-chat-area .custom-message-input-container {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  align-items: stretch !important;
+  padding: 8px 10px !important;
+  margin: 8px !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 20px !important;
+  background: white !important;
+}
+
+.chat-widget-expanded .widget-chat-area .actions-menu,
+.widget-chat-area .actions-menu {
+  display: none !important;
+}
+
+/* Channel Header in Widget - Professional Style */
+.widget-channel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #f3f4f6;
+  border-bottom: 1px solid #e5e7eb;
+  height: 48px;
+}
+
+.back-button {
+  background: transparent;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.back-button:hover {
+  color: #374151;
+}
+
+/* Channel Icon */
+.channel-icon {
+  width: 32px;
+  height: 32px;
+  background: #6b7280;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+}
+
+.channel-icon img {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+/* Channel Details */
+.channel-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.widget-channel-header .channel-name {
+  font-weight: 600;
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.channel-subtitle {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Header Actions */
+.header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.header-action-btn {
+  background: transparent;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-action-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #111827;
+}
+
+/* Message List in Widget */
+.widget-chat-area .str-chat__list {
+  background: white;
+  flex: 1;
+}
+
+.widget-chat-area .str-chat__message-list {
+  padding: 8px;
+}
+
+/* Compact Messages */
+.widget-chat-area .str-chat__message {
+  margin-bottom: 8px;
+}
+
+.widget-chat-area .str-chat__message-text {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Smaller message headers */
+.widget-chat-area .str-chat__message-header,
+.widget-chat-area .str-chat__message-metadata {
+  font-size: 11px !important;
+  margin-bottom: 2px !important;
+}
+
+.widget-chat-area .str-chat__message-username {
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+
+.widget-chat-area .str-chat__message-timestamp {
+  font-size: 10px !important;
+}
+
+/* Reduce spacing in message layout */
+.widget-chat-area .str-chat__message-inner {
+  padding: 4px !important;
+}
+
+.widget-chat-area .str-chat__message-text-inner {
+  padding: 4px 6px !important;
+}
+
+/* Fix avatars with maximum specificity */
+.chat-widget-expanded .widget-chat-area .str-chat__avatar,
+.chat-widget-expanded .widget-chat-area .str-chat__avatar--rounded,
+.chat-widget-expanded .widget-chat-area .str-chat .str-chat__avatar,
+.chat-widget-expanded .str-chat__message .str-chat__avatar {
+  width: 20px !important;
+  height: 20px !important;
+  max-width: 20px !important;
+  max-height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  flex-shrink: 0 !important;
+}
+
+.chat-widget-expanded .widget-chat-area .str-chat__avatar-image,
+.chat-widget-expanded .widget-chat-area .str-chat__avatar img,
+.chat-widget-expanded .str-chat__message .str-chat__avatar img {
+  width: 20px !important;
+  height: 20px !important;
+  max-width: 20px !important;
+  max-height: 20px !important;
+  object-fit: cover !important;
+}
+
+.chat-widget-expanded .widget-chat-area .str-chat__avatar-fallback,
+.chat-widget-expanded .str-chat__message .str-chat__avatar-fallback {
+  width: 20px !important;
+  height: 20px !important;
+  font-size: 9px !important;
+  line-height: 20px !important;
+}
+
+/* Much smaller images and attachments */
+.widget-chat-area .str-chat__message-attachment-card {
+  max-width: 180px !important;
+  padding: 6px !important;
+}
+
+.widget-chat-area .str-chat__message-attachment--image,
+.widget-chat-area .str-chat__message-attachment__image,
+.widget-chat-area .str-chat__message img,
+.widget-chat-area .str-chat__attachment--image img {
+  max-width: 120px !important;
+  max-height: 80px !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
+}
+
+/* Hide attachment footers/titles like in main chat */
+.widget-chat-area .str-chat__message-attachment-card__title,
+.widget-chat-area .str-chat__message-attachment-card--title,
+.widget-chat-area .str-chat__message-attachment__title,
+.widget-chat-area .str-chat__message-attachment-file__title,
+.widget-chat-area .str-chat__message-attachment--image__title {
+  display: none !important;
+}
+
+/* Keep file info but make it compact */
+.widget-chat-area .str-chat__message-attachment-file--item,
+.widget-chat-area .str-chat__message-attachment-file {
+  padding: 4px 6px !important;
+  margin: 2px 0 !important;
+}
+
+.widget-chat-area .str-chat__message-attachment-file--item-text {
+  font-size: 11px !important;
+}
+
+.widget-chat-area .str-chat__message-attachment-file--item-size {
+  font-size: 10px !important;
+}
+
+/* Giphy and gallery images */
+.widget-chat-area .str-chat__message-attachment--giphy,
+.widget-chat-area .str-chat__gallery,
+.widget-chat-area .str-chat__attachment {
+  max-width: 120px !important;
+}
+
+.widget-chat-area .str-chat__attachment img {
+  max-width: 120px !important;
+  max-height: 80px !important;
+}
+
+/* Message Input in Widget - Two Row Style */
+.widget-chat-area .custom-message-input-container {
+  margin: 8px !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 20px !important;
+  padding: 8px 10px !important;
+  background: white !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  align-items: stretch !important;
+  border-top: 1px solid #d1d5db !important; /* Override the default border-top */
+}
+
+/* Input field on first row */
+.chat-widget-expanded .widget-chat-area .input-wrapper,
+.widget-chat-area .input-wrapper {
+  width: 100% !important;
+  order: 1 !important;
+  position: relative !important;
+  flex: none !important;
+}
+
+.chat-widget-expanded .widget-chat-area .message-input-field,
+.widget-chat-area .message-input-field {
+  font-size: 14px !important;
+  padding: 2px 0 !important;
+  border: none !important;
+  background: transparent !important;
+  outline: none !important;
+  resize: none !important;
+  width: 100% !important;
+  box-shadow: none !important;
+  line-height: 1.4 !important;
+  overflow-y: hidden;
+  transition: height 0.1s ease;
+  height: 20px;
+  min-height: 20px;
+  max-height: 80px;
+}
+
+.widget-chat-area .message-input-field::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Override focus state */
+.widget-chat-area .message-input-field:focus {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  outline: none !important;
+}
+
+/* Second row container for all actions */
+.chat-widget-expanded .widget-chat-area .input-actions-container,
+.widget-chat-area .input-actions-container {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  order: 2 !important;
+  width: 100% !important;
+  height: 20px !important;
+}
+
+/* Left actions */
+.chat-widget-expanded .widget-chat-area .input-actions-left,
+.widget-chat-area .input-actions-left {
+  display: flex !important;
+  gap: 8px !important;
+  align-items: center !important;
+  padding: 0 !important;
+  height: 20px !important;
+}
+
+/* Right actions */
+.chat-widget-expanded .widget-chat-area .input-actions-right,
+.widget-chat-area .input-actions-right {
+  display: flex !important;
+  gap: 8px !important;
+  align-items: center !important;
+  padding: 0 !important;
+  height: 20px !important;
+}
+
+.chat-widget-expanded .widget-chat-area .input-action-button,
+.widget-chat-area .input-action-button {
+  padding: 0 !important;
+  margin: 0 !important;
+  width: auto !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  color: #6b7280 !important;
+  cursor: pointer !important;
+  transition: color 0.2s !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 18px !important;
+}
+
+.widget-chat-area .input-action-button:hover {
+  color: #374151 !important;
+}
+
+.widget-chat-area .input-action-button svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* Send button as circle */
+.chat-widget-expanded .widget-chat-area .send-button,
+.widget-chat-area .send-button {
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 24px !important;
+  height: 20px !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  border: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
+  color: #6b7280 !important;
+}
+
+.widget-chat-area .send-button:hover:not(:disabled) {
+  background: #d1d5db !important;
+}
+
+.widget-chat-area .send-button:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+.widget-chat-area .send-button svg {
+  width: 14px !important;
+  height: 14px !important;
+  color: #6b7280 !important;
+}
+
+/* Hide GIF button text, show icon only */
+.widget-chat-area .input-action-button:has-text("GIF") {
+  font-size: 0 !important;
+}
+
+/* Empty State */
+.widget-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #6b7280;
+  font-size: 14px;
+  padding: 20px;
+  text-align: center;
+}
+
+/* Thread in Widget - Hide by default */
+.widget-chat-area .str-chat__thread {
+  display: none;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+  .chat-widget-expanded {
+    width: calc(100vw - 24px);
+    right: 12px;
+    bottom: 12px;
+    max-height: calc(100vh - 24px);
+  }
+}
+
+/* Animations */
+.chat-widget-button {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  }
+  50% {
+    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.6);
+  }
+  100% {
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  }
+}
+
+/* Remove pulse when expanded */
+.chat-widget-expanded + .chat-widget-button {
+  animation: none;
+}
+
+/* Custom scrollbar for widget */
+.widget-channel-list::-webkit-scrollbar,
+.widget-chat-area .str-chat__list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.widget-channel-list::-webkit-scrollbar-track,
+.widget-chat-area .str-chat__list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.widget-channel-list::-webkit-scrollbar-thumb,
+.widget-chat-area .str-chat__list::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.widget-channel-list::-webkit-scrollbar-thumb:hover,
+.widget-chat-area .str-chat__list::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}

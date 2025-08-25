@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { 
   MessageInput, 
   useMessageInputContext,
@@ -109,12 +109,60 @@ const CustomMessageInput = () => {
   // Custom input with enhanced features
   const CustomInput = () => {
     const { text, setText, handleSubmit } = useMessageInputContext();
+    const textareaRef = useRef(null);
+    
+    // Auto-resize textarea function
+    const autoResize = useCallback(() => {
+      if (textareaRef.current) {
+        // Reset to calculate actual height needed
+        textareaRef.current.setAttribute('style', `
+          height: auto !important;
+          font-size: 14px !important;
+          padding: 2px 0 !important;
+          border: none !important;
+          background: transparent !important;
+          outline: none !important;
+          resize: none !important;
+          width: 100% !important;
+          box-shadow: none !important;
+          line-height: 1.4 !important;
+        `);
+        
+        // Calculate and set new height
+        const scrollHeight = textareaRef.current.scrollHeight;
+        const newHeight = Math.min(Math.max(scrollHeight, 20), 80);
+        
+        textareaRef.current.setAttribute('style', `
+          height: ${newHeight}px !important;
+          overflow-y: ${newHeight >= 80 ? 'auto' : 'hidden'} !important;
+          font-size: 14px !important;
+          padding: 2px 0 !important;
+          border: none !important;
+          background: transparent !important;
+          outline: none !important;
+          resize: none !important;
+          width: 100% !important;
+          box-shadow: none !important;
+          line-height: 1.4 !important;
+        `);
+      }
+    }, []);
+    
+    // Auto-resize on text change
+    useEffect(() => {
+      autoResize();
+    }, [text, autoResize]);
     
     const handleKeyPress = (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSubmit(e);
       }
+    };
+    
+    const handleTextChange = (e) => {
+      setText(e.target.value);
+      autoResize();
     };
 
     const handleEmojiSelect = (emoji) => {
@@ -124,59 +172,14 @@ const CustomMessageInput = () => {
 
     return (
       <div className="custom-message-input-container">
-        {/* Action buttons */}
-        <div className="input-actions-left">
-          <button 
-            className="input-action-button"
-            onClick={toggleActions}
-            title="More actions"
-          >
-            <Plus size={20} />
-          </button>
-          
-          {showActions && (
-            <div className="actions-menu">
-              <button 
-                className="action-item" 
-                title="Upload file"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Paperclip size={18} />
-                <span>File</span>
-              </button>
-              <button 
-                className="action-item" 
-                title="Upload image"
-                onClick={() => imageInputRef.current?.click()}
-              >
-                <Image size={18} />
-                <span>Image</span>
-              </button>
-            </div>
-          )}
-          
-          {/* Hidden file inputs */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            style={{ display: 'none' }}
-            onChange={handleFileUpload}
-          />
-          <input
-            ref={imageInputRef}
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={handleImageUpload}
-          />
-        </div>
-
-        {/* Main input area */}
+        {/* Main input area - First Row */}
         <div className="input-wrapper">
           <textarea
+            ref={textareaRef}
             className="message-input-field"
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={handleTextChange}
+            onInput={autoResize}
             onKeyPress={handleKeyPress}
             placeholder={`Message #${channel?.data?.name || 'channel'}`}
             rows={1}
@@ -213,32 +216,82 @@ const CustomMessageInput = () => {
           )}
         </div>
 
-        {/* Right actions */}
-        <div className="input-actions-right">
-          <button 
-            className="input-action-button"
-            onClick={toggleGiphy}
-            title="Send GIF"
-          >
-            GIF
-          </button>
-          
-          <button 
-            className="input-action-button"
-            onClick={toggleEmojiPicker}
-            title="Add emoji"
-          >
-            <Smile size={20} />
-          </button>
-          
-          <button 
-            className="send-button"
-            onClick={handleSubmit}
-            disabled={!text.trim()}
-            title="Send message"
-          >
-            <Send size={20} />
-          </button>
+        {/* Second Row - All Actions */}
+        <div className="input-actions-container">
+          {/* Left actions - paperclip, emoji, gif */}
+          <div className="input-actions-left">
+            <button 
+              className="input-action-button"
+              onClick={toggleActions}
+              title="More actions"
+            >
+              <Paperclip size={20} />
+            </button>
+            
+            <button 
+              className="input-action-button"
+              onClick={toggleEmojiPicker}
+              title="Add emoji"
+            >
+              <Smile size={20} />
+            </button>
+            
+            <button 
+              className="input-action-button"
+              onClick={toggleGiphy}
+              title="Send GIF"
+            >
+              GIF
+            </button>
+            
+            {showActions && (
+              <div className="actions-menu">
+                <button 
+                  className="action-item" 
+                  title="Upload file"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip size={18} />
+                  <span>File</span>
+                </button>
+                <button 
+                  className="action-item" 
+                  title="Upload image"
+                  onClick={() => imageInputRef.current?.click()}
+                >
+                  <Image size={18} />
+                  <span>Image</span>
+                </button>
+              </div>
+            )}
+            
+            {/* Hidden file inputs */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              style={{ display: 'none' }}
+              onChange={handleFileUpload}
+            />
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleImageUpload}
+            />
+          </div>
+
+          {/* Right actions - only send button */}
+          <div className="input-actions-right">
+            <button 
+              className="send-button"
+              onClick={handleSubmit}
+              disabled={!text.trim()}
+              title="Send message"
+            >
+              <Send size={20} />
+            </button>
+          </div>
         </div>
       </div>
     );
