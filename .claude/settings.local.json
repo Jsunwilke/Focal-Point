@@ -92,7 +92,8 @@
       "Bash(firebase functions:delete:*)",
       "WebFetch(domain:getstream.io)",
       "Bash(firebase login:*)",
-      "Bash(firebase functions:list:*)"
+      "Bash(firebase functions:list:*)",
+      "Read(//mnt/c/Users/jsunw/OneDrive/Pictures/Screenshots/**)"
     ],
     "deny": []
   }

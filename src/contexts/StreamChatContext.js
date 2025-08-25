@@ -156,19 +156,34 @@ export const StreamChatProvider = ({ children }) => {
     }
   }, [connectionReady, client]);
 
-  // Get organization users for chat
+  // Get organization users for chat (now uses Firebase directly)
   const getOrganizationUsers = useCallback(async (searchTerm = '') => {
-    if (!connectionReady || !userProfile?.organizationID) {
+    if (!userProfile?.organizationID) {
       return [];
     }
 
     try {
-      return await streamChatService.getOrganizationUsers(userProfile.organizationID, searchTerm);
+      // Import the Firebase function dynamically to avoid circular dependencies
+      const { getAllOrganizationUsers } = await import('../firebase/firestore');
+      
+      // Get all users from Firebase
+      const users = await getAllOrganizationUsers(userProfile.organizationID);
+      
+      // Apply search filter if provided
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        return users.filter(u => 
+          (u.displayName && u.displayName.toLowerCase().includes(searchLower)) ||
+          (u.email && u.email.toLowerCase().includes(searchLower))
+        );
+      }
+      
+      return users;
     } catch (error) {
-      console.error('Failed to get organization users:', error);
+      console.error('Failed to get organization users from Firebase:', error);
       return [];
     }
-  }, [connectionReady, userProfile?.organizationID]);
+  }, [userProfile?.organizationID]);
 
   // Listener management for cleanup
   const addListener = useCallback((cleanup) => {

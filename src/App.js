@@ -32,6 +32,7 @@ import WorkflowDashboard from "./components/workflow/WorkflowDashboard";
 import WorkflowSettings from "./pages/WorkflowSettings";
 import Tracking from "./pages/Tracking";
 import ChatStream from "./pages/ChatStream";
+import ChatStreamPro from "./pages/ChatStreamPro";
 import Proofing from "./pages/Proofing";
 import ProofingReview from "./pages/ProofingReview";
 import Orders from "./pages/Orders";
@@ -140,8 +141,9 @@ const AppContent = () => {
                       <Route path="/test-captura" element={<TestCaptura />} />
                       <Route path="/stats" element={<CapturaStats />} />
                       <Route path="/test-backfill" element={<TestCapturaBackfill />} />
-                      <Route path="/chat" element={<ChatStream />} />
-                      <Route path="/chat-stream" element={<ChatStream />} />
+                      <Route path="/chat" element={<ChatStreamPro />} />
+                      <Route path="/chat-stream" element={<ChatStreamPro />} />
+                      <Route path="/chat-basic" element={<ChatStream />} />
                       <Route path="/daily-reports" element={<DailyReports />} />
                       <Route path="/settings" element={<Settings />} />
                       <Route path="/settings/templates" element={<TemplatesList />} />

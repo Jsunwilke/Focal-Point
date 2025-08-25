@@ -166,6 +166,35 @@ export const getOrganization = async (organizationID) => {
   }
 };
 
+// Get all users from an organization
+export const getAllOrganizationUsers = async (organizationID) => {
+  try {
+    const usersQuery = query(
+      collection(firestore, "users"),
+      where("organizationID", "==", organizationID),
+      where("isActive", "==", true)
+    );
+    
+    const snapshot = await getDocs(usersQuery);
+    const users = [];
+    
+    snapshot.forEach((doc) => {
+      const userData = doc.data();
+      users.push({
+        uid: doc.id,  // Document ID is the user's uid
+        id: doc.id,   // Also include as id for compatibility
+        ...userData
+      });
+    });
+    
+    secureLogger.debug(`Found ${users.length} users in organization ${organizationID}`);
+    return users;
+  } catch (error) {
+    secureLogger.error("Error fetching organization users", error);
+    throw error;
+  }
+};
+
 // Create user profile following your schema
 export const createUserProfile = async (uid, data) => {
   try {

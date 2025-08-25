@@ -228,11 +228,11 @@ class StreamChatService {
       const members = [this.currentUser.id, otherUserId].sort();
       const channelId = `dm-${members.join('-')}`;
 
-      // Get or create the channel with proper created_by_id for server-side auth
+      // Get or create the channel
       const channel = this.client.channel('messaging', channelId, {
         members: members,
-        name: `${this.currentUser.name} & ${otherUserData.name || 'User'}`,
-        created_by_id: this.currentUser.id // Required for server-side auth
+        name: `${this.currentUser.name} & ${otherUserData.name || 'User'}`
+        // Stream Chat will automatically set created_by
       });
 
       await channel.create();
@@ -251,8 +251,8 @@ class StreamChatService {
 
     try {
       const channel = this.client.channel('team', channelId, {
-        ...channelData,
-        created_by_id: this.currentUser.id // Required for server-side auth
+        ...channelData
+        // Stream Chat will automatically set created_by
       });
 
       await channel.create();
@@ -358,8 +358,8 @@ class StreamChatService {
           { organizationID: { $eq: organizationID } },
           {
             $or: [
-              { name: { $autocomplete: searchTerm } },
-              { email: { $autocomplete: searchTerm } }
+              { name: { $icontains: searchTerm } },
+              { email: { $icontains: searchTerm } }
             ]
           }
         ]
@@ -390,29 +390,160 @@ class StreamChatService {
   }
 
   // Create or update user in Stream when they sign up or update profile
-  async upsertUser(userData) {
+  async upsertUser(userData, useServerAuth = false) {
     if (!this.client) {
       this.initializeClient();
     }
 
     try {
+      // Ensure we have a valid user ID
+      const userId = userData.uid || userData.id;
+      if (!userId) {
+        throw new Error('User ID (uid) is required for Stream Chat sync');
+      }
+
       const streamUserData = {
-        id: userData.uid,
-        name: userData.displayName || userData.email?.split('@')[0] || 'User',
+        id: userId,
+        name: this.sanitizeUserName(userData.displayName || userData.email?.split('@')[0] || 'User'),
         email: userData.email,
-        image: userData.photoURL,
+        image: userData.photoURL || userData.originalPhotoURL || this.generateAvatarUrl(userData.displayName || 'U'),
         role: userData.role || 'user',
         organizationID: userData.organizationID,
         isActive: userData.isActive !== false // Default to true if not specified
       };
 
-      console.log('Updating Stream Chat user profile:', streamUserData.id);
-      const response = await this.client.upsertUser(streamUserData);
+      console.log('Updating Stream Chat user profile:', streamUserData.id, streamUserData);
+      
+      // For server-side operations, use server token if available
+      if (useServerAuth && process.env.REACT_APP_STREAM_SECRET) {
+        // Use server token for upsert (development only)
+        const serverClient = StreamChat.getInstance(process.env.REACT_APP_STREAM_KEY);
+        serverClient.connectAnonymousUser(); // Connect without user for server operations
+        const response = await serverClient.upsertUsers([streamUserData]);
+        console.log('Stream Chat user profile updated successfully (server auth)');
+        return response;
+      }
+      
+      // Use regular client for user operations
+      const response = await this.client.upsertUsers([streamUserData]);
+      
+      // Update user cache
+      this.updateUserInCache(streamUserData);
       
       console.log('Stream Chat user profile updated successfully');
       return response;
     } catch (error) {
       console.error('Error upserting user in Stream Chat:', error);
+      // Don't throw for sync operations, just log
+      if (useServerAuth) {
+        console.warn('Non-critical: Failed to sync user to Stream Chat', error.message);
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  // Sync user to Stream Chat (for development with server credentials)
+  async syncUser(userData) {
+    if (!this.client) {
+      this.initializeClient();
+    }
+
+    const userId = String(userData.uid || userData.id);
+    
+    // For development: Use server token if available to sync any user
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    const hasServerSecret = process.env.REACT_APP_STREAM_SECRET && 
+                           process.env.REACT_APP_STREAM_SECRET !== 'your_stream_secret_here';
+    
+    if (isDevelopment && hasServerSecret) {
+      try {
+        // Create a server client for this operation
+        const serverClient = StreamChat.getInstance(
+          process.env.REACT_APP_STREAM_KEY,
+          process.env.REACT_APP_STREAM_SECRET
+        );
+        
+        const streamUserData = {
+          id: userId,
+          name: userData.displayName || userData.name || userData.email?.split('@')[0] || 'User',
+          email: userData.email,
+          image: userData.photoURL || userData.image || userData.originalPhotoURL || this.generateAvatarUrl(userData.displayName || userData.email),
+          role: userData.role || 'user',
+          organizationID: userData.organizationID || this.currentUser?.organizationID
+        };
+        
+        // Upsert user with server client
+        await serverClient.upsertUser(streamUserData);
+        console.log('User synced to Stream Chat via server token:', userId);
+        return true;
+      } catch (error) {
+        console.error('Failed to sync user with server token:', error);
+        return false;
+      }
+    }
+    
+    // Fallback: Regular users can only update their own profile
+    const currentUser = this.client.user;
+    if (currentUser?.id !== userId) {
+      console.log('Cannot sync other users without server permissions');
+      return false;
+    }
+
+    const streamUserData = {
+      id: userId,
+      name: userData.displayName || userData.name || userData.email?.split('@')[0] || 'User',
+      email: userData.email,
+      image: userData.photoURL || userData.image || userData.originalPhotoURL || this.generateAvatarUrl(userData.displayName || userData.email),
+      role: userData.role || 'user',
+      organizationID: userData.organizationID
+    };
+
+    try {
+      // Update the user's own profile
+      await this.client.partialUpdateUser({
+        id: userId,
+        set: streamUserData
+      });
+      
+      console.log('User synced to Stream Chat:', userId);
+      return true;
+    } catch (error) {
+      console.error('Failed to sync user:', error);
+      return false;
+    }
+  }
+
+  // Bulk upsert multiple users efficiently
+  async bulkUpsertUsers(usersData) {
+    if (!this.client) {
+      this.initializeClient();
+    }
+
+    try {
+      // Format all users for Stream Chat
+      const streamUsers = usersData.map(userData => ({
+        id: userData.uid,
+        name: this.sanitizeUserName(userData.displayName || userData.email?.split('@')[0] || 'User'),
+        email: userData.email,
+        image: userData.photoURL || this.generateAvatarUrl(userData.displayName || 'U'),
+        role: userData.role || 'user',
+        organizationID: userData.organizationID,
+        isActive: userData.isActive !== false
+      }));
+
+      console.log(`Bulk upserting ${streamUsers.length} users to Stream Chat`);
+      
+      // Stream Chat's upsertUsers can handle up to 100 users at once
+      const response = await this.client.upsertUsers(streamUsers);
+      
+      // Update cache with all users
+      streamUsers.forEach(user => this.updateUserInCache(user));
+      
+      console.log(`Successfully upserted ${streamUsers.length} users`);
+      return response;
+    } catch (error) {
+      console.error('Error bulk upserting users:', error);
       throw error;
     }
   }
@@ -458,11 +589,11 @@ class StreamChatService {
         isActive: { $eq: true }
       };
 
-      // Add search filter if provided
+      // Add search filter if provided (using contains instead of autocomplete)
       if (searchTerm) {
         filters.$or = [
-          { name: { $autocomplete: searchTerm } },
-          { email: { $autocomplete: searchTerm } }
+          { name: { $icontains: searchTerm } },
+          { email: { $icontains: searchTerm } }
         ];
       }
 

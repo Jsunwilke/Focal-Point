@@ -21,6 +21,9 @@ const capturaStats = require('./capturaStats');
 // Import proofing email service
 const proofingEmailService = require('./proofingEmailService');
 
+// Import Stream Chat migration
+const { migrateOrganizationUsersToStream } = require('./migrateUsersToStream');
+
 // Function 1: Update Player Search Index when sports jobs change
 exports.updatePlayerSearchIndex = onDocumentWritten('sportsJobs/{jobId}', async (event) => {
     const change = event.data;
@@ -2698,16 +2701,21 @@ exports.generateStreamChatToken = onCall({
         
         // Create/update user in Stream Chat
         try {
+            // Map Firebase roles to Stream Chat roles
+            let streamRole = 'user';
+            if (userData?.role === 'admin' || userData?.role === 'owner') {
+                streamRole = 'admin';
+            }
+            
             const streamUserData = {
                 id: userId,
                 name: userData?.displayName || userData?.name || request.auth.token.name || request.auth.token.email?.split('@')[0] || 'User',
                 email: userData?.email || request.auth.token.email,
                 image: userData?.photoURL || userData?.profilePicture || userData?.avatar || request.auth.token.picture,
-                role: userData?.role || 'user',
+                role: streamRole, // Use Stream Chat compatible role
+                firebaseRole: userData?.role, // Store original role as custom field
                 organizationID: userData?.organizationID || userData?.orgId,
-                isActive: userData?.isActive !== false, // Default to true if not specified
-                // Add debug info to help troubleshoot
-                firebaseFields: Object.keys(userData || {})
+                isActive: userData?.isActive !== false // Default to true if not specified
             };
             
             console.log(`Stream Chat user data:`, JSON.stringify(streamUserData, null, 2));
@@ -2737,5 +2745,216 @@ exports.generateStreamChatToken = onCall({
             success: false,
             error: `Token generation failed: ${error?.message || String(error) || 'Unknown error'}`
         };
+    }
+});
+
+// Function to sync users to Stream Chat
+exports.syncUsersToStreamChat = onCall({
+    cors: true,
+    enforceAppCheck: false,
+}, async (request) => {
+    console.log('Starting Stream Chat user sync');
+    
+    // Check authentication
+    if (!request.auth) {
+        console.error('No authentication provided');
+        return { success: false, error: 'Authentication required' };
+    }
+
+    const { userIds } = request.data;
+    
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+        return { success: false, error: 'userIds array is required' };
+    }
+
+    try {
+        // Initialize Stream Chat with server credentials
+        const StreamChat = require('stream-chat').StreamChat;
+        
+        const apiKey = process.env.STREAM_KEY || 'fgxkbmk4kp9f';
+        const apiSecret = process.env.STREAM_SECRET || 'bh9rb2p38b9xcv3gm2t2fe9s7htv6wxv5gcpkb2dc6v4e85zxpptmc5h4m4fjs23';
+        
+        if (!apiKey || !apiSecret) {
+            console.error('Stream Chat credentials not configured');
+            return { success: false, error: 'Stream Chat not configured' };
+        }
+        
+        const serverClient = StreamChat.getInstance(apiKey, apiSecret);
+        
+        // Get the requesting user's organization
+        const requestingUserDoc = await db.collection('users').doc(request.auth.uid).get();
+        
+        if (!requestingUserDoc.exists) {
+            return { success: false, error: 'Requesting user not found' };
+        }
+
+        const requestingUser = requestingUserDoc.data();
+        const organizationId = requestingUser.organizationID;
+
+        if (!organizationId) {
+            return { success: false, error: 'User must belong to an organization' };
+        }
+
+        // Fetch all requested users from Firestore
+        const userPromises = userIds.map(userId => 
+            db.collection('users').doc(userId).get()
+        );
+        
+        const userDocs = await Promise.all(userPromises);
+        
+        // Filter users that exist and belong to the same organization
+        const usersToSync = [];
+        userDocs.forEach(doc => {
+            if (doc.exists) {
+                const userData = doc.data();
+                if (userData.organizationID === organizationId) {
+                    usersToSync.push({
+                        id: doc.id,
+                        ...userData
+                    });
+                }
+            }
+        });
+
+        if (usersToSync.length === 0) {
+            return { 
+                success: false, 
+                message: 'No valid users found to sync',
+                syncedCount: 0 
+            };
+        }
+
+        // Sync users to Stream Chat
+        const syncPromises = usersToSync.map(async (user) => {
+            try {
+                // Map Firebase roles to Stream Chat roles
+                let streamRole = 'user';
+                if (user.role === 'admin' || user.role === 'owner') {
+                    streamRole = 'admin';
+                }
+                
+                const streamUserData = {
+                    id: user.id,
+                    name: user.displayName || user.email?.split('@')[0] || 'User',
+                    email: user.email,
+                    image: user.photoURL || user.originalPhotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || user.email)}&background=6366f1&color=fff&size=200`,
+                    role: streamRole,
+                    firebaseRole: user.role, // Store original role as custom field
+                    organizationID: user.organizationID
+                };
+
+                // Upsert user in Stream Chat
+                await serverClient.upsertUser(streamUserData);
+                
+                return { success: true, userId: user.id };
+            } catch (error) {
+                console.error(`Failed to sync user ${user.id}:`, error);
+                return { success: false, userId: user.id, error: error.message };
+            }
+        });
+
+        const results = await Promise.all(syncPromises);
+        const successCount = results.filter(r => r.success).length;
+
+        return {
+            success: true,
+            message: `Successfully synced ${successCount} out of ${usersToSync.length} users`,
+            syncedCount: successCount,
+            results: results
+        };
+
+    } catch (error) {
+        console.error('Error in syncUsersToStreamChat:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Function to create a chat channel with proper user sync
+// Export the migration function
+exports.migrateOrganizationUsersToStream = migrateOrganizationUsersToStream;
+
+exports.createChatChannel = onCall({
+    cors: true,
+    enforceAppCheck: false,
+}, async (request) => {
+    console.log('Starting Stream Chat channel creation');
+    
+    // Check authentication
+    if (!request.auth) {
+        console.error('No authentication provided');
+        return { success: false, error: 'Authentication required' };
+    }
+
+    const { channelType, channelId, members, channelData } = request.data;
+
+    if (!channelType || !channelId || !members || !Array.isArray(members)) {
+        return { success: false, error: 'Missing required parameters' };
+    }
+
+    try {
+        // Initialize Stream Chat with server credentials
+        const StreamChat = require('stream-chat').StreamChat;
+        
+        const apiKey = process.env.STREAM_KEY || 'fgxkbmk4kp9f';
+        const apiSecret = process.env.STREAM_SECRET || 'bh9rb2p38b9xcv3gm2t2fe9s7htv6wxv5gcpkb2dc6v4e85zxpptmc5h4m4fjs23';
+        
+        if (!apiKey || !apiSecret) {
+            console.error('Stream Chat credentials not configured');
+            return { success: false, error: 'Stream Chat not configured' };
+        }
+        
+        const serverClient = StreamChat.getInstance(apiKey, apiSecret);
+        
+        // First, ensure all members exist in Stream Chat
+        const userDocs = await Promise.all(
+            members.map(memberId => 
+                db.collection('users').doc(memberId).get()
+            )
+        );
+
+        // Sync all members to Stream Chat
+        const syncPromises = userDocs.map(async (doc) => {
+            if (doc.exists) {
+                const userData = doc.data();
+                const streamUserData = {
+                    id: doc.id,
+                    name: userData.displayName || userData.email?.split('@')[0] || 'User',
+                    email: userData.email,
+                    image: userData.photoURL || userData.originalPhotoURL,
+                    role: userData.role || 'user',
+                    organizationID: userData.organizationID
+                };
+
+                try {
+                    await serverClient.upsertUser(streamUserData);
+                    return true;
+                } catch (error) {
+                    console.error(`Failed to sync user ${doc.id}:`, error);
+                    return false;
+                }
+            }
+            return false;
+        });
+
+        await Promise.all(syncPromises);
+
+        // Create the channel with all members
+        const channel = serverClient.channel(channelType, channelId, {
+            ...channelData,
+            members: members,
+            created_by_id: request.auth.uid
+        });
+
+        await channel.create();
+
+        return {
+            success: true,
+            channelId: channelId,
+            message: 'Channel created successfully with all members'
+        };
+
+    } catch (error) {
+        console.error('Error in createChatChannel:', error);
+        return { success: false, error: error.message };
     }
 });

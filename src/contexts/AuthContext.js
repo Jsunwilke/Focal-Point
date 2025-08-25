@@ -10,6 +10,7 @@ import {
   createOrganization,
 } from "../firebase/firestore";
 import secureLogger from '../utils/secureLogger';
+import userMigrationService from '../services/userMigrationService';
 
 const AuthContext = createContext({});
 
@@ -154,6 +155,9 @@ export const AuthProvider = ({ children }) => {
             hasOrganizationID: !!profile?.organizationID,
             isActive: profile?.isActive 
           });
+          
+          // Note: User sync to Stream Chat happens when they access the chat feature
+          // This avoids trying to sync before Stream Chat is connected
 
           // Get organization if user has one
           if (profile?.organizationID) {
@@ -225,12 +229,25 @@ export const AuthProvider = ({ children }) => {
       const organizationID = await createOrganization(studioData);
 
       // Create user profile with organization link
-      await createUserProfile(user.uid, {
+      const profileData = {
         ...userData,
         email,
         organizationID,
         role: "admin",
-      });
+      };
+      
+      await createUserProfile(user.uid, profileData);
+      
+      // Sync new user to Stream Chat
+      try {
+        await userMigrationService.syncSingleUser({
+          uid: user.uid,
+          ...profileData
+        });
+        secureLogger.debug("New user synced to Stream Chat");
+      } catch (error) {
+        secureLogger.warn("Failed to sync new user to Stream Chat", error);
+      }
 
       return user;
     } finally {
