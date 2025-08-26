@@ -6,7 +6,7 @@ import {
   Thread, 
   Window,
   TypingIndicator,
-  MessageTeam,
+  MessageSimple,
   Chat
 } from 'stream-chat-react';
 import { EmojiPicker } from 'stream-chat-react/emojis';
@@ -152,7 +152,7 @@ const ChatWidget = () => {
                         </div>
                       </div>
                       <MessageList 
-                        Message={MessageTeam}
+                        Message={MessageSimple}
                         messageActions={['edit', 'delete', 'react', 'reply']}
                         reactionOptions={[
                           { name: 'like', emoji: '👍' },

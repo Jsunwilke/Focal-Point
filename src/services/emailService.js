@@ -7,13 +7,9 @@ import { functions } from "../firebase/config";
 
 // Initialize EmailJS (call this once when the app loads)
 export const initEmailService = () => {
-  // Check if emailjs is available
-  if (typeof window !== 'undefined' && window.emailjs) {
-    window.emailjs.init(EMAILJS_PUBLIC_KEY);
-    return true;
-  }
-  console.warn('EmailJS not loaded. Email notifications will not work.');
-  return false;
+  // EmailJS is no longer used - we use Firebase Functions for email
+  // This function is kept for backward compatibility
+  return true;
 };
 
 // Send proofing approval notification

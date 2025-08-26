@@ -4,15 +4,53 @@ import { Image, CheckCircle, XCircle, AlertCircle, Clock, Calendar, Archive, Arc
 import { toggleGalleryArchiveStatus } from "../../../services/proofingService";
 
 const CompactGalleryCard = ({ gallery, onView, isArchived }) => {
-  // Format date
+  // Format date - handles Firestore timestamps, cached timestamps, and regular dates
   const formatDate = (timestamp) => {
     if (!timestamp) return '';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric' 
-    });
+    
+    try {
+      // Handle Firestore Timestamp
+      if (timestamp && typeof timestamp.toDate === 'function') {
+        return timestamp.toDate().toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric' 
+        });
+      }
+      
+      // Handle millisecond timestamp (number)
+      if (typeof timestamp === 'number') {
+        return new Date(timestamp).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric' 
+        });
+      }
+      
+      // Handle object with seconds/nanoseconds (serialized Firestore timestamp)
+      if (timestamp && typeof timestamp === 'object' && 'seconds' in timestamp) {
+        return new Date(timestamp.seconds * 1000).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric' 
+        });
+      }
+      
+      // Handle JavaScript Date objects and date strings
+      const date = new Date(timestamp);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric' 
+        });
+      }
+      
+      return '';
+    } catch (error) {
+      console.error('Error formatting date:', error, timestamp);
+      return '';
+    }
   };
 
   // Get status info

@@ -9,7 +9,7 @@
 }
 
 /* Photographer Card */
-.photographer-card {
+.photographer-list .photographer-card {
   background: white;
   border-radius: 8px;
   border: 1px solid #e5e7eb;
@@ -19,21 +19,24 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  width: auto;
+  height: auto;
 }
 
-.photographer-card:hover {
+.photographer-list .photographer-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   border-color: var(--primary-color);
+  background: white;
 }
 
-.photographer-card__header {
+.photographer-list .photographer-card__header {
   display: flex;
   align-items: center;
   gap: 1rem;
 }
 
-.photographer-card__avatar {
+.photographer-list .photographer-card__avatar {
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -45,22 +48,22 @@
   flex-shrink: 0;
 }
 
-.photographer-card__avatar img {
+.photographer-list .photographer-card__avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.photographer-card__avatar svg {
+.photographer-list .photographer-card__avatar svg {
   color: #9ca3af;
 }
 
-.photographer-card__info {
+.photographer-list .photographer-card__info {
   flex: 1;
   min-width: 0;
 }
 
-.photographer-card__name {
+.photographer-list .photographer-card__name {
   font-size: 1rem;
   font-weight: 600;
   color: #111827;
@@ -70,7 +73,7 @@
   text-overflow: ellipsis;
 }
 
-.photographer-card__last-activity {
+.photographer-list .photographer-card__last-activity {
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -78,16 +81,16 @@
   color: #6b7280;
 }
 
-.photographer-card__last-activity svg {
+.photographer-list .photographer-card__last-activity svg {
   flex-shrink: 0;
 }
 
-.photographer-card__arrow {
+.photographer-list .photographer-card__arrow {
   color: #9ca3af;
   flex-shrink: 0;
 }
 
-.photographer-card__stats {
+.photographer-list .photographer-card__stats {
   display: flex;
   gap: 1rem;
   padding: 1rem 0;
@@ -95,7 +98,7 @@
   border-bottom: 1px solid #f3f4f6;
 }
 
-.photographer-card__stat {
+.photographer-list .photographer-card__stat {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -103,40 +106,40 @@
   gap: 0.25rem;
 }
 
-.photographer-card__stat svg {
+.photographer-list .photographer-card__stat svg {
   color: #6b7280;
 }
 
-.photographer-card__stat--good svg {
+.photographer-list .photographer-card__stat--good svg {
   color: #10b981;
 }
 
-.photographer-card__stat--improvement svg {
+.photographer-list .photographer-card__stat--improvement svg {
   color: #f59e0b;
 }
 
-.photographer-card__stat-value {
+.photographer-list .photographer-card__stat-value {
   font-size: 1.25rem;
   font-weight: 700;
   color: #111827;
 }
 
-.photographer-card__stat--good .photographer-card__stat-value {
+.photographer-list .photographer-card__stat--good .photographer-card__stat-value {
   color: #10b981;
 }
 
-.photographer-card__stat--improvement .photographer-card__stat-value {
+.photographer-list .photographer-card__stat--improvement .photographer-card__stat-value {
   color: #f59e0b;
 }
 
-.photographer-card__stat-label {
+.photographer-list .photographer-card__stat-label {
   font-size: 0.75rem;
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
-.photographer-card__empty {
+.photographer-list .photographer-card__empty {
   text-align: center;
   color: #9ca3af;
   font-size: 0.875rem;
@@ -151,7 +154,7 @@
   padding: 1rem 0;
 }
 
-.photographer-row {
+.photographer-list .photographer-row {
   background: white;
   border-radius: 8px;
   border: 1px solid #e5e7eb;
@@ -161,14 +164,16 @@
   display: flex;
   align-items: center;
   gap: 1.5rem;
+  width: auto;
+  height: auto;
 }
 
-.photographer-row:hover {
+.photographer-list .photographer-row:hover {
   background: #f9fafb;
   border-color: var(--primary-color);
 }
 
-.photographer-row__main {
+.photographer-list .photographer-row__main {
   flex: 1;
   display: flex;
   align-items: center;
@@ -176,7 +181,7 @@
   min-width: 0;
 }
 
-.photographer-row__avatar {
+.photographer-list .photographer-row__avatar {
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -188,35 +193,35 @@
   flex-shrink: 0;
 }
 
-.photographer-row__avatar img {
+.photographer-list .photographer-row__avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.photographer-row__info {
+.photographer-list .photographer-row__info {
   flex: 1;
   min-width: 0;
 }
 
-.photographer-row__name {
+.photographer-list .photographer-row__name {
   font-size: 0.875rem;
   font-weight: 600;
   color: #111827;
   margin: 0 0 0.125rem 0;
 }
 
-.photographer-row__meta {
+.photographer-list .photographer-row__meta {
   font-size: 0.75rem;
   color: #6b7280;
 }
 
-.photographer-row__stats {
+.photographer-list .photographer-row__stats {
   display: flex;
   gap: 1.5rem;
 }
 
-.photographer-row__stat {
+.photographer-list .photographer-row__stat {
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -225,27 +230,27 @@
   font-weight: 500;
 }
 
-.photographer-row__stat svg {
+.photographer-list .photographer-row__stat svg {
   color: #9ca3af;
 }
 
-.photographer-row__stat--good {
+.photographer-list .photographer-row__stat--good {
   color: #10b981;
 }
 
-.photographer-row__stat--good svg {
+.photographer-list .photographer-row__stat--good svg {
   color: #10b981;
 }
 
-.photographer-row__stat--improvement {
+.photographer-list .photographer-row__stat--improvement {
   color: #f59e0b;
 }
 
-.photographer-row__stat--improvement svg {
+.photographer-list .photographer-row__stat--improvement svg {
   color: #f59e0b;
 }
 
-.photographer-row__last-activity {
+.photographer-list .photographer-row__last-activity {
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -254,7 +259,7 @@
   white-space: nowrap;
 }
 
-.photographer-row__arrow {
+.photographer-list .photographer-row__arrow {
   color: #9ca3af;
   flex-shrink: 0;
 }
@@ -293,26 +298,26 @@
     grid-template-columns: 1fr;
   }
   
-  .photographer-row {
+  .photographer-list .photographer-row {
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
   }
   
-  .photographer-row__main {
+  .photographer-list .photographer-row__main {
     width: 100%;
   }
   
-  .photographer-row__stats {
+  .photographer-list .photographer-row__stats {
     width: 100%;
     justify-content: space-between;
   }
   
-  .photographer-row__last-activity {
+  .photographer-list .photographer-row__last-activity {
     width: 100%;
   }
   
-  .photographer-row__arrow {
+  .photographer-list .photographer-row__arrow {
     display: none;
   }
 }

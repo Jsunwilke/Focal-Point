@@ -23,7 +23,7 @@ const Settings = () => {
   const [activeModal, setActiveModal] = useState(null);
 
   // Check if user is admin
-  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager';
+  const isAdminOrManager = userProfile?.role === 'admin' || userProfile?.role === 'manager';
 
   const settingsCards = [
     {
@@ -41,7 +41,7 @@ const Settings = () => {
       description: "Manage studio information and organization settings",
       icon: <Building2 size={24} />,
       color: "green",
-      available: isAdmin,
+      available: isAdminOrManager,
       modal: "studio"
     },
     {
@@ -50,7 +50,7 @@ const Settings = () => {
       description: "Create and manage custom daily report templates",
       icon: <FileText size={24} />,
       color: "purple",
-      available: isAdmin,
+      available: isAdminOrManager,
       action: "navigate",
       path: "/settings/templates"
     },
@@ -60,7 +60,7 @@ const Settings = () => {
       description: "Manage team members and permissions",
       icon: <Users size={24} />,
       color: "orange",
-      available: isAdmin,
+      available: isAdminOrManager,
       action: "navigate",
       path: "/team"
     },
@@ -70,7 +70,7 @@ const Settings = () => {
       description: "Manage schools and their information",
       icon: <School size={24} />,
       color: "indigo",
-      available: isAdmin,
+      available: userProfile?.role === 'admin',
       action: "navigate",
       path: "/schools"
     }
@@ -129,7 +129,7 @@ const Settings = () => {
                 <h3 className="settings-card__title">{card.title}</h3>
                 <p className="settings-card__description">{card.description}</p>
                 {!card.available && (
-                  <p className="settings-card__restriction">Admin access required</p>
+                  <p className="settings-card__restriction">Permission required</p>
                 )}
               </div>
               {card.available && (card.modal || card.action === 'navigate') && (

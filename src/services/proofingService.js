@@ -103,15 +103,9 @@ export const addPhotosToGallery = async (galleryId, files, onProgress, signal) =
     // Upload the photos
     const result = await uploadProofImages(galleryId, files, onProgress, signal);
     
-    // Get current gallery to update count
-    const galleryDoc = await getDoc(doc(firestore, "proofGalleries", galleryId));
-    const currentTotal = galleryDoc.data().totalImages || 0;
-    
-    // Update the total image count
-    await updateDoc(doc(firestore, "proofGalleries", galleryId), {
-      totalImages: currentTotal + result.uploaded.length,
-      updatedAt: serverTimestamp()
-    });
+    // Recalculate counts to ensure accuracy (this also updates status)
+    // This is more reliable than incrementing as it counts actual proofs in database
+    await recalculateGalleryCounts(galleryId);
     
     readCounter.recordRead("get", "proofGalleries", "addPhotosToGallery", 1);
     readCounter.recordRead("update", "proofGalleries", "addPhotosToGallery", 1);
@@ -159,7 +153,7 @@ export const subscribeToGalleries = (organizationId, callback, errorCallback, is
     collection(firestore, "proofGalleries"),
     where("organizationId", "==", organizationId),
     where("isArchived", "==", isArchived),
-    orderBy("createdAt", "desc")
+    orderBy("createdAt", "asc")
   );
   
   return onSnapshot(
@@ -467,14 +461,23 @@ export const updateProofStatus = async (galleryId, proofId, status, denialNotes,
     
     // Get current proof status to update counts correctly
     const proofDoc = await getDoc(proofRef);
-    const currentStatus = proofDoc.data()?.status;
+    const currentStatus = proofDoc.data()?.status || "pending";
     
+    // Only update counts if status actually changed
     if (currentStatus !== status) {
-      if (currentStatus === "approved") updates.approvedCount = increment(-1);
-      if (currentStatus === "denied") updates.deniedCount = increment(-1);
+      // Decrement old status count (if it was approved/denied)
+      if (currentStatus === "approved") {
+        updates.approvedCount = increment(-1);
+      } else if (currentStatus === "denied") {
+        updates.deniedCount = increment(-1);
+      }
       
-      if (status === "approved") updates.approvedCount = increment(1);
-      if (status === "denied") updates.deniedCount = increment(1);
+      // Increment new status count (if it's approved/denied)
+      if (status === "approved") {
+        updates.approvedCount = increment(1);
+      } else if (status === "denied") {
+        updates.deniedCount = increment(1);
+      }
     }
     
     batch.update(galleryRef, updates);
@@ -929,6 +932,93 @@ export const getProofRevisions = async (proofId) => {
     return revisions;
   } catch (error) {
     console.error("Error getting proof revisions:", error);
+    throw error;
+  }
+};
+
+// Recalculate approved/denied counts for a gallery
+export const recalculateGalleryCounts = async (galleryId) => {
+  try {
+    // Get all proofs for this gallery
+    const proofsQuery = query(
+      collection(firestore, "proofs"),
+      where("galleryId", "==", galleryId)
+    );
+    
+    const proofsSnapshot = await getDocs(proofsQuery);
+    
+    // Count approved and denied
+    let approvedCount = 0;
+    let deniedCount = 0;
+    let totalImages = proofsSnapshot.size;
+    
+    proofsSnapshot.forEach(doc => {
+      const proof = doc.data();
+      if (proof.status === 'approved') {
+        approvedCount++;
+      } else if (proof.status === 'denied') {
+        deniedCount++;
+      }
+    });
+    
+    // Update gallery with correct counts
+    const galleryRef = doc(firestore, "proofGalleries", galleryId);
+    
+    // Prepare updates
+    const updates = {
+      totalImages,
+      approvedCount,
+      deniedCount,
+      updatedAt: serverTimestamp()
+    };
+    
+    // Check if gallery has createdAt field, add it if missing
+    const galleryDoc = await getDoc(galleryRef);
+    const galleryData = galleryDoc.data();
+    if (!galleryData.createdAt) {
+      console.log(`Adding missing createdAt for gallery ${galleryId}`);
+      updates.createdAt = serverTimestamp();
+    }
+    
+    await updateDoc(galleryRef, updates);
+    
+    // Update gallery status
+    await updateGalleryStatus(galleryId);
+    
+    readCounter.recordRead("query", "proofs", "recalculateGalleryCounts", proofsSnapshot.size);
+    readCounter.recordRead("update", "proofGalleries", "recalculateGalleryCounts", 1);
+    
+    console.log(`Recalculated counts for gallery ${galleryId}: ${approvedCount} approved, ${deniedCount} denied, ${totalImages} total`);
+    
+    return { approvedCount, deniedCount, totalImages };
+  } catch (error) {
+    console.error("Error recalculating gallery counts:", error);
+    throw error;
+  }
+};
+
+// Batch recalculate counts for all galleries in an organization
+export const recalculateAllGalleryCounts = async (organizationId) => {
+  try {
+    const galleriesQuery = query(
+      collection(firestore, "proofGalleries"),
+      where("organizationId", "==", organizationId)
+    );
+    
+    const galleriesSnapshot = await getDocs(galleriesQuery);
+    
+    console.log(`Recalculating counts for ${galleriesSnapshot.size} galleries...`);
+    
+    const results = [];
+    for (const galleryDoc of galleriesSnapshot.docs) {
+      const result = await recalculateGalleryCounts(galleryDoc.id);
+      results.push({ galleryId: galleryDoc.id, ...result });
+    }
+    
+    console.log('Finished recalculating all gallery counts');
+    return results;
+  } catch (error) {
+    console.error("Error recalculating all gallery counts:", error);
     throw error;
   }
 };

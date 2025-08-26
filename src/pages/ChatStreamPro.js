@@ -8,7 +8,7 @@ import {
   Window,
   ChannelHeader,
   TypingIndicator,
-  MessageTeam,
+  MessageSimple,
   useChannelStateContext,
   useChatContext,
   Avatar,
@@ -199,7 +199,7 @@ const ChatStreamPro = () => {
                         onSettingsClick={() => setShowChannelSettings(true)} 
                       />
                       <MessageList 
-                        Message={MessageTeam}
+                        Message={MessageSimple}
                         messageActions={['edit', 'delete', 'react', 'reply', 'quote']}
                         reactionOptions={[
                           { name: 'like', emoji: '👍' },
@@ -284,7 +284,7 @@ const ChatStreamPro = () => {
                 }}
               />
               <MessageList 
-                Message={MessageTeam}
+                Message={MessageSimple}
                 messageActions={['edit', 'delete', 'react', 'reply', 'quote', 'pin']}
                 reactionOptions={[
                   { name: 'like', emoji: '👍' },

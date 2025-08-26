@@ -125,7 +125,7 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
   const [dragOverIndex, setDragOverIndex] = useState(null);
 
   // Check if user has admin permissions
-  const isAdmin = userProfile?.role === "admin";
+  const isAdmin = userProfile?.role === "admin" || userProfile?.role === "manager";
 
   // Initialize form data when modal opens or organization changes
   useEffect(() => {
@@ -581,8 +581,8 @@ const StudioSettingsModal = ({ isOpen, onClose }) => {
           <div className="modal__content">
             <div className="access-denied">
               <Shield size={48} className="access-denied__icon" />
-              <h3>Admin Access Required</h3>
-              <p>Only administrators can access studio settings.</p>
+              <h3>Permission Required</h3>
+              <p>Only administrators and managers can access studio settings.</p>
             </div>
           </div>
           <div className="modal__actions">

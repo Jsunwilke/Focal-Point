@@ -6,7 +6,7 @@ class ProofingCacheService {
     this.CACHE_PREFIX = 'focal_proofing_';
     this.GALLERIES_KEY = 'galleries';
     this.PROOFS_KEY = 'proofs';
-    this.CACHE_VERSION = '1.0';
+    this.CACHE_VERSION = '1.2'; // Updated to fix timestamp serialization using toMillis()
     this.MAX_CACHE_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
   }
 
@@ -48,8 +48,35 @@ class ProofingCacheService {
   setCachedGalleries(organizationId, galleries) {
     try {
       const key = this.getCacheKey(this.GALLERIES_KEY, organizationId);
+      
+      // Convert Firestore Timestamps to serializable format
+      const serializableGalleries = galleries.map(gallery => {
+        const serialized = { ...gallery };
+        
+        // Convert createdAt timestamp to milliseconds
+        if (gallery.createdAt && typeof gallery.createdAt.toDate === 'function') {
+          serialized.createdAt = gallery.createdAt.toMillis();
+        }
+        
+        // Convert deadline timestamp if it exists
+        if (gallery.deadline) {
+          if (typeof gallery.deadline.toDate === 'function') {
+            serialized.deadline = gallery.deadline.toMillis();
+          } else if (gallery.deadline instanceof Date) {
+            serialized.deadline = gallery.deadline.getTime();
+          }
+        }
+        
+        // Convert updatedAt timestamp
+        if (gallery.updatedAt && typeof gallery.updatedAt.toDate === 'function') {
+          serialized.updatedAt = gallery.updatedAt.toMillis();
+        }
+        
+        return serialized;
+      });
+      
       const cacheData = {
-        data: galleries,
+        data: serializableGalleries,
         timestamp: Date.now(),
         version: this.CACHE_VERSION
       };
@@ -124,6 +151,25 @@ class ProofingCacheService {
       localStorage.removeItem(proofsKey);
     } catch (error) {
       console.error('Error clearing gallery cache:', error);
+    }
+  }
+
+  // Clear all proofing caches
+  clearAllCaches() {
+    try {
+      // Get all localStorage keys
+      const keys = Object.keys(localStorage);
+      
+      // Remove all proofing-related cache entries
+      keys.forEach(key => {
+        if (key.startsWith(this.CACHE_PREFIX)) {
+          localStorage.removeItem(key);
+        }
+      });
+      
+      console.log('All proofing caches cleared');
+    } catch (error) {
+      console.error('Error clearing all caches:', error);
     }
   }
 

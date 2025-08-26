@@ -768,35 +768,36 @@ const EditSessionModal = ({
 
         {/* Modal Footer */}
         <div className="modal-footer">
-          {/* Delete Button */}
-          {!showDeleteConfirm ? (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={loading}
-              style={{ 
-                background: "#dc3545", 
-                color: "white", 
-                border: "1px solid #dc3545" 
-              }}
-            >
-              <Trash2 size={12} />
-              Delete
-            </button>
-          ) : (
-            <div style={{ display: "flex", gap: "8px" }}>
+          {/* Delete Button - Only for admins and managers */}
+          {(userProfile?.role === 'admin' || userProfile?.role === 'manager') && (
+            !showDeleteConfirm ? (
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={deleteLoading}
-                style={{ fontSize: "12px", padding: "4px 8px" }}
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={loading}
+                style={{ 
+                  background: "#dc3545", 
+                  color: "white", 
+                  border: "1px solid #dc3545" 
+                }}
               >
-                Cancel
+                <Trash2 size={12} />
+                Delete
               </button>
-              <button
-                type="button"
+            ) : (
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={deleteLoading}
+                  style={{ fontSize: "12px", padding: "4px 8px" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
                 className="btn btn-primary"
                 onClick={handleDelete}
                 disabled={deleteLoading}
@@ -810,6 +811,7 @@ const EditSessionModal = ({
                 {deleteLoading ? "Deleting..." : "Confirm Delete"}
               </button>
             </div>
+            )
           )}
 
           <div style={{ display: "flex", gap: "8px" }}>

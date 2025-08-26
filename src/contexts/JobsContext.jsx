@@ -81,7 +81,7 @@ export const JobsProvider = ({ children }) => {
     const jobsQuery = query(
       collection(firestore, SPORTS_JOBS_COLLECTION),
       where("organizationID", "==", organization.id),
-      orderBy("shootDate", "desc")
+      orderBy("shootDate", "asc")
     );
 
     const trackedOnSnapshot = createTrackedOnSnapshot('JobsContext');

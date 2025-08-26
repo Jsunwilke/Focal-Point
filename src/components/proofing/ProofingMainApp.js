@@ -9,7 +9,7 @@ import SearchControls from "./search/SearchControls";
 import CreateGalleryModal from "./CreateGalleryModal";
 import GalleryDetailsModal from "./GalleryDetailsModal";
 import EditGalleryModal from "./EditGalleryModal";
-import { subscribeToGalleries } from "../../services/proofingService";
+import { subscribeToGalleries, recalculateAllGalleryCounts } from "../../services/proofingService";
 import { proofingCacheService } from "../../services/proofingCacheService";
 import { readCounter } from "../../services/readCounter";
 
@@ -120,6 +120,34 @@ const ProofingMainApp = () => {
 
   // Get the current galleries based on active tab
   const currentGalleries = activeTab === "archived" ? archivedGalleries : activeGalleries;
+
+  // One-time recalculation of gallery counts to fix existing data
+  useEffect(() => {
+    if (!organization?.id) return;
+    
+    // Check if we've already run recalculation for this organization
+    const recalcKey = `proofing_counts_recalculated_${organization.id}_v3`; // v3 to force re-run
+    const hasRecalculated = localStorage.getItem(recalcKey);
+    
+    if (!hasRecalculated) {
+      console.log('Running one-time gallery count recalculation...');
+      
+      // Clear cache to ensure fresh data
+      proofingCacheService.clearAllCaches();
+      
+      // Run recalculation in background
+      recalculateAllGalleryCounts(organization.id)
+        .then(results => {
+          console.log('Gallery count recalculation complete:', results);
+          // Mark as completed
+          localStorage.setItem(recalcKey, 'true');
+          showToast('Success', 'Gallery counts have been updated', 'success');
+        })
+        .catch(error => {
+          console.error('Error recalculating gallery counts:', error);
+        });
+    }
+  }, [organization?.id, showToast]);
 
   // Show loading spinner while data is loading
   if (loading) {
