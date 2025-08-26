@@ -74,18 +74,20 @@ const JobList = ({ isArchived, searchState, onViewJob, viewMode = "flat" }) => {
     if (viewMode !== "folders") return filteredJobs;
 
     if (currentFolderView.level === "root") {
-      // Show schools
-      return Object.keys(folderStructure).map((schoolName) => {
-        const totalJobs = Object.values(folderStructure[schoolName]).reduce(
-          (acc, jobs) => acc + jobs.length,
-          0
-        );
-        return {
-          name: schoolName,
-          count: totalJobs,
-          type: "school",
-        };
-      });
+      // Show schools in alphabetical order
+      return Object.keys(folderStructure)
+        .sort((a, b) => a.localeCompare(b))
+        .map((schoolName) => {
+          const totalJobs = Object.values(folderStructure[schoolName]).reduce(
+            (acc, jobs) => acc + jobs.length,
+            0
+          );
+          return {
+            name: schoolName,
+            count: totalJobs,
+            type: "school",
+          };
+        });
     } else if (currentFolderView.level === "school") {
       // Show years for selected school
       const schoolData = folderStructure[currentFolderView.school] || {};

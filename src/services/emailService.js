@@ -1,12 +1,9 @@
 // src/services/emailService.js
 // Email service for sending notifications
-// Using EmailJS as a frontend email solution
+// Using Firebase Cloud Functions for backend email delivery
 
-// EmailJS configuration
-// Note: These should ideally be in environment variables
-const EMAILJS_SERVICE_ID = 'service_focal_point'; // Replace with your EmailJS service ID
-const EMAILJS_TEMPLATE_ID = 'template_proofing_approval'; // Replace with your EmailJS template ID
-const EMAILJS_PUBLIC_KEY = 'YOUR_PUBLIC_KEY'; // Replace with your EmailJS public key
+import { httpsCallable } from "firebase/functions";
+import { functions } from "../firebase/config";
 
 // Initialize EmailJS (call this once when the app loads)
 export const initEmailService = () => {
@@ -61,28 +58,35 @@ export const sendProofingApprovalEmail = async (recipientEmail, recipientName, g
   }
 };
 
-// Send batch notifications to multiple recipients
+// Send batch notifications to multiple recipients via Firebase Function
 export const sendBatchProofingApprovalEmails = async (recipients, galleryDetails) => {
-  const results = [];
-  
-  // Send emails one by one to avoid rate limiting
-  for (const recipient of recipients) {
-    const result = await sendProofingApprovalEmail(
-      recipient.email,
-      `${recipient.firstName} ${recipient.lastName}`,
-      galleryDetails
-    );
-    
-    results.push({
-      recipient: recipient.email,
-      ...result
+  try {
+    console.log('Calling Firebase Function to send approval emails', {
+      recipients: recipients.length,
+      galleryId: galleryDetails.id
     });
     
-    // Add a small delay between emails to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Get organizationId from first recipient or gallery details
+    const organizationId = recipients[0]?.organizationId || galleryDetails.organizationId;
+    
+    if (!organizationId) {
+      console.error('No organizationId found for email notifications');
+      return { success: false, error: 'Missing organization ID' };
+    }
+    
+    // Call the working Firebase Function
+    const sendEmailFunction = httpsCallable(functions, 'sendProofingApprovalEmailManual');
+    const result = await sendEmailFunction({
+      galleryId: galleryDetails.id,
+      organizationId: organizationId
+    });
+    
+    console.log('Email function result:', result.data);
+    return result.data;
+  } catch (error) {
+    console.error('Failed to send approval emails:', error);
+    return { success: false, error: error.message };
   }
-  
-  return results;
 };
 
 // Alternative backend integration (for future Firebase Functions implementation)

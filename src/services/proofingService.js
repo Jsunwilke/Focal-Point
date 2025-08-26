@@ -580,7 +580,8 @@ const sendProofingApprovalNotifications = async (galleryId, galleryData) => {
       name: galleryData.name,
       schoolName: galleryData.schoolName,
       totalImages: galleryData.totalImages,
-      approvedBy: galleryData.lastApprovedBy || 'Client'
+      approvedBy: galleryData.lastApprovedBy || 'Client',
+      organizationId: galleryData.organizationId
     };
     
     // Send batch emails
@@ -763,11 +764,31 @@ export const batchReplaceProofImages = async (galleryId, replacements, userEmail
     
     // Update gallery to reflect pending status if any images were versioned
     if (uploadedVersions.length > 0) {
-      const galleryRef = doc(firestore, "proofGalleries", galleryId);
-      batch.update(galleryRef, {
+      // Count how many denied/approved photos are being replaced
+      let deniedToReplace = 0;
+      let approvedToReplace = 0;
+      
+      replacements.forEach(replacement => {
+        if (replacement.oldProof?.status === 'denied') deniedToReplace++;
+        if (replacement.oldProof?.status === 'approved') approvedToReplace++;
+      });
+      
+      // Build gallery updates
+      const galleryUpdates = {
         status: "partial", // Gallery has mixed statuses
         updatedAt: serverTimestamp()
-      });
+      };
+      
+      // Decrement counts for replaced photos
+      if (deniedToReplace > 0) {
+        galleryUpdates.deniedCount = increment(-deniedToReplace);
+      }
+      if (approvedToReplace > 0) {
+        galleryUpdates.approvedCount = increment(-approvedToReplace);
+      }
+      
+      const galleryRef = doc(firestore, "proofGalleries", galleryId);
+      batch.update(galleryRef, galleryUpdates);
     }
     
     // Log activity
@@ -787,6 +808,9 @@ export const batchReplaceProofImages = async (galleryId, replacements, userEmail
     
     // Clear cache for this gallery
     proofingCacheService.clearGalleryCache(galleryId);
+    
+    // Update gallery status after replacements
+    await updateGalleryStatus(galleryId);
     
     // Collect unique emails of users who denied the replaced images
     const deniedByEmails = new Set();

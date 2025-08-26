@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Table, Button } from "react-bootstrap";
+import { Table, Button, Dropdown, Form } from "react-bootstrap";
 import {
   ChevronUp,
   ChevronDown,
@@ -7,6 +7,8 @@ import {
   Edit,
   Trash2,
   Star,
+  Filter,
+  X,
 } from "lucide-react";
 import { useJobs } from "../../../contexts/JobsContext";
 import RosterEntryModal from "./RosterEntryModal";
@@ -22,6 +24,11 @@ const RosterTable = ({ roster, jobId, highlightPlayerId }) => {
   const [tempValue, setTempValue] = useState("");
   const [fontSize, setFontSize] = useState(14); // Base font size in px
   const [showOnlyFilledBlanks, setShowOnlyFilledBlanks] = useState(false);
+  
+  // Filter states
+  const [teacherFilter, setTeacherFilter] = useState("");
+  const [groupFilter, setGroupFilter] = useState("");
+  const [imageFilter, setImageFilter] = useState("all"); // all, with, without
 
   // Column width state - using percentages for responsive design
   const [columnWidths, setColumnWidths] = useState({
@@ -51,11 +58,36 @@ const RosterTable = ({ roster, jobId, highlightPlayerId }) => {
     
     // Apply filled blanks filter if enabled
     if (showOnlyFilledBlanks) {
-      filteredRoster = roster.filter(entry => entry.isFilledBlank === true);
+      filteredRoster = filteredRoster.filter(entry => entry.isFilledBlank === true);
+    }
+    
+    // Apply teacher filter
+    if (teacherFilter) {
+      filteredRoster = filteredRoster.filter(entry => 
+        entry.teacher && entry.teacher === teacherFilter
+      );
+    }
+    
+    // Apply group filter
+    if (groupFilter) {
+      filteredRoster = filteredRoster.filter(entry => 
+        entry.group && entry.group === groupFilter
+      );
+    }
+    
+    // Apply image filter
+    if (imageFilter === "with") {
+      filteredRoster = filteredRoster.filter(entry => 
+        entry.imageNumbers && entry.imageNumbers.trim() !== ""
+      );
+    } else if (imageFilter === "without") {
+      filteredRoster = filteredRoster.filter(entry => 
+        !entry.imageNumbers || entry.imageNumbers.trim() === ""
+      );
     }
     
     sortRoster(filteredRoster, sortField, sortDirection);
-  }, [roster, sortField, sortDirection, showOnlyFilledBlanks]);
+  }, [roster, sortField, sortDirection, showOnlyFilledBlanks, teacherFilter, groupFilter, imageFilter]);
 
   useEffect(() => {
     if (highlightPlayerId) {
@@ -409,16 +441,150 @@ const RosterTable = ({ roster, jobId, highlightPlayerId }) => {
     "imageNumbers",
     "notes",
   ];
+  
+  // Get unique values for filters
+  const uniqueTeachers = [...new Set(roster.filter(entry => entry.teacher).map(entry => entry.teacher))].sort();
+  const uniqueGroups = [...new Set(roster.filter(entry => entry.group).map(entry => entry.group))].sort();
+  
+  // Count athletes with images
+  const withImagesCount = roster.filter(entry => entry.imageNumbers && entry.imageNumbers.trim() !== "").length;
+  const withoutImagesCount = roster.length - withImagesCount;
+  
+  // Check if any filters are active
+  const hasActiveFilters = teacherFilter || groupFilter || imageFilter !== "all" || showOnlyFilledBlanks;
+  
+  // Clear all filters
+  const clearAllFilters = () => {
+    setTeacherFilter("");
+    setGroupFilter("");
+    setImageFilter("all");
+    setShowOnlyFilledBlanks(false);
+  };
 
   return (
     <>
       <style>{dynamicStyles}</style>
 
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <div className="d-flex align-items-center gap-3">
-          <h5 className="mb-0">Athletes Roster ({sortedRoster.length}{roster.length !== sortedRoster.length && ` of ${roster.length}`})</h5>
+      <div className="mb-3">
+        <div className="d-flex justify-content-between align-items-center mb-2">
+          <div className="d-flex align-items-center gap-3">
+            <h5 className="mb-0">Athletes Roster ({sortedRoster.length}{roster.length !== sortedRoster.length && ` of ${roster.length}`})</h5>
+            {hasActiveFilters && (
+              <Button 
+                variant="outline-secondary" 
+                size="sm" 
+                onClick={clearAllFilters}
+                className="d-flex align-items-center gap-1"
+              >
+                <X size={14} />
+                Clear Filters
+              </Button>
+            )}
+          </div>
+          <Button variant="primary" size="sm" onClick={handleAddEntry}>
+            Add Athlete
+          </Button>
+        </div>
+        
+        {/* Filter Controls */}
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          <div className="d-flex align-items-center gap-1">
+            <Filter size={16} className="text-muted" />
+            <span className="text-muted small">Filters:</span>
+          </div>
+          
+          {/* Teacher/Special Filter */}
+          {uniqueTeachers.length > 0 && (
+            <Dropdown>
+              <Dropdown.Toggle 
+                variant={teacherFilter ? "primary" : "outline-secondary"} 
+                size="sm"
+                className="d-flex align-items-center gap-1"
+              >
+                Special: {teacherFilter || "All"}
+                {teacherFilter && ` (${sortedRoster.filter(e => e.teacher === teacherFilter).length})`}
+              </Dropdown.Toggle>
+              <Dropdown.Menu style={{ maxHeight: "300px", overflowY: "auto" }}>
+                <Dropdown.Item onClick={() => setTeacherFilter("")}>
+                  All Teachers/Special
+                </Dropdown.Item>
+                <Dropdown.Divider />
+                {uniqueTeachers.map(teacher => (
+                  <Dropdown.Item 
+                    key={teacher} 
+                    onClick={() => setTeacherFilter(teacher)}
+                    active={teacherFilter === teacher}
+                  >
+                    {teacher} ({roster.filter(e => e.teacher === teacher).length})
+                  </Dropdown.Item>
+                ))}
+              </Dropdown.Menu>
+            </Dropdown>
+          )}
+          
+          {/* Group/Sport Filter */}
+          {uniqueGroups.length > 0 && (
+            <Dropdown>
+              <Dropdown.Toggle 
+                variant={groupFilter ? "primary" : "outline-secondary"} 
+                size="sm"
+                className="d-flex align-items-center gap-1"
+              >
+                Sport: {groupFilter || "All"}
+                {groupFilter && ` (${sortedRoster.filter(e => e.group === groupFilter).length})`}
+              </Dropdown.Toggle>
+              <Dropdown.Menu style={{ maxHeight: "300px", overflowY: "auto" }}>
+                <Dropdown.Item onClick={() => setGroupFilter("")}>
+                  All Sports/Groups
+                </Dropdown.Item>
+                <Dropdown.Divider />
+                {uniqueGroups.map(group => (
+                  <Dropdown.Item 
+                    key={group} 
+                    onClick={() => setGroupFilter(group)}
+                    active={groupFilter === group}
+                  >
+                    {group} ({roster.filter(e => e.group === group).length})
+                  </Dropdown.Item>
+                ))}
+              </Dropdown.Menu>
+            </Dropdown>
+          )}
+          
+          {/* Image Filter */}
+          <Dropdown>
+            <Dropdown.Toggle 
+              variant={imageFilter !== "all" ? "primary" : "outline-secondary"} 
+              size="sm"
+              className="d-flex align-items-center gap-1"
+            >
+              Images: {imageFilter === "with" ? "With" : imageFilter === "without" ? "Without" : "All"}
+            </Dropdown.Toggle>
+            <Dropdown.Menu>
+              <Dropdown.Item 
+                onClick={() => setImageFilter("all")}
+                active={imageFilter === "all"}
+              >
+                All Athletes ({roster.length})
+              </Dropdown.Item>
+              <Dropdown.Item 
+                onClick={() => setImageFilter("with")}
+                active={imageFilter === "with"}
+              >
+                With Images ({withImagesCount})
+              </Dropdown.Item>
+              <Dropdown.Item 
+                onClick={() => setImageFilter("without")}
+                active={imageFilter === "without"}
+              >
+                Without Images ({withoutImagesCount})
+              </Dropdown.Item>
+            </Dropdown.Menu>
+          </Dropdown>
+          
+          {/* Filled Blanks Filter */}
           {roster.some(entry => entry.isFilledBlank) && (
-            <div className="form-check mb-0">
+            <div className="form-check mb-0 ms-2">
               <input
                 className="form-check-input"
                 type="checkbox"
@@ -431,8 +597,8 @@ const RosterTable = ({ roster, jobId, highlightPlayerId }) => {
                 htmlFor="showFilledBlanks"
                 style={{ cursor: "pointer" }}
               >
-                <Star size={16} style={{ color: "#ff9800", fill: "#ff9800" }} />
-                Show only filled blanks
+                <Star size={14} style={{ color: "#ff9800", fill: "#ff9800" }} />
+                Filled blanks
                 <span className="badge bg-warning text-dark ms-1">
                   {roster.filter(entry => entry.isFilledBlank).length}
                 </span>
@@ -440,9 +606,6 @@ const RosterTable = ({ roster, jobId, highlightPlayerId }) => {
             </div>
           )}
         </div>
-        <Button variant="primary" size="sm" onClick={handleAddEntry}>
-          Add Athlete
-        </Button>
       </div>
 
       <div className="roster-table-container" ref={containerRef}>
