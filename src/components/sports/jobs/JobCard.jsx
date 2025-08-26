@@ -229,7 +229,7 @@ const JobCard = ({ job, isArchived, onView }) => {
     <>
       <div className={`compact-job-card ${isArchived ? "archived-job" : ""}`}>
         {/* Compact Header */}
-        <div className="compact-header">
+        <div className="sports-card-header">
           <div className="school-info">
             <h4 className="school-name">{job.schoolName}</h4>
             <div className="date-text">

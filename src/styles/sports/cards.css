@@ -24,66 +24,80 @@
   border-left: 3px solid #28a745;
 }
 
-/* Compact Card Header */
-.compact-header {
-  padding: 12px 16px 8px;
+/* Sports Card Header - ultra compact */
+.sports-card-header {
+  padding: 2px 16px 2px;
+  background: rgba(58, 110, 165, 0.03);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  background: rgba(58, 110, 165, 0.03);
+  min-height: 0;
+  height: auto;
 }
 
-.compact-header .school-info {
+.sports-card-header .school-info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
-.compact-header .school-name {
-  font-size: 1rem;
+.sports-card-header h4.school-name {
+  font-size: 1.05rem;
   font-weight: 700;
   color: #1a202c;
-  margin: 0 0 4px 0;
+  margin: 0 0 2px 0;
+  padding: 0;
   line-height: 1.2;
   word-wrap: break-word;
 }
 
-.compact-header .date-text {
+.sports-card-header .date-text {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   color: #64748b;
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   font-weight: 500;
+  line-height: 1;
+  margin: 0;
+  padding: 0;
 }
 
-.compact-header .season-tag {
+.sports-card-header .season-tag {
   background: linear-gradient(135deg, #3a6ea5 0%, #2d5a8a 100%);
   color: white;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
   flex-shrink: 0;
   margin-left: 12px;
+  margin-top: 2px;
+  line-height: 1.2;
+  display: inline-block;
 }
 
 /* Job Meta Information */
 .compact-job-card .job-meta {
-  padding: 0 16px 8px;
+  padding: 0 16px 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 4px;
+  margin: 0;
 }
 
-.job-meta .meta-item {
+.compact-job-card .job-meta .meta-item {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   color: #64748b;
-  font-size: 0.8rem;
+  font-size: 0.65rem;
   font-weight: 500;
+  line-height: 1;
 }
 
 .meta-item i {
