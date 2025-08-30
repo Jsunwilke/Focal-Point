@@ -16,6 +16,7 @@ import { useLocation } from 'react-router-dom';
 import { MessageSquare, X, Send, ChevronLeft, MoreHorizontal, Users } from 'lucide-react';
 import CustomMessageInput from './CustomMessageInput';
 import CustomChannelPreview from './CustomChannelPreview';
+import CustomMessage from './CustomMessage';
 import GiphySelector from './GiphySelector';
 import './ChatWidget.css';
 
@@ -152,7 +153,7 @@ const ChatWidget = () => {
                         </div>
                       </div>
                       <MessageList 
-                        Message={MessageSimple}
+                        Message={CustomMessage}
                         messageActions={['edit', 'delete', 'react', 'reply']}
                         reactionOptions={[
                           { name: 'like', emoji: '👍' },

@@ -394,21 +394,23 @@
   line-height: 20px !important;
 }
 
-/* Much smaller images and attachments */
+/* Much smaller images and attachments (except GIFs) */
 .widget-chat-area .str-chat__message-attachment-card {
   max-width: 180px !important;
   padding: 6px !important;
 }
 
+/* Images in chat widget - all images including GIFs */
 .widget-chat-area .str-chat__message-attachment--image,
 .widget-chat-area .str-chat__message-attachment__image,
-.widget-chat-area .str-chat__message img,
-.widget-chat-area .str-chat__attachment--image img {
-  max-width: 120px !important;
-  max-height: 80px !important;
-  width: auto !important;
-  height: auto !important;
-  object-fit: contain !important;
+.widget-chat-area .str-chat__attachment--image img,
+.widget-chat-area .str-chat__message-attachment--image img,
+.widget-chat-area .str-chat__message img {
+  max-width: 150px;
+  max-height: 150px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
 }
 
 /* Hide attachment footers/titles like in main chat */
@@ -435,16 +437,26 @@
   font-size: 10px !important;
 }
 
-/* Giphy and gallery images */
-.widget-chat-area .str-chat__message-attachment--giphy,
-.widget-chat-area .str-chat__gallery,
-.widget-chat-area .str-chat__attachment {
-  max-width: 120px !important;
+/* Giphy attachment containers */
+.widget-chat-area .str-chat__message-attachment--giphy {
+  max-width: 250px !important;
 }
 
-.widget-chat-area .str-chat__attachment img {
-  max-width: 120px !important;
-  max-height: 80px !important;
+/* Hide empty message text */
+.widget-chat-area .str-chat__message-text-inner:empty,
+.widget-chat-area .str-chat__message-text:empty {
+  display: none !important;
+}
+
+/* Hide message text that only contains whitespace */
+.widget-chat-area .str-chat__message-text-inner {
+  min-height: 0 !important;
+}
+
+/* Gallery and attachment containers */
+.widget-chat-area .str-chat__gallery,
+.widget-chat-area .str-chat__attachment {
+  max-width: 250px !important;
 }
 
 /* Message Input in Widget - Two Row Style */

@@ -283,6 +283,8 @@ export const uploadProofImages = async (galleryId, files, onProgress, abortSigna
     
     uploadedProofs.forEach((upload, orderIndex) => {
       const proofRef = doc(collection(firestore, "proofs"));
+      
+      // Create the proof document with version tracking fields
       batch.set(proofRef, {
         galleryId,
         filename: upload.filename,
@@ -291,8 +293,27 @@ export const uploadProofImages = async (galleryId, files, onProgress, abortSigna
         order: orderIndex,
         status: "pending",
         denialNotes: null,
+        currentVersion: 1,
+        versionCount: 1,
+        hasVersions: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
+      });
+      
+      // Create a revision record for version 1
+      const revisionRef = doc(collection(firestore, "proofRevisions"));
+      batch.set(revisionRef, {
+        proofId: proofRef.id,
+        galleryId,
+        originalImageUrl: upload.imageUrl, // For v1, original and new are the same
+        newImageUrl: upload.imageUrl,
+        versionNumber: 1,
+        isLatest: true,
+        isCurrent: true,
+        studioNotes: "Initial upload",
+        replacedBy: "System",
+        replacedAt: serverTimestamp(),
+        createdAt: serverTimestamp()
       });
       
       proofDocuments.push({
@@ -311,7 +332,8 @@ export const uploadProofImages = async (galleryId, files, onProgress, abortSigna
     });
     
     await batch.commit();
-    readCounter.recordRead("write", "proofs", "uploadProofImages", uploadedProofs.length + 1);
+    // Account for proofs + revisions + gallery update
+    readCounter.recordRead("write", "proofs", "uploadProofImages", uploadedProofs.length * 2 + 1);
     
     // Report completion
     if (onProgress) {
@@ -716,7 +738,9 @@ export const batchReplaceProofImages = async (galleryId, replacements, userEmail
           proofId,
           galleryId,
           originalImageUrl: oldProof.imageUrl,
+          originalFilename: oldProof.filename, // Store original filename for history
           newImageUrl,
+          newFilename: newFile.name, // Store new filename for history
           versionNumber: newVersion,
           denialNotes: oldProof.denialNotes,
           studioNotes: studioNotes || null,
@@ -727,12 +751,32 @@ export const batchReplaceProofImages = async (galleryId, replacements, userEmail
           isLatest: true
         });
         
-        // If there was a previous revision, mark it as not latest
+        // Mark all previous revisions as not latest/current
         if (oldProof.lastRevisionId) {
           const prevRevisionRef = doc(firestore, "proofRevisions", oldProof.lastRevisionId);
           batch.update(prevRevisionRef, {
-            isLatest: false
+            isLatest: false,
+            isCurrent: false
           });
+        }
+        
+        // Also update any v1 revision to not be current
+        if (currentVersion === 1) {
+          // Find and update the v1 revision
+          const v1Query = query(
+            collection(firestore, "proofRevisions"),
+            where("proofId", "==", proofId),
+            where("versionNumber", "==", 1)
+          );
+          const v1Snapshot = await getDocs(v1Query);
+          if (!v1Snapshot.empty) {
+            v1Snapshot.forEach(doc => {
+              batch.update(doc.ref, {
+                isCurrent: false,
+                isLatest: false
+              });
+            });
+          }
         }
         
         // Update proof document with new version
@@ -740,6 +784,7 @@ export const batchReplaceProofImages = async (galleryId, replacements, userEmail
         batch.update(proofRef, {
           imageUrl: newImageUrl,
           thumbnailUrl: newImageUrl, // For now, use same URL
+          filename: newFile.name, // Update filename to match the new file
           status: "pending", // Reset to pending for re-review
           denialNotes: null,
           currentVersion: newVersion,

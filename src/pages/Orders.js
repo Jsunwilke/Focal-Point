@@ -158,11 +158,32 @@ const Orders = () => {
   };
 
   // Copy to clipboard helper
-  const copyToClipboard = (text, fieldName) => {
-    navigator.clipboard.writeText(text).then(() => {
+  const copyToClipboard = async (text, fieldName) => {
+    try {
+      // Try the modern clipboard API first
+      await navigator.clipboard.writeText(text);
       setCopiedField(fieldName);
       setTimeout(() => setCopiedField(null), 2000);
-    });
+    } catch (err) {
+      // Fallback for when clipboard API fails (e.g., document not focused)
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setCopiedField(fieldName);
+        setTimeout(() => setCopiedField(null), 2000);
+      } catch (fallbackErr) {
+        console.error('Failed to copy:', fallbackErr);
+      } finally {
+        textArea.remove();
+      }
+    }
   };
 
   // Get status badge class

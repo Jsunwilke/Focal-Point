@@ -1209,7 +1209,7 @@ service cloud.firestore {
         // Case 2: Public users updating status only
         (// Only allow updating specific fields
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['status', 'denialNotes', 'reviewedAt', 'reviewedBy', 'updatedAt']) &&
+           .hasOnly(['status', 'denialNotes', 'reviewedAt', 'reviewedBy', 'deniedBy', 'deniedAt', 'updatedAt']) &&
          // Validate status
          request.resource.data.status in ['pending', 'approved', 'denied'] &&
          // If denied, must have notes

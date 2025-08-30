@@ -139,7 +139,7 @@ const Settings = () => {
           ))}
         </div>
 
-        {!isAdmin && (
+        {!isAdminOrManager && (
           <div className="settings-notice">
             <div className="settings-notice__content">
               <h3>Limited Access</h3>

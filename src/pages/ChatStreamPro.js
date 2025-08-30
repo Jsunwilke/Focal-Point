@@ -25,6 +25,7 @@ import CustomChannelHeader from '../components/chat/CustomChannelHeader';
 import CustomMessageInput from '../components/chat/CustomMessageInput';
 import CustomChannelPreview from '../components/chat/CustomChannelPreview';
 import CustomChannelSearch from '../components/chat/CustomChannelSearch';
+import CustomMessage from '../components/chat/CustomMessage';
 import GiphySelector from '../components/chat/GiphySelector';
 
 import 'stream-chat-react/dist/css/v2/index.css';
@@ -199,7 +200,7 @@ const ChatStreamPro = () => {
                         onSettingsClick={() => setShowChannelSettings(true)} 
                       />
                       <MessageList 
-                        Message={MessageSimple}
+                        Message={CustomMessage}
                         messageActions={['edit', 'delete', 'react', 'reply', 'quote']}
                         reactionOptions={[
                           { name: 'like', emoji: '👍' },
@@ -284,7 +285,7 @@ const ChatStreamPro = () => {
                 }}
               />
               <MessageList 
-                Message={MessageSimple}
+                Message={CustomMessage}
                 messageActions={['edit', 'delete', 'react', 'reply', 'quote', 'pin']}
                 reactionOptions={[
                   { name: 'like', emoji: '👍' },

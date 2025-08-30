@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useDataCache } from "../../contexts/DataCacheContext";
+import { useStreamChat } from "../../contexts/StreamChatContext";
 import {
   updateUserProfile,
   updateUserPhotoWithCrop,
@@ -33,6 +34,7 @@ import "./ProfileSettingsModal.css";
 const ProfileSettingsModal = ({ isOpen, onClose }) => {
   const { userProfile, user, loadUserProfile, organization } = useAuth();
   const { updateUserOptimistically } = useDataCache();
+  const { syncUserProfile } = useStreamChat();
   const fileInputRef = useRef(null);
   const [formData, setFormData] = useState({
     firstName: "",
@@ -170,6 +172,25 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
         photoCropSettings: photoData.cropSettings,
       });
 
+      // Sync photo changes to Stream Chat
+      try {
+        if (syncUserProfile) {
+          const streamUserData = {
+            uid: user.uid,
+            email: userProfile?.email || user.email,
+            displayName: userProfile?.displayName || formData.displayName,
+            photoURL: photoData.croppedURL,
+            role: userProfile?.role,
+            organizationID: userProfile?.organizationID
+          };
+          console.log('ProfileSettingsModal: Syncing photo to Stream Chat:', streamUserData);
+          await syncUserProfile(streamUserData);
+        }
+      } catch (streamError) {
+        console.warn('Failed to sync photo with Stream Chat:', streamError);
+        // Don't block photo update on Stream Chat sync failure
+      }
+
       // Reload user profile to reflect changes
       await loadUserProfile();
     } catch (error) {
@@ -223,6 +244,25 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
         originalPhotoURL: "",
         photoCropSettings: null,
       });
+
+      // Sync photo deletion to Stream Chat
+      try {
+        if (syncUserProfile) {
+          const streamUserData = {
+            uid: user.uid,
+            email: userProfile?.email || user.email,
+            displayName: userProfile?.displayName || formData.displayName,
+            photoURL: "", // Clear the photo
+            role: userProfile?.role,
+            organizationID: userProfile?.organizationID
+          };
+          console.log('ProfileSettingsModal: Syncing photo deletion to Stream Chat:', streamUserData);
+          await syncUserProfile(streamUserData);
+        }
+      } catch (streamError) {
+        console.warn('Failed to sync photo deletion with Stream Chat:', streamError);
+        // Don't block photo deletion on Stream Chat sync failure
+      }
 
       // Reload user profile to reflect changes
       await loadUserProfile();
@@ -340,6 +380,25 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
         updateData
       });
       updateUserOptimistically(user.uid, updateData);
+
+      // Sync profile changes to Stream Chat
+      try {
+        if (syncUserProfile) {
+          const streamUserData = {
+            uid: user.uid,
+            email: updateData.email || user.email,
+            displayName: updateData.displayName || `${updateData.firstName} ${updateData.lastName}`,
+            photoURL: updateData.photoURL || userProfile?.photoURL,
+            role: userProfile?.role,
+            organizationID: userProfile?.organizationID
+          };
+          console.log('ProfileSettingsModal: Syncing to Stream Chat:', streamUserData);
+          await syncUserProfile(streamUserData);
+        }
+      } catch (streamError) {
+        console.warn('Failed to sync profile with Stream Chat:', streamError);
+        // Don't block profile update on Stream Chat sync failure
+      }
 
       // Reload user profile to get fresh data
       await loadUserProfile();

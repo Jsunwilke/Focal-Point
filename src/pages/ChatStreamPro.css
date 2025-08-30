@@ -566,6 +566,29 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* Giphy images - only in main chat area, not widget */
+.chat-stream-pro .giphy-image,
+.chat-stream-pro img[src*="giphy"],
+.str-chat:not(.widget-chat-area) img[src*="giphy"] {
+  max-width: 400px;
+  max-height: 400px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+/* Hide empty message text */
+.str-chat__message-text-inner:empty,
+.str-chat__message-text:empty {
+  display: none !important;
+}
+
+/* Remove min-height for message text */
+.str-chat__message-text-inner {
+  min-height: 0 !important;
+}
+
 .giphy-preview {
   max-width: 300px;
   border-radius: 8px;

@@ -25,23 +25,48 @@ const VersionHistoryModal = ({ isOpen, onClose, proof }) => {
       setLoading(true);
       const history = await getProofRevisions(proof.id);
       
-      // Add current version to the list if not already there
-      const currentRevision = {
-        id: 'current',
-        proofId: proof.id,
-        galleryId: proof.galleryId,
-        newImageUrl: proof.imageUrl,
-        versionNumber: proof.currentVersion || 1,
-        isLatest: true,
-        isCurrent: true,
-        replacedAt: proof.updatedAt,
-        replacedBy: proof.reviewedBy || 'System'
-      };
-      
-      // Check if current version is already in revisions
-      const hasCurrentVersion = history.some(r => r.versionNumber === currentRevision.versionNumber);
-      
-      setRevisions(hasCurrentVersion ? history : [currentRevision, ...history]);
+      // With the new system, we should have complete history
+      // But for backward compatibility, add current if missing
+      if (history.length === 0 || !history.some(r => r.isCurrent)) {
+        // This handles old galleries without v1 revisions
+        const currentRevision = {
+          id: 'current',
+          proofId: proof.id,
+          galleryId: proof.galleryId,
+          newImageUrl: proof.imageUrl,
+          originalImageUrl: proof.imageUrl,
+          versionNumber: proof.currentVersion || 1,
+          isLatest: true,
+          isCurrent: true,
+          replacedAt: proof.updatedAt,
+          replacedBy: proof.reviewedBy || 'System',
+          studioNotes: 'Current version'
+        };
+        
+        // For backward compatibility, reconstruct v1 if missing
+        if (history.length > 0 && history[history.length - 1].versionNumber > 1) {
+          const oldestRevision = history[history.length - 1];
+          const v1Revision = {
+            id: 'v1-reconstructed',
+            proofId: proof.id,
+            galleryId: proof.galleryId,
+            newImageUrl: oldestRevision.originalImageUrl,
+            originalImageUrl: oldestRevision.originalImageUrl,
+            versionNumber: 1,
+            isLatest: false,
+            isCurrent: false,
+            replacedAt: proof.createdAt,
+            replacedBy: 'System',
+            studioNotes: 'Initial upload (reconstructed)'
+          };
+          setRevisions([currentRevision, ...history, v1Revision]);
+        } else {
+          setRevisions([currentRevision, ...history]);
+        }
+      } else {
+        // New galleries will have complete history
+        setRevisions(history);
+      }
     } catch (error) {
       console.error("Error loading version history:", error);
       showToast("Failed to load version history", "error");
