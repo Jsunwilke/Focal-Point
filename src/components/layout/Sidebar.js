@@ -1,5 +1,5 @@
 // src/components/layout/Sidebar.js
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useStreamChat } from "../../contexts/StreamChatContext";
@@ -18,6 +18,7 @@ import {
   Workflow,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Scan,
   MessageCircle,
   Image,
@@ -37,8 +38,14 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
   const isAdminOnly = userProfile?.role === 'admin';
   const isAccountant = userProfile?.isAccountant === true;
 
-  // Navigation items with Lucide icons
-  const navigationItems = [
+  // State for managing collapsed groups
+  const [collapsedGroups, setCollapsedGroups] = useState(() => {
+    const saved = localStorage.getItem('sidebarCollapsedGroups');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  // Top-level navigation items (always visible)
+  const topLevelItems = [
     {
       id: "dashboard",
       label: "Dashboard",
@@ -51,20 +58,6 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       label: "Schedule",
       icon: Calendar,
       path: "/schedule",
-      enabled: true, // Now enabled
-    },
-    {
-      id: "time-tracking",
-      label: "Time Tracking",
-      icon: Clock,
-      path: "/time-tracking",
-      enabled: true,
-    },
-    {
-      id: "mileage",
-      label: "Mileage",
-      icon: Navigation,
-      path: "/mileage",
       enabled: true,
     },
     {
@@ -82,71 +75,6 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       enabled: true,
     },
     {
-      id: "payroll",
-      label: "Payroll",
-      icon: Receipt,
-      path: "/payroll-timesheets",
-      enabled: true,
-      adminOnly: true,
-    },
-    {
-      id: "sports",
-      label: "Sports",
-      icon: Trophy,
-      path: "/sports",
-      enabled: true,
-    },
-    {
-      id: "class-groups",
-      label: "Class Groups",
-      icon: Users,
-      path: "/class-groups",
-      enabled: true,
-    },
-    {
-      id: "tracking",
-      label: "Tracking",
-      icon: Scan,
-      path: "/tracking",
-      enabled: true,
-    },
-    {
-      id: "proofing",
-      label: "Proofing",
-      icon: Image,
-      path: "/proofing",
-      enabled: true,
-    },
-    {
-      id: "photo-critique",
-      label: "Photo Critique",
-      icon: Camera,
-      path: "/photo-critique",
-      enabled: true,
-    },
-    {
-      id: "orders",
-      label: "Orders",
-      icon: ShoppingCart,
-      path: "/orders",
-      enabled: true,
-    },
-    {
-      id: "stats",
-      label: "Stats",
-      icon: BarChart3,
-      path: "/stats",
-      enabled: true,
-      adminOnly: true,
-    },
-    {
-      id: "daily-reports",
-      label: "Daily Reports",
-      icon: FileText,
-      path: "/daily-reports",
-      enabled: true,
-    },
-    {
       id: "settings",
       label: "Settings",
       icon: Settings,
@@ -154,6 +82,139 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       enabled: true,
     },
   ];
+
+  // Grouped navigation items
+  const navigationGroups = [
+    {
+      id: "employee",
+      label: "Hours & Mileage",
+      items: [
+        {
+          id: "time-tracking",
+          label: "Time Tracking",
+          icon: Clock,
+          path: "/time-tracking",
+          enabled: true,
+        },
+        {
+          id: "mileage",
+          label: "Mileage",
+          icon: Navigation,
+          path: "/mileage",
+          enabled: true,
+        },
+        {
+          id: "daily-reports",
+          label: "Daily Reports",
+          icon: FileText,
+          path: "/daily-reports",
+          enabled: true,
+        },
+      ],
+    },
+    {
+      id: "photography",
+      label: "Photography",
+      items: [
+        {
+          id: "sports",
+          label: "Sports",
+          icon: Trophy,
+          path: "/sports",
+          enabled: true,
+        },
+        {
+          id: "class-groups",
+          label: "Class Groups",
+          icon: Users,
+          path: "/class-groups",
+          enabled: true,
+        },
+        {
+          id: "tracking",
+          label: "Tracking",
+          icon: Scan,
+          path: "/tracking",
+          enabled: true,
+        },
+        {
+          id: "proofing",
+          label: "Proofing",
+          icon: Image,
+          path: "/proofing",
+          enabled: true,
+        },
+        {
+          id: "photo-critique",
+          label: "Photo Critique",
+          icon: Camera,
+          path: "/photo-critique",
+          enabled: true,
+        },
+      ],
+    },
+    {
+      id: "business",
+      label: "Business",
+      items: [
+        {
+          id: "orders",
+          label: "Orders",
+          icon: ShoppingCart,
+          path: "/orders",
+          enabled: true,
+        },
+        {
+          id: "payroll",
+          label: "Payroll",
+          icon: Receipt,
+          path: "/payroll-timesheets",
+          enabled: true,
+          adminOnly: true,
+        },
+        {
+          id: "stats",
+          label: "Stats",
+          icon: BarChart3,
+          path: "/stats",
+          enabled: true,
+          adminOnly: true,
+        },
+      ],
+    },
+  ];
+
+  // Save collapsed state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsedGroups', JSON.stringify(collapsedGroups));
+  }, [collapsedGroups]);
+
+  // Initialize default expanded groups based on user role
+  useEffect(() => {
+    if (!localStorage.getItem('sidebarCollapsedGroups')) {
+      const defaults = {};
+      if (userProfile) {
+        if (userProfile.role === 'admin') {
+          // Admin: expand business group
+          defaults.business = false;
+        } else if (userProfile.role === 'photographer') {
+          // Photographer: expand photography group
+          defaults.photography = false;
+        } else {
+          // Others: expand employee group
+          defaults.employee = false;
+        }
+      }
+      setCollapsedGroups(defaults);
+    }
+  }, [userProfile]);
+
+  const toggleGroup = (groupId) => {
+    setCollapsedGroups(prev => ({
+      ...prev,
+      [groupId]: !prev[groupId]
+    }));
+  };
 
   const handleNavigation = (item) => {
     if (item.enabled) {
@@ -206,43 +267,104 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
 
       <nav className="sidebar__nav">
         <ul className="sidebar__nav-list">
-          {navigationItems
+          {/* Top-level items */}
+          {topLevelItems
             .filter(item => {
-              // If user is an accountant, only show payroll and settings
-              // This takes priority even if they have admin role
+              // If user is an accountant, only show settings
               if (userProfile && userProfile.isAccountant === true) {
-                return item.id === 'payroll' || item.id === 'settings';
+                return item.id === 'settings';
               }
-              // Otherwise, use existing logic (payroll is adminOnly, so only admins see it)
-              return !item.adminOnly || isAdminOnly;
+              return true;
             })
             .map((item) => {
-            const IconComponent = item.icon;
-            return (
-              <li key={item.id} className="sidebar__nav-item">
-                <button
-                  className={`sidebar__nav-link ${
-                    isActive(item.path) ? "sidebar__nav-link--active" : ""
-                  } ${!item.enabled ? "sidebar__nav-link--disabled" : ""}`}
-                  onClick={() => handleNavigation(item)}
-                  disabled={!item.enabled}
-                  data-tooltip={item.label}
-                  title={isCollapsed ? item.label : undefined}
-                >
-                  <IconComponent className="sidebar__nav-icon" size={20} />
-                  <span className="sidebar__nav-label">{item.label}</span>
-                  {!item.enabled && (
-                    <span className="sidebar__nav-badge">Soon</span>
+              const IconComponent = item.icon;
+              return (
+                <li key={item.id} className="sidebar__nav-item">
+                  <button
+                    className={`sidebar__nav-link ${
+                      isActive(item.path) ? "sidebar__nav-link--active" : ""
+                    } ${!item.enabled ? "sidebar__nav-link--disabled" : ""}`}
+                    onClick={() => handleNavigation(item)}
+                    disabled={!item.enabled}
+                    data-tooltip={item.label}
+                    title={isCollapsed ? item.label : undefined}
+                  >
+                    <IconComponent className="sidebar__nav-icon" size={20} />
+                    <span className="sidebar__nav-label">{item.label}</span>
+                    {!item.enabled && (
+                      <span className="sidebar__nav-badge">Soon</span>
+                    )}
+                    {item.id === 'chat' && totalUnreadCount > 0 && (
+                      <span className="sidebar__nav-badge sidebar__nav-badge--unread">
+                        {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+
+          {/* Grouped items */}
+          {navigationGroups
+            .filter(group => {
+              // If user is an accountant, only show business group
+              if (userProfile && userProfile.isAccountant === true) {
+                return group.id === 'business';
+              }
+              return true;
+            })
+            .map((group) => {
+              const isGroupCollapsed = collapsedGroups[group.id] !== false;
+              const hasActiveItem = group.items.some(item => isActive(item.path));
+              
+              return (
+                <li key={group.id} className="sidebar__nav-group">
+                  <button
+                    className={`sidebar__nav-group-header ${hasActiveItem ? 'sidebar__nav-group-header--has-active' : ''}`}
+                    onClick={() => toggleGroup(group.id)}
+                    title={isCollapsed ? group.label : undefined}
+                  >
+                    <ChevronDown 
+                      className={`sidebar__nav-group-icon ${!isGroupCollapsed ? 'sidebar__nav-group-icon--expanded' : ''}`} 
+                      size={16} 
+                    />
+                    <span className="sidebar__nav-group-label">{group.label}</span>
+                  </button>
+                  
+                  {!isGroupCollapsed && (
+                    <ul className="sidebar__nav-group-list">
+                      {group.items
+                        .filter(item => {
+                          // Filter admin-only items
+                          return !item.adminOnly || isAdminOnly;
+                        })
+                        .map((item) => {
+                          const IconComponent = item.icon;
+                          return (
+                            <li key={item.id} className="sidebar__nav-group-item">
+                              <button
+                                className={`sidebar__nav-link sidebar__nav-link--grouped ${
+                                  isActive(item.path) ? "sidebar__nav-link--active" : ""
+                                } ${!item.enabled ? "sidebar__nav-link--disabled" : ""}`}
+                                onClick={() => handleNavigation(item)}
+                                disabled={!item.enabled}
+                                data-tooltip={item.label}
+                                title={isCollapsed ? item.label : undefined}
+                              >
+                                <IconComponent className="sidebar__nav-icon" size={18} />
+                                <span className="sidebar__nav-label">{item.label}</span>
+                                {!item.enabled && (
+                                  <span className="sidebar__nav-badge">Soon</span>
+                                )}
+                              </button>
+                            </li>
+                          );
+                        })}
+                    </ul>
                   )}
-                  {item.id === 'chat' && totalUnreadCount > 0 && (
-                    <span className="sidebar__nav-badge sidebar__nav-badge--unread">
-                      {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
-                    </span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
+                </li>
+              );
+            })}
         </ul>
       </nav>
     </aside>

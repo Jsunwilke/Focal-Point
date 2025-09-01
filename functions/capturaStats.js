@@ -86,54 +86,107 @@ exports.syncDailyOrders = onSchedule({
   });
 
 /**
- * Fetch all orders for a specific date, handling 5000 limit
+ * Fetch all orders for a specific date using the same Captura API logic as getCapturaOrders
  */
 async function fetchAllOrdersForDate(dateStr) {
-  const allOrders = [];
-  let start = 1;
-  let hasMore = true;
+  console.log(`Starting to fetch ALL orders for the past year (ignoring specific date: ${dateStr})`);
   
-  console.log(`Starting to fetch orders for date: ${dateStr}`);
-  
-  while (hasMore) {
-    const batch = await fetchOrderBatch(dateStr, dateStr, start, start + API_LIMIT - 1);
+  try {
+    // Get access token using the same method as getCapturaOrders
+    const accessToken = await getCapturaAccessToken();
+    const accountId = process.env.CAPTURA_ACCOUNT_ID || 'J98TA9W';
     
-    if (batch && Array.isArray(batch)) {
-      console.log(`Received batch with ${batch.length} items`);
+    // Fixed date range: Sept 1, 2024 to tomorrow (full year of data)
+    const startDateStr = '2024-09-01';
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const endDateStr = tomorrow.toISOString().split('T')[0];
+    
+    console.log(`Fetching ALL orders from ${startDateStr} to ${endDateStr}`);
+    
+    // Use the same API call structure as the working getCapturaOrders function
+    const url = `https://api.imagequix.com/api/v1/account/${accountId}/order`;
+    
+    // Fetch orders in batches to get them all
+    let allOrders = [];
+    let start = 1;
+    const batchSize = 100;
+    const maxBatches = 50; // Up to 5000 orders total
+    
+    for (let batch = 0; batch < maxBatches; batch++) {
+      const end = start + batchSize - 1;
       
-      // Extract orders from each batch item
-      let ordersInThisBatch = 0;
-      batch.forEach((batchItem, index) => {
-        if (batchItem.orders && Array.isArray(batchItem.orders)) {
-          console.log(`Batch item ${index} has ${batchItem.orders.length} orders`);
-          allOrders.push(...batchItem.orders);
-          ordersInThisBatch += batchItem.orders.length;
-        } else {
-          console.log(`Batch item ${index} has no orders array`);
-        }
+      console.log(`Fetching batch ${batch + 1}: orders ${start}-${end}`);
+      
+      const response = await axios.get(url, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        params: {
+          orderStartDate: startDateStr,  // Sept 1, 2024
+          orderEndDate: endDateStr,      // Tomorrow (to include all of today)
+          start: start.toString(),
+          end: end.toString()
+        },
+        timeout: 30000
       });
       
-      console.log(`Extracted ${ordersInThisBatch} orders from this batch. Total so far: ${allOrders.length}`);
+      // Get orders from this batch
+      const batchOrders = response.data?.data || response.data?.orders || [];
       
-      // Check if we got less than the limit
-      const batchOrderCount = batch.reduce((sum, item) => 
-        sum + (item.orders ? item.orders.length : 0), 0);
+      console.log(`Batch ${batch + 1} returned ${batchOrders.length} orders`);
       
-      if (batchOrderCount < API_LIMIT) {
-        hasMore = false;
-      } else {
-        start += API_LIMIT;
-        // Add delay to respect rate limits
-        await sleep(1000);
+      if (batchOrders.length === 0) {
+        console.log('No more orders found, stopping pagination');
+        break;
       }
-    } else {
-      console.log('Batch is null or not an array - stopping');
-      hasMore = false;
+      
+      allOrders = allOrders.concat(batchOrders);
+      
+      // Check if we have all orders
+      if (response.data?.total) {
+        console.log(`Total orders available: ${response.data.total}, fetched so far: ${allOrders.length}`);
+        if (allOrders.length >= response.data.total) {
+          console.log('Fetched all available orders');
+          break;
+        }
+      }
+      
+      // Move to next batch
+      start += batchSize;
+      
+      // Small delay between batches to avoid rate limiting
+      if (batch < maxBatches - 1) {
+        await sleep(100);
+      }
     }
+    
+    console.log(`Finished fetching orders. Total orders retrieved: ${allOrders.length}`);
+    
+    if (allOrders.length > 0) {
+      console.log(`Sample order structure:`, {
+        id: allOrders[0]?.id,
+        total: allOrders[0]?.total,
+        orderDate: allOrders[0]?.orderDate,
+        hasItems: !!allOrders[0]?.items,
+        hasGalleryName: !!allOrders[0]?.galleryName,
+        hasGallery: !!allOrders[0]?.gallery,
+        hasSchool: !!allOrders[0]?.school,
+        allFields: Object.keys(allOrders[0])
+      });
+    }
+    
+    return allOrders;
+  } catch (error) {
+    console.error(`Error calling Captura API for ${dateStr}:`, error.message);
+    console.error('Error details:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data
+    });
+    throw error;
   }
-  
-  console.log(`Finished fetching orders for ${dateStr}. Total orders found: ${allOrders.length}`);
-  return allOrders;
 }
 
 /**
@@ -180,11 +233,19 @@ async function fetchOrderBatch(startDate, endDate, start, end) {
  */
 async function fetchOrderDetails(orderList) {
   const detailedOrders = [];
-  const batchSize = 10; // Process 10 orders at a time to avoid timeout
+  const batchSize = 10; // Process 10 orders at a time
+  const maxOrders = orderList.length; // Process ALL orders
   
-  for (let i = 0; i < orderList.length; i += batchSize) {
+  console.log(`Fetching details for all ${orderList.length} orders in batches of ${batchSize}...`);
+  
+  for (let i = 0; i < maxOrders; i += batchSize) {
     const batch = orderList.slice(i, i + batchSize);
     const promises = batch.map(order => fetchSingleOrderDetail(order.id || order.orderID));
+    
+    // Progress logging
+    if (i % 100 === 0) {
+      console.log(`Progress: Fetched ${i}/${orderList.length} orders...`);
+    }
     
     try {
       const results = await Promise.allSettled(promises);
@@ -197,9 +258,9 @@ async function fetchOrderDetails(orderList) {
         }
       });
       
-      // Rate limiting
+      // Reduced rate limiting for faster processing
       if (i + batchSize < orderList.length) {
-        await sleep(500);
+        await sleep(200); // Reduced from 500ms
       }
     } catch (error) {
       console.error(`Batch ${i} failed:`, error);
@@ -229,6 +290,23 @@ async function fetchSingleOrderDetail(orderId) {
       },
       timeout: 10000 // 10 second timeout
     });
+    
+    // Log the first order to understand structure
+    if (Math.random() < 0.05) { // Log 5% of orders
+      console.log(`Order ${orderId} structure:`, {
+        hasTotal: response.data.total !== undefined,
+        totalValue: response.data.total,
+        hasSubtotal: response.data.subtotal !== undefined,
+        subtotalValue: response.data.subtotal,
+        hasAmount: response.data.amount !== undefined,
+        amountValue: response.data.amount,
+        hasGalleryOrders: !!response.data.galleryOrders,
+        galleryOrdersLength: response.data.galleryOrders?.length,
+        hasItems: !!response.data.items,
+        itemsLength: response.data.items?.length,
+        topLevelFields: Object.keys(response.data).slice(0, 15)
+      });
+    }
     
     return response.data;
   } catch (error) {
@@ -328,8 +406,27 @@ function calculateDailySummary(dateStr, orders) {
   orders.forEach(order => {
     if (!order) return;
     
+    // Calculate order total from multiple possible fields
+    let orderTotal = 0;
+    if (order.total !== undefined && order.total !== null) {
+      orderTotal = order.total;
+    } else if (order.subtotal !== undefined && order.subtotal !== null) {
+      orderTotal = order.subtotal;
+    } else if (order.amount !== undefined && order.amount !== null) {
+      orderTotal = order.amount;
+    } else if (order.orderTotal !== undefined && order.orderTotal !== null) {
+      orderTotal = order.orderTotal;
+    } else if (order.items && Array.isArray(order.items)) {
+      // Calculate from items if no total fields exist
+      orderTotal = order.items.reduce((sum, item) => {
+        const price = item.price || item.unitPrice || 0;
+        const quantity = item.quantity || 1;
+        return sum + (price * quantity);
+      }, 0);
+    }
+    
     // Basic metrics
-    summary.totalRevenue += order.total || 0;
+    summary.totalRevenue += orderTotal;
     summary.totalItems += order.items?.length || 0;
     
     // Hourly breakdown
@@ -352,12 +449,58 @@ function calculateDailySummary(dateStr, orders) {
       customer.revenue += order.total || 0;
     }
     
-    // Gallery breakdown
+    // Gallery breakdown - enhanced revenue calculation
     if (order.galleryOrders && Array.isArray(order.galleryOrders)) {
-      order.galleryOrders.forEach(go => {
+      // We have detailed gallery info
+      order.galleryOrders.forEach((go, index) => {
         const galleryName = go.gallery?.title || go.gallery?.name || go.galleryName || 'Unknown';
+        
+        // Calculate revenue for this gallery order from multiple sources
+        let galleryRevenue = 0;
+        
+        // Try multiple approaches to get revenue
+        if (go.total !== undefined && go.total !== null) {
+          galleryRevenue = go.total;
+        } else if (go.subtotal !== undefined && go.subtotal !== null) {
+          galleryRevenue = go.subtotal;
+        } else if (go.amount !== undefined && go.amount !== null) {
+          galleryRevenue = go.amount;
+        } else if (go.items && Array.isArray(go.items) && go.items.length > 0) {
+          // Calculate revenue from items in this gallery order
+          galleryRevenue = go.items.reduce((sum, item) => {
+            const itemPrice = item.price || item.unitPrice || 0;
+            const itemQuantity = item.quantity || 1;
+            return sum + (itemPrice * itemQuantity);
+          }, 0);
+        } else if (order.galleryOrders.length === 1) {
+          // If only one gallery order, assign full order total
+          galleryRevenue = order.total || 0;
+        } else {
+          // As a last resort, distribute order total evenly
+          galleryRevenue = (order.total || 0) / order.galleryOrders.length;
+        }
+        
+        // Log first gallery order to understand structure
+        if (index === 0 && Math.random() < 0.1) { // Log 10% of orders for better debugging
+          console.log('Gallery order revenue calculation:', {
+            galleryName,
+            hasTotal: go.total !== undefined,
+            totalValue: go.total,
+            hasSubtotal: go.subtotal !== undefined,
+            subtotalValue: go.subtotal,
+            hasAmount: go.amount !== undefined,
+            amountValue: go.amount,
+            hasItems: !!go.items,
+            itemsLength: go.items?.length || 0,
+            calculatedRevenue: galleryRevenue,
+            orderTotal: order.total,
+            allGOFields: Object.keys(go).slice(0, 10) // First 10 fields
+          });
+        }
+        
         if (!galleryMap.has(galleryName)) {
           galleryMap.set(galleryName, {
+            name: galleryName,
             count: 0,
             revenue: 0,
             items: 0
@@ -365,8 +508,56 @@ function calculateDailySummary(dateStr, orders) {
         }
         const gallery = galleryMap.get(galleryName);
         gallery.count++;
-        gallery.revenue += go.total || go.subtotal || 0;
+        gallery.revenue += galleryRevenue;
         gallery.items += go.items?.length || 0;
+      });
+    } else if (order.galleryName || order.gallery) {
+      // Fallback: use basic order info when detailed gallery info is missing
+      const galleryName = order.galleryName || order.gallery?.name || order.gallery || 'Unknown';
+      if (!galleryMap.has(galleryName)) {
+        galleryMap.set(galleryName, {
+          count: 0,
+          revenue: 0,
+          items: 0
+        });
+      }
+      const gallery = galleryMap.get(galleryName);
+      gallery.count++;
+      gallery.revenue += order.total || 0; // Use the order total as gallery revenue
+      gallery.items += order.items?.length || 0;
+    } else if (order.items && Array.isArray(order.items)) {
+      // Last resort: If no gallery info but has items, check items for gallery info
+      const itemGalleryMap = new Map();
+      
+      order.items.forEach(item => {
+        const galleryName = item.galleryName || item.gallery?.name || 'Unknown';
+        const itemRevenue = (item.price || item.unitPrice || 0) * (item.quantity || 1);
+        
+        if (!itemGalleryMap.has(galleryName)) {
+          itemGalleryMap.set(galleryName, {
+            revenue: 0,
+            items: 0
+          });
+        }
+        const itemGallery = itemGalleryMap.get(galleryName);
+        itemGallery.revenue += itemRevenue;
+        itemGallery.items += 1;
+      });
+      
+      // Add item-based galleries to main gallery map
+      itemGalleryMap.forEach((data, galleryName) => {
+        if (!galleryMap.has(galleryName)) {
+          galleryMap.set(galleryName, {
+            name: galleryName,
+            count: 0,
+            revenue: 0,
+            items: 0
+          });
+        }
+        const gallery = galleryMap.get(galleryName);
+        gallery.count += 1; // Count as one order
+        gallery.revenue += data.revenue;
+        gallery.items += data.items;
       });
     }
     
@@ -398,7 +589,7 @@ function calculateDailySummary(dateStr, orders) {
     }
     const payment = paymentMap.get(paymentStatus);
     payment.count++;
-    payment.amount += order.total || 0;
+    payment.amount += orderTotal;
     
     // Product tracking
     if (order.items && Array.isArray(order.items)) {
@@ -657,7 +848,7 @@ async function updateMonthlyStats(date) {
  * Manual backfill function - callable
  */
 exports.backfillHistoricalData = onCall({
-  memory: '1GB',
+  memory: '2GB',
   timeoutSeconds: 540,
   cors: true
 }, async (request) => {
@@ -701,12 +892,12 @@ exports.backfillHistoricalData = onCall({
         console.log(`Force overwriting existing data for ${dateStr}`);
       }
       
-      // Process the day
+      // Process ALL orders from the past year
       const orderList = await fetchAllOrdersForDate(dateStr);
-      console.log(`Backfill for ${dateStr}: Found ${orderList.length} orders from batch API`);
+      console.log(`Backfill: Found ${orderList.length} total orders from past year`);
       
       if (orderList.length === 0) {
-        console.log(`No orders found for ${dateStr}, skipping detailed fetch`);
+        console.log(`No orders found, skipping detailed fetch`);
         results.push({ 
           date: dateStr, 
           status: 'completed', 
@@ -715,13 +906,40 @@ exports.backfillHistoricalData = onCall({
         continue;
       }
       
+      // Always fetch individual orders - we need them for revenue data
+      console.log(`Fetching individual details for ${orderList.length} orders...`);
       const detailedOrders = await fetchOrderDetails(orderList);
-      console.log(`Fetched ${detailedOrders.length} detailed orders out of ${orderList.length}`);
+      console.log(`Successfully fetched ${detailedOrders.length} detailed orders out of ${orderList.length}`);
       
-      const batchIds = await batchAndStoreOrders(dateStr, detailedOrders);
-      const summary = calculateDailySummary(dateStr, detailedOrders);
-      summary.batchIds = batchIds;
-      await storeDailySummary(dateStr, summary);
+      // Use detailed orders (they have the actual data we need)
+      const mergedOrders = detailedOrders;
+      
+      // Group orders by their actual order date
+      const ordersByDate = {};
+      mergedOrders.forEach(order => {
+        // Extract date from orderDate field (format: "2025-09-01 11:56:53")
+        const orderDateStr = order.orderDate?.split(' ')[0] || dateStr;
+        if (!ordersByDate[orderDateStr]) {
+          ordersByDate[orderDateStr] = [];
+        }
+        ordersByDate[orderDateStr].push(order);
+      });
+      
+      console.log(`Grouped orders into ${Object.keys(ordersByDate).length} different dates`);
+      
+      // Process and store each day's orders separately
+      for (const [dayStr, dayOrders] of Object.entries(ordersByDate)) {
+        console.log(`Processing ${dayOrders.length} orders for ${dayStr}`);
+        
+        // Skip batch storage when we don't have detailed orders
+        // (batches are mainly for detailed order data)
+        
+        // Calculate and store summary for this specific day using ALL orders for that day
+        const summary = calculateDailySummary(dayStr, dayOrders);
+        await storeDailySummary(dayStr, summary);
+        
+        console.log(`Stored summary for ${dayStr}: ${dayOrders.length} orders, $${summary.totalRevenue.toFixed(2)} revenue`);
+      }
       
       results.push({ 
         date: dateStr, 

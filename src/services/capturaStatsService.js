@@ -130,7 +130,7 @@ class CapturaStatsService {
     
     try {
       // Fetch from Firestore
-      const docRef = doc(firestore, 'capturaOrderStats', 'yearly', year.toString());
+      const docRef = doc(firestore, 'capturaOrderStats', `yearly_${year}`);
       const docSnap = await getDoc(docRef);
       
       if (!docSnap.exists()) {
@@ -514,6 +514,51 @@ class CapturaStatsService {
     const keys = Object.keys(localStorage);
     const statsKeys = keys.filter(k => k.startsWith(this.CACHE_PREFIX));
     statsKeys.forEach(key => localStorage.removeItem(key));
+  }
+
+  /**
+   * Debug function to inspect Firestore collections directly
+   */
+  async debugFirestoreCollections() {
+    try {
+      console.log('=== FIRESTORE DEBUG INSPECTION ===');
+      
+      // Try to list documents in capturaOrderBatches collection
+      const capturaOrderBatchesRef = collection(firestore, 'capturaOrderBatches');
+      const snapshot = await getDocs(capturaOrderBatchesRef);
+      
+      console.log(`Found ${snapshot.size} documents in capturaOrderBatches collection:`);
+      
+      const documents = [];
+      snapshot.forEach(doc => {
+        documents.push({
+          id: doc.id,
+          exists: doc.exists(),
+          data: doc.data()
+        });
+        console.log(`Document ID: ${doc.id}`, doc.data());
+      });
+      
+      // Specifically check for 2025-08-31 document
+      const aug31DocRef = doc(firestore, 'capturaOrderBatches', '2025-08-31', 'summary', 'daily');
+      console.log(`Checking specific path: ${aug31DocRef.path}`);
+      
+      const aug31Doc = await getDoc(aug31DocRef);
+      console.log(`2025-08-31 document exists: ${aug31Doc.exists()}`);
+      if (aug31Doc.exists()) {
+        console.log('2025-08-31 document data:', aug31Doc.data());
+      }
+      
+      return {
+        totalDocuments: snapshot.size,
+        documents: documents,
+        aug31Exists: aug31Doc.exists(),
+        aug31Data: aug31Doc.exists() ? aug31Doc.data() : null
+      };
+    } catch (error) {
+      console.error('Error in debugFirestoreCollections:', error);
+      throw error;
+    }
   }
 
   /**

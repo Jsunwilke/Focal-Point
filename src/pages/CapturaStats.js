@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import capturaStatsService from '../services/capturaStatsService';
+import { capturaOrdersService } from '../services/capturaOrdersService';
 import { readCounter } from '../services/readCounter';
 import {
   BarChart3,
@@ -23,7 +24,7 @@ const CapturaStats = () => {
   const { userProfile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('day');
-  const [selectedDate, setSelectedDate] = useState(new Date('2025-08-31'));
+  const [selectedDate, setSelectedDate] = useState(new Date(2025, 7, 31)); // Month is 0-indexed, so 7 = August
   const [stats, setStats] = useState(null);
   const [syncStatus, setSyncStatus] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -34,7 +35,7 @@ const CapturaStats = () => {
   // Load stats on mount and when period/date changes
   useEffect(() => {
     // Clear cache on mount to ensure fresh data
-    if (selectedDate.toDateString() === new Date('2025-08-31').toDateString()) {
+    if (selectedDate.toDateString() === new Date(2025, 7, 31).toDateString()) {
       console.log('Clearing cache for fresh August 31 data load');
       capturaStatsService.clearCache();
     }
@@ -48,12 +49,26 @@ const CapturaStats = () => {
     try {
       let data;
       
-      console.log(`CapturaStats: Loading ${selectedPeriod} stats for ${selectedDate.toDateString()} (${selectedDate.toISOString().split('T')[0]})`);
+      const dateStr = selectedDate.toISOString().split('T')[0];
+      console.log(`=== CAPTURA STATS DEBUG ===`);
+      console.log(`Loading ${selectedPeriod} stats for:`, {
+        selectedDate: selectedDate.toDateString(),
+        dateString: dateStr,
+        currentTime: new Date().toISOString(),
+        cacheCleared: selectedDate.toDateString() === new Date('2025-08-31').toDateString()
+      });
       
       switch (selectedPeriod) {
         case 'day':
+          console.log(`About to call getDailyStats with date:`, selectedDate);
           data = await capturaStatsService.getDailyStats(selectedDate);
-          console.log(`CapturaStats: Daily stats result:`, data);
+          console.log(`=== DAILY STATS RESULT ===`, {
+            hasData: !!data,
+            totalOrders: data?.totalOrders,
+            totalRevenue: data?.totalRevenue,
+            dataKeys: data ? Object.keys(data) : null,
+            rawData: data
+          });
           break;
         case 'month':
           data = await capturaStatsService.getMonthlyStats(
@@ -106,9 +121,9 @@ const CapturaStats = () => {
     setSyncing(true);
     setError(null);
     try {
-      // Use August 31, 2025 since that's when we know there are orders
-      const startDate = new Date('2025-08-31');
-      const endDate = new Date('2025-08-31');
+      // Use August 31, 2025 since that's when we know there are orders (timezone-corrected)
+      const startDate = new Date(2025, 7, 31); // Month is 0-indexed, so 7 = August
+      const endDate = new Date(2025, 7, 31);
 
       console.log('Syncing data for date range:', startDate.toDateString(), 'to', endDate.toDateString());
       const result = await capturaStatsService.triggerBackfill(startDate, endDate, true); // Force overwrite
@@ -262,6 +277,177 @@ const CapturaStats = () => {
             {syncing ? 'Syncing...' : 'Sync Data'}
           </button>
           <button 
+            onClick={async () => {
+              console.log('=== MANUAL FIRESTORE DEBUG ===');
+              try {
+                const result = await capturaStatsService.debugFirestoreCollections();
+                console.log('Debug result:', result);
+                alert(`Found ${result.totalDocuments} documents. Aug 31 exists: ${result.aug31Exists}. Check console for details.`);
+              } catch (error) {
+                console.error('Debug failed:', error);
+                alert('Debug failed: ' + error.message);
+              }
+            }}
+            style={{ 
+              backgroundColor: '#28a745',
+              color: 'white',
+              marginRight: '8px',
+              border: 'none',
+              padding: '6px 12px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            🔍 Debug DB
+          </button>
+          <button 
+            onClick={async () => {
+              console.log('=== API vs FIRESTORE COMPARISON ===');
+              try {
+                // Get live API data for August 31, 2025
+                console.log('Fetching live API data...');
+                const apiData = await capturaOrdersService.getOrders('2025-08-31', '2025-08-31', 1, 50);
+                console.log('Live API data for 2025-08-31:', {
+                  totalOrders: apiData.totalOrders || apiData.pagination?.totalCount,
+                  ordersLength: apiData.orders?.length,
+                  paginationInfo: apiData.pagination,
+                  sampleOrder: apiData.orders?.[0],
+                  fullApiResponse: apiData
+                });
+                
+                // Get Firestore data
+                console.log('Fetching Firestore data...');
+                const firestoreData = await capturaStatsService.getDailyStats(new Date(2025, 7, 31)); // Timezone-corrected
+                console.log('Firestore data for 2025-08-31:', {
+                  exists: !!firestoreData,
+                  totalOrders: firestoreData?.totalOrders,
+                  totalRevenue: firestoreData?.totalRevenue,
+                  fullFirestoreData: firestoreData
+                });
+                
+                const apiOrderCount = apiData.totalOrders || apiData.pagination?.totalCount || apiData.orders?.length || 0;
+                alert(`API: ${apiOrderCount} orders | Firestore: ${firestoreData?.totalOrders || 0} orders. Check console for details.`);
+              } catch (error) {
+                console.error('Comparison failed:', error);
+                alert('Comparison failed: ' + error.message);
+              }
+            }}
+            style={{ 
+              backgroundColor: '#17a2b8',
+              color: 'white',
+              marginRight: '8px',
+              border: 'none',
+              padding: '6px 12px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            🔄 Compare API/DB
+          </button>
+          <button 
+            onClick={async () => {
+              console.log('=== SIMPLE API TEST ===');
+              try {
+                // Test different date formats and parameters
+                console.log('Testing various API calls...');
+                
+                // Test 1: Simple API call
+                const test1 = await capturaOrdersService.getOrders('2025-08-31', '2025-08-31');
+                console.log('Test 1 (minimal params):', test1);
+                
+                // Test 2: Different date format
+                const test2 = await capturaOrdersService.getOrders('08-31-2025', '08-31-2025');
+                console.log('Test 2 (US date format):', test2);
+                
+                // Test 3: Single date
+                const test3 = await capturaOrdersService.getOrders('2025-08-31');
+                console.log('Test 3 (single date):', test3);
+                
+                alert('API tests complete. Check console for results.');
+              } catch (error) {
+                console.error('API test failed:', error);
+                alert('API test failed: ' + error.message);
+              }
+            }}
+            style={{ 
+              backgroundColor: '#6c757d',
+              color: 'white',
+              marginRight: '8px',
+              border: 'none',
+              padding: '6px 12px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            🧪 Test API
+          </button>
+          <button 
+            onClick={async () => {
+              console.log('=== MANUAL DATA CREATION ===');
+              try {
+                // Get API data
+                const apiData = await capturaOrdersService.getOrders('2025-08-31', '2025-08-31', 1, 500);
+                console.log(`Got ${apiData.orders?.length || 0} orders from API`);
+                
+                if (!apiData.orders || apiData.orders.length === 0) {
+                  alert('No API data found to create stats from');
+                  return;
+                }
+                
+                // Create a basic daily summary from the API data
+                const summary = {
+                  date: '2025-08-31',
+                  totalOrders: apiData.orders.length,
+                  totalRevenue: apiData.orders.reduce((sum, order) => sum + (order.total || 0), 0),
+                  totalItems: apiData.orders.reduce((sum, order) => sum + (order.items?.length || 0), 0),
+                  averageOrderValue: 0,
+                  ordersByGallery: {},
+                  ordersBySchool: {},
+                  topProducts: [],
+                  createdAt: new Date().toISOString(),
+                  source: 'manual_creation'
+                };
+                
+                summary.averageOrderValue = summary.totalOrders > 0 ? summary.totalRevenue / summary.totalOrders : 0;
+                
+                console.log('Created summary:', summary);
+                
+                // Write directly to Firestore to bypass the broken sync
+                const { doc, setDoc } = await import('../services/firestoreWrapper');
+                const { firestore } = await import('../firebase/config');
+                
+                const docRef = doc(firestore, 'capturaOrderBatches', '2025-08-31', 'summary', 'daily');
+                await setDoc(docRef, summary);
+                
+                console.log('Successfully wrote manual summary to Firestore');
+                
+                // Clear cache and reload stats
+                capturaStatsService.clearCache();
+                await loadStats();
+                
+                alert(`✅ Successfully created and saved stats: ${summary.totalOrders} orders, $${summary.totalRevenue.toFixed(2)} revenue!`);
+              } catch (error) {
+                console.error('Manual creation failed:', error);
+                alert('Manual creation failed: ' + error.message);
+              }
+            }}
+            style={{ 
+              backgroundColor: '#dc3545',
+              color: 'white',
+              marginRight: '8px',
+              border: 'none',
+              padding: '6px 12px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            🚑 Manual Fix
+          </button>
+          <button 
             className="captura-stats__refresh-btn"
             onClick={handleRefresh}
             disabled={refreshing}
@@ -338,6 +524,24 @@ const CapturaStats = () => {
             onChange={(e) => setSelectedDate(new Date(e.target.value))}
           />
         </div>
+      </div>
+
+      {/* Debug Info */}
+      <div style={{ 
+        backgroundColor: '#f8f9fa', 
+        padding: '12px', 
+        marginBottom: '16px', 
+        borderRadius: '4px',
+        border: '1px solid #dee2e6',
+        fontSize: '12px',
+        fontFamily: 'monospace'
+      }}>
+        <strong>🔍 Debug Info:</strong><br/>
+        Querying: {selectedPeriod} stats for {selectedDate.toDateString()} ({selectedDate.toISOString().split('T')[0]})<br/>
+        Firestore Path: capturaOrderBatches/{selectedDate.toISOString().split('T')[0]}/summary/daily<br/>
+        Current Time: {new Date().toISOString()}<br/>
+        Stats Data: {stats ? `Found (${stats.totalOrders} orders)` : 'NULL - No data found'}<br/>
+        Loading: {loading ? 'Yes' : 'No'} | Syncing: {syncing ? 'Yes' : 'No'}
       </div>
 
       {/* Error Message */}
