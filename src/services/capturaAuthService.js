@@ -15,6 +15,12 @@ class CapturaAuthService {
       const callable = httpsCallable(this.functions, functionName);
       const result = await callable(data);
       
+      // Handle undefined result or result.data
+      if (!result || !result.data) {
+        console.error(`Function ${functionName} returned undefined result:`, result);
+        throw new Error(`Function ${functionName} returned invalid response`);
+      }
+      
       if (result.data.success) {
         return result.data.data;
       } else {

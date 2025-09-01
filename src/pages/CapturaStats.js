@@ -22,16 +22,22 @@ import './CapturaStats.css';
 const CapturaStats = () => {
   const { userProfile } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [selectedPeriod, setSelectedPeriod] = useState('month');
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedPeriod, setSelectedPeriod] = useState('day');
+  const [selectedDate, setSelectedDate] = useState(new Date('2025-08-31'));
   const [stats, setStats] = useState(null);
   const [syncStatus, setSyncStatus] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [expandedSection, setExpandedSection] = useState(null);
   const [error, setError] = useState(null);
 
   // Load stats on mount and when period/date changes
   useEffect(() => {
+    // Clear cache on mount to ensure fresh data
+    if (selectedDate.toDateString() === new Date('2025-08-31').toDateString()) {
+      console.log('Clearing cache for fresh August 31 data load');
+      capturaStatsService.clearCache();
+    }
     loadStats();
     loadSyncStatus();
   }, [selectedPeriod, selectedDate]);
@@ -42,9 +48,12 @@ const CapturaStats = () => {
     try {
       let data;
       
+      console.log(`CapturaStats: Loading ${selectedPeriod} stats for ${selectedDate.toDateString()} (${selectedDate.toISOString().split('T')[0]})`);
+      
       switch (selectedPeriod) {
         case 'day':
           data = await capturaStatsService.getDailyStats(selectedDate);
+          console.log(`CapturaStats: Daily stats result:`, data);
           break;
         case 'month':
           data = await capturaStatsService.getMonthlyStats(
@@ -90,6 +99,33 @@ const CapturaStats = () => {
       await loadSyncStatus();
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const handleSyncData = async () => {
+    setSyncing(true);
+    setError(null);
+    try {
+      // Use August 31, 2025 since that's when we know there are orders
+      const startDate = new Date('2025-08-31');
+      const endDate = new Date('2025-08-31');
+
+      console.log('Syncing data for date range:', startDate.toDateString(), 'to', endDate.toDateString());
+      const result = await capturaStatsService.triggerBackfill(startDate, endDate, true); // Force overwrite
+      console.log('Backfill result:', result);
+      
+      if (result.success) {
+        // Refresh data after successful sync
+        await loadStats();
+        await loadSyncStatus();
+      } else {
+        setError('Sync completed but no data was processed.');
+      }
+    } catch (error) {
+      console.error('Error syncing data:', error);
+      setError('Failed to sync data: ' + error.message);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -212,6 +248,19 @@ const CapturaStats = () => {
       <div className="captura-stats__header">
         <h1>Order Statistics</h1>
         <div className="captura-stats__actions">
+          <button 
+            className="captura-stats__sync-btn"
+            onClick={handleSyncData}
+            disabled={syncing}
+            style={{ 
+              backgroundColor: syncing ? '#ccc' : '#007bff',
+              color: 'white',
+              marginRight: '8px'
+            }}
+          >
+            <RefreshCw className={syncing ? 'spinning' : ''} size={16} />
+            {syncing ? 'Syncing...' : 'Sync Data'}
+          </button>
           <button 
             className="captura-stats__refresh-btn"
             onClick={handleRefresh}

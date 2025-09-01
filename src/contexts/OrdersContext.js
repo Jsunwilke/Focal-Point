@@ -113,7 +113,6 @@ export const OrdersProvider = ({ children }) => {
       // First check if we have this order in the current list and display it immediately
       const orderInList = orders.find(o => o.id === orderId);
       if (orderInList) {
-        console.log('Displaying order from list immediately:', orderInList);
         setSelectedOrder(orderInList);
         // Don't return - continue to fetch detailed data
       }
@@ -123,36 +122,19 @@ export const OrdersProvider = ({ children }) => {
       
       if (cachedDetailedOrder && cachedDetailedOrder.items) {
         // We have a detailed order with items - use it
-        console.log('Using cached detailed order:', cachedDetailedOrder);
         setSelectedOrder(cachedDetailedOrder);
         readCounter.recordCacheHit('order-detail', 'OrdersContext', 1);
         setLoadingOrderDetails(false);
         return; // No need to fetch again
       } else if (!orderInList && cachedDetailedOrder) {
         // Show cached version if we don't have list version
-        console.log('Using cached order (no items):', cachedDetailedOrder);
         setSelectedOrder(cachedDetailedOrder);
       } else {
         readCounter.recordCacheMiss('order-detail', 'OrdersContext');
       }
 
       // Always fetch fresh detailed data to get items and full information
-      console.log('Fetching detailed order data for:', orderId);
       const freshOrder = await capturaOrdersService.getOrderById(orderId);
-      console.log('Fresh detailed order received:', freshOrder);
-      console.log('=== Order Details Debug ===');
-      console.log('Gallery Orders in fresh order:', freshOrder?.galleryOrders);
-      console.log('Items by Student:', freshOrder?.itemsByStudent);
-      if (freshOrder?.galleryOrders) {
-        freshOrder.galleryOrders.forEach((go, idx) => {
-          console.log(`Gallery Order ${idx} gallery data:`, {
-            hasGallery: !!go.gallery,
-            galleryTitle: go.gallery?.title,
-            galleryName: go.gallery?.name,
-            fullGalleryObject: go.gallery
-          });
-        });
-      }
       setSelectedOrder(freshOrder);
       
       // Cache the order
@@ -172,7 +154,6 @@ export const OrdersProvider = ({ children }) => {
   const loadStatistics = useCallback(async (range = 'month') => {
     // Statistics endpoint doesn't exist in Captura API
     // TODO: Implement by fetching orders and calculating stats locally
-    console.log('Statistics loading disabled - endpoint not available');
     return;
     
     /* Original implementation commented out:

@@ -97,6 +97,13 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       enabled: true,
     },
     {
+      id: "class-groups",
+      label: "Class Groups",
+      icon: Users,
+      path: "/class-groups",
+      enabled: true,
+    },
+    {
       id: "tracking",
       label: "Tracking",
       icon: Scan,

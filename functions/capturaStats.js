@@ -32,7 +32,7 @@ async function getCapturaAccessToken() {
     
     return response.data.access_token;
   } catch (error) {
-    logger.error('Failed to get Captura access token:', error);
+    console.error('Failed to get Captura access token:', error);
     throw new Error('Failed to authenticate with Captura API');
   }
 }
@@ -53,11 +53,11 @@ exports.syncDailyOrders = onSchedule({
     const dateStr = formatDate(yesterday);
     
     try {
-      logger.info(`Starting daily sync for ${dateStr}`);
+      console.log(`Starting daily sync for ${dateStr}`);
       
       // Step 1: Fetch all order IDs for the date
       const orderList = await fetchAllOrdersForDate(dateStr);
-      logger.info(`Found ${orderList.length} orders for ${dateStr}`);
+      console.log(`Found ${orderList.length} orders for ${dateStr}`);
       
       // Step 2: Fetch detailed data for each order
       const detailedOrders = await fetchOrderDetails(orderList);
@@ -79,7 +79,7 @@ exports.syncDailyOrders = onSchedule({
       return { success: true, ordersProcessed: orderList.length };
       
     } catch (error) {
-      logger.error('Sync failed:', error);
+      console.error('Sync failed:', error);
       await logSyncStatus(syncStart, 'failed', 0, error.message);
       throw error;
     }
@@ -93,27 +93,27 @@ async function fetchAllOrdersForDate(dateStr) {
   let start = 1;
   let hasMore = true;
   
-  logger.info(`Starting to fetch orders for date: ${dateStr}`);
+  console.log(`Starting to fetch orders for date: ${dateStr}`);
   
   while (hasMore) {
     const batch = await fetchOrderBatch(dateStr, dateStr, start, start + API_LIMIT - 1);
     
     if (batch && Array.isArray(batch)) {
-      logger.info(`Received batch with ${batch.length} items`);
+      console.log(`Received batch with ${batch.length} items`);
       
       // Extract orders from each batch item
       let ordersInThisBatch = 0;
       batch.forEach((batchItem, index) => {
         if (batchItem.orders && Array.isArray(batchItem.orders)) {
-          logger.info(`Batch item ${index} has ${batchItem.orders.length} orders`);
+          console.log(`Batch item ${index} has ${batchItem.orders.length} orders`);
           allOrders.push(...batchItem.orders);
           ordersInThisBatch += batchItem.orders.length;
         } else {
-          logger.info(`Batch item ${index} has no orders array`);
+          console.log(`Batch item ${index} has no orders array`);
         }
       });
       
-      logger.info(`Extracted ${ordersInThisBatch} orders from this batch. Total so far: ${allOrders.length}`);
+      console.log(`Extracted ${ordersInThisBatch} orders from this batch. Total so far: ${allOrders.length}`);
       
       // Check if we got less than the limit
       const batchOrderCount = batch.reduce((sum, item) => 
@@ -127,12 +127,12 @@ async function fetchAllOrdersForDate(dateStr) {
         await sleep(1000);
       }
     } else {
-      logger.info('Batch is null or not an array - stopping');
+      console.log('Batch is null or not an array - stopping');
       hasMore = false;
     }
   }
   
-  logger.info(`Finished fetching orders for ${dateStr}. Total orders found: ${allOrders.length}`);
+  console.log(`Finished fetching orders for ${dateStr}. Total orders found: ${allOrders.length}`);
   return allOrders;
 }
 
@@ -152,7 +152,7 @@ async function fetchOrderBatch(startDate, endDate, start, end) {
   
   const url = `https://api.imagequix.com/api/v1/account/${accountId}/order?${params}`;
   
-  logger.info(`Fetching orders: ${url}`);
+  console.log(`Fetching orders: ${url}`);
   
   const response = await axios.get(url, {
     headers: {
@@ -163,13 +163,13 @@ async function fetchOrderBatch(startDate, endDate, start, end) {
   });
   
   // Log the full response structure
-  logger.info(`API Response - Total: ${response.data.total}, Start: ${response.data.start}, End: ${response.data.end}`);
-  logger.info(`API Response - Data array length: ${response.data.data ? response.data.data.length : 0}`);
+  console.log(`API Response - Total: ${response.data.total}, Start: ${response.data.start}, End: ${response.data.end}`);
+  console.log(`API Response - Data array length: ${response.data.data ? response.data.data.length : 0}`);
   
   // Log first item if exists to see structure
   if (response.data.data && response.data.data.length > 0) {
     const firstItem = response.data.data[0];
-    logger.info(`First batch item has ${firstItem.orders ? firstItem.orders.length : 0} orders`);
+    console.log(`First batch item has ${firstItem.orders ? firstItem.orders.length : 0} orders`);
   }
   
   return response.data.data;
@@ -193,7 +193,7 @@ async function fetchOrderDetails(orderList) {
         if (result.status === 'fulfilled' && result.value) {
           detailedOrders.push(result.value);
         } else {
-          logger.error(`Failed to fetch order ${batch[index].id}:`, result.reason);
+          console.error(`Failed to fetch order ${batch[index].id}:`, result.reason);
         }
       });
       
@@ -202,7 +202,7 @@ async function fetchOrderDetails(orderList) {
         await sleep(500);
       }
     } catch (error) {
-      logger.error(`Batch ${i} failed:`, error);
+      console.error(`Batch ${i} failed:`, error);
     }
   }
   
@@ -232,7 +232,7 @@ async function fetchSingleOrderDetail(orderId) {
     
     return response.data;
   } catch (error) {
-    logger.error(`Failed to fetch order ${orderId}:`, error.message);
+    console.error(`Failed to fetch order ${orderId}:`, error.message);
     throw error;
   }
 }
@@ -282,7 +282,7 @@ async function batchAndStoreOrders(dateStr, orders) {
     batchRefs.push(batchId);
   }
   
-  logger.info(`Stored ${batches.length} batches for ${dateStr}`);
+  console.log(`Stored ${batches.length} batches for ${dateStr}`);
   return batchRefs;
 }
 
@@ -483,7 +483,7 @@ async function storeDailySummary(dateStr, summary) {
     .doc('daily')
     .set(summary);
   
-  logger.info(`Stored daily summary for ${dateStr}`);
+  console.log(`Stored daily summary for ${dateStr}`);
 }
 
 /**
@@ -494,7 +494,7 @@ async function updateMonthlyStats(date) {
   const month = date.getMonth();
   const monthStr = `${year}-${(month + 1).toString().padStart(2, '0')}`;
   
-  logger.info(`Updating monthly stats for ${monthStr}`);
+  console.log(`Updating monthly stats for ${monthStr}`);
   
   // Get all daily summaries for the month
   const startDate = new Date(year, month, 1);
@@ -514,12 +514,12 @@ async function updateMonthlyStats(date) {
         dailySummaries.push(summaryDoc.data());
       }
     } catch (error) {
-      logger.warn(`No summary for ${dateStr}`);
+      console.warn(`No summary for ${dateStr}`);
     }
   }
   
   if (dailySummaries.length === 0) {
-    logger.warn(`No daily summaries found for ${monthStr}`);
+    console.warn(`No daily summaries found for ${monthStr}`);
     return;
   }
   
@@ -650,7 +650,7 @@ async function updateMonthlyStats(date) {
     .doc(monthStr)
     .set(monthlyStats);
   
-  logger.info(`Stored monthly stats for ${monthStr}`);
+  console.log(`Stored monthly stats for ${monthStr}`);
 }
 
 /**
@@ -677,33 +677,36 @@ exports.backfillHistoricalData = onCall({
   const end = new Date(endDate);
   const results = [];
   
-  logger.info(`Starting backfill from ${startDate} to ${endDate}`);
+  console.log(`Starting backfill from ${startDate} to ${endDate}`);
   
   // Process each day
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const dateStr = formatDate(d);
     
     try {
-      logger.info(`Backfilling ${dateStr}`);
+      console.log(`Backfilling ${dateStr}`);
       
-      // Check if already processed
+      // Check if already processed (allow force overwrite for debugging)
       const existing = await db.collection('capturaOrderBatches')
         .doc(dateStr)
         .collection('summary')
         .doc('daily')
         .get();
       
-      if (existing.exists) {
+      if (existing.exists && !data.forceOverwrite) {
+        console.log(`Daily summary already exists for ${dateStr}, skipping`);
         results.push({ date: dateStr, status: 'skipped', reason: 'already exists' });
         continue;
+      } else if (existing.exists) {
+        console.log(`Force overwriting existing data for ${dateStr}`);
       }
       
       // Process the day
       const orderList = await fetchAllOrdersForDate(dateStr);
-      logger.info(`Backfill for ${dateStr}: Found ${orderList.length} orders from batch API`);
+      console.log(`Backfill for ${dateStr}: Found ${orderList.length} orders from batch API`);
       
       if (orderList.length === 0) {
-        logger.info(`No orders found for ${dateStr}, skipping detailed fetch`);
+        console.log(`No orders found for ${dateStr}, skipping detailed fetch`);
         results.push({ 
           date: dateStr, 
           status: 'completed', 
@@ -713,7 +716,7 @@ exports.backfillHistoricalData = onCall({
       }
       
       const detailedOrders = await fetchOrderDetails(orderList);
-      logger.info(`Fetched ${detailedOrders.length} detailed orders out of ${orderList.length}`);
+      console.log(`Fetched ${detailedOrders.length} detailed orders out of ${orderList.length}`);
       
       const batchIds = await batchAndStoreOrders(dateStr, detailedOrders);
       const summary = calculateDailySummary(dateStr, detailedOrders);
@@ -730,7 +733,7 @@ exports.backfillHistoricalData = onCall({
       await sleep(2000);
       
     } catch (error) {
-      logger.error(`Failed to backfill ${dateStr}:`, error);
+      console.error(`Failed to backfill ${dateStr}:`, error);
       results.push({ 
         date: dateStr, 
         status: 'failed', 

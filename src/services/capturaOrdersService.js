@@ -33,12 +33,10 @@ class CapturaOrdersService {
       if (orderType) params.orderType = orderType;
       if (paymentStatus) params.paymentStatus = paymentStatus;
 
-      console.log('Fetching orders with params:', params);
 
       // Call Firebase Function with parameters
       const response = await capturaAuthService.makeAuthenticatedRequest('getCapturaOrders', params);
 
-      console.log('Captura orders response:', response);
 
       // Transform the response to ensure consistent format
       return this.transformOrdersResponse(response);
@@ -72,20 +70,6 @@ class CapturaOrdersService {
         orderId
       });
 
-      console.log('Single order API response:', response);
-      console.log('=== Raw API Gallery Data Debug ===');
-      if (response.galleryOrders) {
-        console.log('Raw galleryOrders from API:', response.galleryOrders);
-        response.galleryOrders.forEach((go, idx) => {
-          console.log(`Raw Gallery Order ${idx}:`, {
-            id: go.id,
-            galleryID: go.galleryID,
-            gallery: go.gallery,
-            hasGallery: !!go.gallery,
-            allFields: Object.keys(go)
-          });
-        });
-      }
       
       // Check if response has the same structure as list response
       if (response.orders && Array.isArray(response.orders) && response.orders.length > 0) {
@@ -97,12 +81,10 @@ class CapturaOrdersService {
           shipTo: response.shipTo,
           accountID: response.accountID
         }, response); // Pass full response as second parameter
-        console.log('Transformed order from array structure:', transformed);
         return transformed;
       } else {
         // Single order API returned the order directly
         const transformed = this.transformOrder(response, response); // Pass full response as second parameter
-        console.log('Transformed order from direct structure:', transformed);
         return transformed;
       }
     } catch (error) {
@@ -145,12 +127,12 @@ class CapturaOrdersService {
     if (response.orders && Array.isArray(response.orders)) {
       // This is the actual Captura response format
       const orders = response.orders.map(order => {
-        // Merge the parent billTo/shipTo data with each order
+        // Transform each order preserving its individual customer data
+        // Don't overwrite order's billTo/shipTo with parent-level data
         return this.transformOrder({
           ...order,
-          billTo: response.billTo,
-          shipTo: response.shipTo,
-          accountID: response.accountID
+          accountID: response.accountID || order.accountID
+          // Note: Removed billTo/shipTo override - each order keeps its own customer info
         }, originalApiResponse); // Pass full original response
       });
       
@@ -391,23 +373,9 @@ class CapturaOrdersService {
       return [];
     }
 
-    console.log('=== groupItemsByStudent Debug ===');
-    console.log('Gallery Orders:', galleryOrders);
-    console.log('Gallery Orders count:', galleryOrders.length);
-
     // Create a map of gallery order ID to student info
     const studentMap = {};
     galleryOrders.forEach((go, index) => {
-      console.log(`Gallery Order ${index}:`, {
-        id: go.id,
-        studentIdentifier: go.studentIdentifier,
-        subject: go.subject,
-        gallery: go.gallery,
-        galleryID: go.galleryID,
-        hasGalleryObject: !!go.gallery,
-        galleryTitle: go.gallery?.title,
-        galleryName: go.gallery?.name
-      });
       // Determine student name using same logic as transformOrder
       let studentName = go.studentIdentifier;
       if (!studentName && (go.subject?.firstName || go.subject?.lastName)) {
@@ -495,7 +463,6 @@ class CapturaOrdersService {
       }
       params.orderEndDate = adjustedEndDate;
       
-      console.log(`Adjusted end date from ${endDate} to ${adjustedEndDate} for inclusive range`);
     }
     
     return this.getOrders(params);

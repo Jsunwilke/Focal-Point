@@ -161,13 +161,35 @@ const RosterTable = ({ roster, jobId, highlightPlayerId }) => {
 
   const sortRoster = (rosterData, field, direction) => {
     const sorted = [...rosterData].sort((a, b) => {
-      const valueA = (a[field] || "").toLowerCase();
-      const valueB = (b[field] || "").toLowerCase();
+      let valueA = a[field] || "";
+      let valueB = b[field] || "";
+
+      // Special handling for imageNumbers field - sort numerically
+      if (field === "imageNumbers") {
+        // Extract the first number from values like "3856", "3854-55", etc.
+        const getFirstNumber = (str) => {
+          if (!str) return 0;
+          const match = str.toString().match(/^\d+/);
+          return match ? parseInt(match[0], 10) : 0;
+        };
+        
+        const numA = getFirstNumber(valueA);
+        const numB = getFirstNumber(valueB);
+        
+        // If both have numbers, compare numerically
+        if (numA || numB) {
+          return direction === "asc" ? numA - numB : numB - numA;
+        }
+      }
+
+      // Default string comparison for all other fields
+      const strA = valueA.toString().toLowerCase();
+      const strB = valueB.toString().toLowerCase();
 
       if (direction === "asc") {
-        return valueA.localeCompare(valueB);
+        return strA.localeCompare(strB);
       } else {
-        return valueB.localeCompare(valueA);
+        return strB.localeCompare(strA);
       }
     });
 
@@ -724,7 +746,13 @@ const RosterTable = ({ roster, jobId, highlightPlayerId }) => {
                   position: "relative",
                 }}
               >
-                Images
+                <div
+                  className="sortable-header"
+                  onClick={() => handleSort("imageNumbers")}
+                >
+                  <div>Images</div>
+                  <div className="sort-icon">{getSortIcon("imageNumbers")}</div>
+                </div>
                 <div
                   className="resize-handle"
                   onMouseDown={(e) =>

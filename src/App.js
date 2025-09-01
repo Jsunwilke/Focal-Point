@@ -21,6 +21,7 @@ import TeamManagement from "./pages/TeamManagement";
 import SchoolManagement from "./pages/SchoolManagement";
 import DailyReports from "./pages/DailyReports";
 import Sports from "./pages/Sports";
+import ClassGroups from "./pages/ClassGroups";
 import Schedule from "./pages/Schedule";
 import Settings from "./pages/Settings";
 import TimeTracking from "./pages/TimeTracking";
@@ -135,6 +136,7 @@ const AppContent = () => {
                       <Route path="/team" element={<TeamManagement />} />
                       <Route path="/schools" element={<SchoolManagement />} />
                       <Route path="/sports" element={<Sports />} />
+                      <Route path="/class-groups" element={<ClassGroups />} />
                       <Route path="/tracking" element={<Tracking />} />
                       <Route path="/proofing" element={<Proofing />} />
                       <Route path="/photo-critique" element={<PhotoCritique />} />

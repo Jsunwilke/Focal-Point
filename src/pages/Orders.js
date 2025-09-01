@@ -145,7 +145,6 @@ const Orders = () => {
 
   // View order details
   const handleViewOrder = (order) => {
-    console.log('Viewing order:', order);
     loadOrderDetails(order.id);
   };
 
@@ -905,7 +904,6 @@ const Orders = () => {
                         }
                         
                         return studentsWithItems.map((student, studentIndex, array) => {
-                          console.log('Student data:', student.studentName, { galleryName: student.galleryName, grade: student.grade, teacher: student.teacher });
                           return (
                         <div key={student.galleryOrderID} className="orders__student-items-section" style={{
                           marginBottom: studentIndex < array.length - 1 ? '2rem' : '1rem',
@@ -1032,17 +1030,6 @@ const Orders = () => {
                               const studentTaxPortion = (selectedOrder.tax || 0) * studentProportion;
                               const studentShippingPortion = (selectedOrder.shipping || 0) / selectedOrder.galleryOrders.length;
                               
-                              // Debug log
-                              console.log('Student calculations:', {
-                                studentName: student.studentName,
-                                subtotal: student.subtotal,
-                                proportion: studentProportion,
-                                orderDiscount: selectedOrder.discount,
-                                studentDiscountPortion,
-                                studentTaxPortion,
-                                studentShippingPortion,
-                                total: student.subtotal - Math.abs(studentDiscountPortion) + studentTaxPortion + studentShippingPortion
-                              });
                               
                               // Calculate net subtotal after discount
                               const netSubtotal = student.subtotal + studentDiscountPortion; // discount is negative

@@ -39,13 +39,21 @@ class CapturaStatsService {
     try {
       // Fetch from Firestore
       const docRef = doc(firestore, 'capturaOrderBatches', dateStr, 'summary', 'daily');
+      console.log(`CapturaStatsService: Fetching daily stats for ${dateStr} from path:`, docRef.path);
       const docSnap = await getDoc(docRef);
       
       if (!docSnap.exists()) {
+        console.log(`CapturaStatsService: No document found for ${dateStr}`);
         return null;
       }
       
       const data = docSnap.data();
+      console.log(`CapturaStatsService: Found daily stats for ${dateStr}:`, {
+        totalOrders: data.totalOrders,
+        totalRevenue: data.totalRevenue,
+        hasOrdersByGallery: !!data.ordersByGallery,
+        ordersByGalleryKeys: data.ordersByGallery ? Object.keys(data.ordersByGallery) : []
+      });
       readCounter.recordRead('firestore', 'captura-stats-daily', 'CapturaStatsService', 1);
       
       // Cache the result
@@ -218,17 +226,29 @@ class CapturaStatsService {
   /**
    * Trigger manual sync for a date range
    */
-  async triggerBackfill(startDate, endDate) {
+  async triggerBackfill(startDate, endDate, forceOverwrite = false) {
     try {
-      const backfillFunction = httpsCallable(functions, 'backfillHistoricalData');
-      const result = await backfillFunction({
-        startDate: this.formatDate(startDate),
-        endDate: this.formatDate(endDate)
+      const formattedStartDate = this.formatDate(startDate);
+      const formattedEndDate = this.formatDate(endDate);
+      
+      console.log('Calling backfillHistoricalData with:', { 
+        startDate: formattedStartDate, 
+        endDate: formattedEndDate, 
+        forceOverwrite 
       });
       
+      const backfillFunction = httpsCallable(functions, 'backfillHistoricalData');
+      const result = await backfillFunction({
+        startDate: formattedStartDate,
+        endDate: formattedEndDate,
+        forceOverwrite
+      });
+      
+      console.log('Backfill function returned:', result);
       return result.data;
     } catch (error) {
       console.error('Error triggering backfill:', error);
+      console.error('Error details:', error.code, error.message, error.details);
       throw error;
     }
   }
