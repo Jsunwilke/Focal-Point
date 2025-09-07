@@ -22,6 +22,25 @@
   gap: 1rem;
 }
 
+.schools-refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.schools-refresh-btn .spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .schools-title {
   font-size: var(--font-size-3xl);
   font-weight: var(--font-weight-bold);

@@ -1047,6 +1047,10 @@ export const createSchool = async (organizationID, schoolData) => {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    
+    // Clear schools cache so fresh data is fetched on next load
+    organizationCacheService.clearSchoolsCache(organizationID);
+    
     return schoolRef.id;
   } catch (error) {
     throw error;
@@ -1069,6 +1073,14 @@ export const updateSchool = async (schoolId, schoolData) => {
     }
     
     await updateDoc(doc(firestore, "schools", schoolId), updateData);
+    
+    // Clear schools cache to ensure fresh data
+    // Get organizationID from the school document
+    const schoolDoc = await getDoc(doc(firestore, "schools", schoolId));
+    if (schoolDoc.exists()) {
+      const orgId = schoolDoc.data().organizationID;
+      organizationCacheService.clearSchoolsCache(orgId);
+    }
   } catch (error) {
     throw error;
   }

@@ -19,10 +19,12 @@ import {
   Building2,
   BookOpen,
   Image,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useDistricts } from "../contexts/DistrictContext";
 import { getSchools, createSchool, updateSchool } from "../firebase/firestore";
+import organizationCacheService from "../services/organizationCacheService";
 import Button from "../components/shared/Button";
 import AddSchoolModal from "../components/schools/AddSchoolModal";
 import SchoolSessionsModal from "../components/schools/SchoolSessionsModal";
@@ -62,6 +64,7 @@ const SchoolManagement = () => {
   const [showLocationPhotos, setShowLocationPhotos] = useState(false);
   const [locationPhotosSchool, setLocationPhotosSchool] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   // District state
   const [showAddDistrictModal, setShowAddDistrictModal] = useState(false);
@@ -170,6 +173,25 @@ const SchoolManagement = () => {
       console.error("Error loading schools:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (!organization?.id) return;
+    
+    try {
+      setRefreshing(true);
+      // Clear the schools cache to force fresh data
+      organizationCacheService.clearSchoolsCache(organization.id);
+      // Reload schools from Firestore
+      const schoolsList = await getSchools(organization.id);
+      setSchools(schoolsList);
+      setError(""); // Clear any previous errors
+    } catch (err) {
+      setError("Failed to refresh schools");
+      console.error("Error refreshing schools:", err);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -377,6 +399,16 @@ const SchoolManagement = () => {
               Districts
             </button>
           </div>
+          <Button
+            variant="secondary"
+            onClick={handleRefresh}
+            className="schools-refresh-btn"
+            disabled={refreshing || loading}
+            title="Refresh schools data"
+          >
+            <RefreshCw size={16} className={refreshing ? "spinning" : ""} />
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </Button>
           <Button
             variant="primary"
             onClick={() => activeTab === "schools" ? setShowAddModal(true) : setShowAddDistrictModal(true)}

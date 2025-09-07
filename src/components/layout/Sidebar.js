@@ -1,5 +1,5 @@
 // src/components/layout/Sidebar.js
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useStreamChat } from "../../contexts/StreamChatContext";
@@ -8,7 +8,6 @@ import {
   Calendar,
   Clock,
   Navigation,
-  School,
   Users,
   BarChart3,
   Settings,
@@ -18,7 +17,6 @@ import {
   Workflow,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   Scan,
   MessageCircle,
   Image,
@@ -33,18 +31,10 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
   const { userProfile, organization } = useAuth();
   const { totalUnreadCount = 0 } = useStreamChat() || {};
 
-  // Check if user has admin/manager permissions
-  const isAdminOrManager = userProfile?.role === 'admin' || userProfile?.role === 'manager';
+  // Check if user has admin permissions
   const isAdminOnly = userProfile?.role === 'admin';
-  const isAccountant = userProfile?.isAccountant === true;
 
-  // State for managing collapsed groups
-  const [collapsedGroups, setCollapsedGroups] = useState(() => {
-    const saved = localStorage.getItem('sidebarCollapsedGroups');
-    return saved ? JSON.parse(saved) : {};
-  });
-
-  // Top-level navigation items (always visible)
+  // Top-level navigation items (Settings moved to bottom)
   const topLevelItems = [
     {
       id: "dashboard",
@@ -74,17 +64,10 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       path: "/chat",
       enabled: true,
     },
-    {
-      id: "settings",
-      label: "Settings",
-      icon: Settings,
-      path: "/settings",
-      enabled: true,
-    },
   ];
 
-  // Grouped navigation items
-  const navigationGroups = [
+  // Navigation sections with items (no longer collapsible, just visual grouping)
+  const navigationSections = [
     {
       id: "employee",
       label: "Hours & Mileage",
@@ -184,36 +167,13 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
     },
   ];
 
-  // Save collapsed state to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('sidebarCollapsedGroups', JSON.stringify(collapsedGroups));
-  }, [collapsedGroups]);
-
-  // Initialize default expanded groups based on user role
-  useEffect(() => {
-    if (!localStorage.getItem('sidebarCollapsedGroups')) {
-      const defaults = {};
-      if (userProfile) {
-        if (userProfile.role === 'admin') {
-          // Admin: expand business group
-          defaults.business = false;
-        } else if (userProfile.role === 'photographer') {
-          // Photographer: expand photography group
-          defaults.photography = false;
-        } else {
-          // Others: expand employee group
-          defaults.employee = false;
-        }
-      }
-      setCollapsedGroups(defaults);
-    }
-  }, [userProfile]);
-
-  const toggleGroup = (groupId) => {
-    setCollapsedGroups(prev => ({
-      ...prev,
-      [groupId]: !prev[groupId]
-    }));
+  // Settings item (separated to show at bottom)
+  const settingsItem = {
+    id: "settings",
+    label: "Settings",
+    icon: Settings,
+    path: "/settings",
+    enabled: true,
   };
 
   const handleNavigation = (item) => {
@@ -270,9 +230,9 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
           {/* Top-level items */}
           {topLevelItems
             .filter(item => {
-              // If user is an accountant, only show settings
+              // If user is an accountant, skip these top items
               if (userProfile && userProfile.isAccountant === true) {
-                return item.id === 'settings';
+                return false;
               }
               return true;
             })
@@ -304,67 +264,70 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
               );
             })}
 
-          {/* Grouped items */}
-          {navigationGroups
-            .filter(group => {
-              // If user is an accountant, only show business group
+          {/* Navigation sections with always-visible items */}
+          {navigationSections
+            .filter(section => {
+              // If user is an accountant, only show business section
               if (userProfile && userProfile.isAccountant === true) {
-                return group.id === 'business';
+                return section.id === 'business';
               }
               return true;
             })
-            .map((group) => {
-              const isGroupCollapsed = collapsedGroups[group.id] !== false;
-              const hasActiveItem = group.items.some(item => isActive(item.path));
-              
+            .map((section) => {
               return (
-                <li key={group.id} className="sidebar__nav-group">
-                  <button
-                    className={`sidebar__nav-group-header ${hasActiveItem ? 'sidebar__nav-group-header--has-active' : ''}`}
-                    onClick={() => toggleGroup(group.id)}
-                    title={isCollapsed ? group.label : undefined}
-                  >
-                    <ChevronDown 
-                      className={`sidebar__nav-group-icon ${!isGroupCollapsed ? 'sidebar__nav-group-icon--expanded' : ''}`} 
-                      size={16} 
-                    />
-                    <span className="sidebar__nav-group-label">{group.label}</span>
-                  </button>
+                <li key={section.id} className="sidebar__nav-section">
+                  <div className="sidebar__nav-section-header">
+                    <span className="sidebar__nav-section-label">{section.label}</span>
+                  </div>
                   
-                  {!isGroupCollapsed && (
-                    <ul className="sidebar__nav-group-list">
-                      {group.items
-                        .filter(item => {
-                          // Filter admin-only items
-                          return !item.adminOnly || isAdminOnly;
-                        })
-                        .map((item) => {
-                          const IconComponent = item.icon;
-                          return (
-                            <li key={item.id} className="sidebar__nav-group-item">
-                              <button
-                                className={`sidebar__nav-link sidebar__nav-link--grouped ${
-                                  isActive(item.path) ? "sidebar__nav-link--active" : ""
-                                } ${!item.enabled ? "sidebar__nav-link--disabled" : ""}`}
-                                onClick={() => handleNavigation(item)}
-                                disabled={!item.enabled}
-                                data-tooltip={item.label}
-                                title={isCollapsed ? item.label : undefined}
-                              >
-                                <IconComponent className="sidebar__nav-icon" size={18} />
-                                <span className="sidebar__nav-label">{item.label}</span>
-                                {!item.enabled && (
-                                  <span className="sidebar__nav-badge">Soon</span>
-                                )}
-                              </button>
-                            </li>
-                          );
-                        })}
-                    </ul>
-                  )}
+                  <ul className="sidebar__nav-section-list">
+                    {section.items
+                      .filter(item => {
+                        // Filter admin-only items
+                        return !item.adminOnly || isAdminOnly;
+                      })
+                      .map((item) => {
+                        const IconComponent = item.icon;
+                        return (
+                          <li key={item.id} className="sidebar__nav-section-item">
+                            <button
+                              className={`sidebar__nav-link sidebar__nav-link--sectioned ${
+                                isActive(item.path) ? "sidebar__nav-link--active" : ""
+                              } ${!item.enabled ? "sidebar__nav-link--disabled" : ""}`}
+                              onClick={() => handleNavigation(item)}
+                              disabled={!item.enabled}
+                              data-tooltip={item.label}
+                              title={isCollapsed ? item.label : undefined}
+                            >
+                              <IconComponent className="sidebar__nav-icon" size={18} />
+                              <span className="sidebar__nav-label">{item.label}</span>
+                              {!item.enabled && (
+                                <span className="sidebar__nav-badge">Soon</span>
+                              )}
+                            </button>
+                          </li>
+                        );
+                      })}
+                  </ul>
                 </li>
               );
             })}
+
+          {/* Settings at the bottom with divider */}
+          <li className="sidebar__nav-divider"></li>
+          <li className="sidebar__nav-item">
+            <button
+              className={`sidebar__nav-link ${
+                isActive(settingsItem.path) ? "sidebar__nav-link--active" : ""
+              }`}
+              onClick={() => handleNavigation(settingsItem)}
+              data-tooltip={settingsItem.label}
+              title={isCollapsed ? settingsItem.label : undefined}
+            >
+              <Settings className="sidebar__nav-icon" size={20} />
+              <span className="sidebar__nav-label">{settingsItem.label}</span>
+            </button>
+          </li>
         </ul>
       </nav>
     </aside>

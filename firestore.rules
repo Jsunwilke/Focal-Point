@@ -1299,14 +1299,15 @@ service cloud.firestore {
                        (!request.resource.data.keys().hasAny(['replacedAt']) || 
                         request.resource.data.replacedAt is timestamp);
       
-      // Only allow updating isLatest flag by organization members
+      // Only allow updating isLatest and isCurrent flags by organization members
       allow update: if request.auth != null && 
                        exists(/databases/$(database)/documents/proofGalleries/$(resource.data.galleryId)) &&
                        belongsToSameOrg(request.auth.uid, 
                          get(/databases/$(database)/documents/proofGalleries/$(resource.data.galleryId)).data.organizationId) &&
-                       // Only allow updating isLatest field
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isLatest']) &&
-                       request.resource.data.isLatest is bool;
+                       // Only allow updating isLatest and isCurrent fields
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isLatest', 'isCurrent']) &&
+                       (!request.resource.data.keys().hasAny(['isLatest']) || request.resource.data.isLatest is bool) &&
+                       (!request.resource.data.keys().hasAny(['isCurrent']) || request.resource.data.isCurrent is bool);
       
       // Only admins can delete revisions
       allow delete: if request.auth != null && 

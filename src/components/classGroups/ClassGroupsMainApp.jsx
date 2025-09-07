@@ -38,6 +38,41 @@ const ClassGroupsMainApp = () => {
     year: null,
   });
 
+  // Organize jobs into folder structure - must be before any conditional returns
+  const folderStructure = useMemo(() => {
+    const structure = {};
+    const jobs = getFilteredAndSortedJobs();
+
+    jobs.forEach((job) => {
+      const schoolName = job.schoolName || "Unknown School";
+      const year = getSchoolYear(job.sessionDate);
+
+      if (!structure[schoolName]) {
+        structure[schoolName] = {};
+      }
+
+      if (!structure[schoolName][year]) {
+        structure[schoolName][year] = [];
+      }
+
+      structure[schoolName][year].push(job);
+    });
+
+    return structure;
+  }, [getFilteredAndSortedJobs]);
+
+  // Reset folder view when search changes - must be before any conditional returns
+  React.useEffect(() => {
+    if (searchQuery.trim()) {
+      // When searching, reset to root but keep the search results visible
+      setCurrentFolderView({
+        level: "root",
+        school: null,
+        year: null,
+      });
+    }
+  }, [searchQuery]);
+
   // Show loading spinner while data is loading
   if (loading) {
     return (
@@ -75,29 +110,6 @@ const ClassGroupsMainApp = () => {
   const toggleSortDirection = () => {
     setSortDirection(sortDirection === "asc" ? "desc" : "asc");
   };
-
-  // Organize jobs into folder structure
-  const folderStructure = useMemo(() => {
-    const structure = {};
-    const jobs = getFilteredAndSortedJobs();
-
-    jobs.forEach((job) => {
-      const schoolName = job.schoolName || "Unknown School";
-      const year = getSchoolYear(job.sessionDate);
-
-      if (!structure[schoolName]) {
-        structure[schoolName] = {};
-      }
-
-      if (!structure[schoolName][year]) {
-        structure[schoolName][year] = [];
-      }
-
-      structure[schoolName][year].push(job);
-    });
-
-    return structure;
-  }, [getFilteredAndSortedJobs]);
 
   // Get current view data based on folder level
   const getCurrentViewData = () => {
@@ -172,18 +184,6 @@ const ClassGroupsMainApp = () => {
       });
     }
   };
-
-  // Reset folder view when search changes
-  React.useEffect(() => {
-    if (searchQuery.trim()) {
-      // When searching, reset to root but keep the search results visible
-      setCurrentFolderView({
-        level: "root",
-        school: null,
-        year: null,
-      });
-    }
-  }, [searchQuery]);
 
   return (
     <div className="class-groups-container">
@@ -310,9 +310,9 @@ const ClassGroupsMainApp = () => {
           if (currentFolderView.level === "root" || currentFolderView.level === "school") {
             return (
               <div className="class-groups-folder-grid">
-                {currentData.map((item) => (
+                {currentData.map((item, index) => (
                   <ClassGroupFolderCard
-                    key={item.name}
+                    key={`${item.type}-${item.name}-${index}`}
                     name={item.name}
                     count={item.count}
                     type={item.type}
