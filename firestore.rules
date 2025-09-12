@@ -1193,10 +1193,9 @@ service cloud.firestore {
            get(/databases/$(database)/documents/proofGalleries/$(resource.data.galleryId)).data.organizationId) &&
          // Prevent changing core fields
          request.resource.data.galleryId == resource.data.galleryId &&
-         request.resource.data.filename == resource.data.filename &&
-         // Allow updating versioning fields
+         // Allow updating versioning fields (including filename for version replacements)
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['imageUrl', 'thumbnailUrl', 'status', 'denialNotes', 
+           .hasOnly(['imageUrl', 'thumbnailUrl', 'filename', 'status', 'denialNotes', 
                     'currentVersion', 'versionCount', 'hasVersions', 
                     'lastRevisionId', 'updatedAt']) &&
          // Validate version fields
@@ -1295,9 +1294,18 @@ service cloud.firestore {
                         request.resource.data.previousVersion is int) &&
                        (!request.resource.data.keys().hasAny(['isLatest']) || 
                         request.resource.data.isLatest is bool) &&
+                       (!request.resource.data.keys().hasAny(['isCurrent']) || 
+                        request.resource.data.isCurrent is bool) &&
+                       // Allow filename fields for audit trail
+                       (!request.resource.data.keys().hasAny(['originalFilename']) || 
+                        request.resource.data.originalFilename is string) &&
+                       (!request.resource.data.keys().hasAny(['newFilename']) || 
+                        request.resource.data.newFilename is string) &&
                        // Allow timestamp fields
                        (!request.resource.data.keys().hasAny(['replacedAt']) || 
-                        request.resource.data.replacedAt is timestamp);
+                        request.resource.data.replacedAt is timestamp) &&
+                       (!request.resource.data.keys().hasAny(['createdAt']) || 
+                        request.resource.data.createdAt is timestamp);
       
       // Only allow updating isLatest and isCurrent flags by organization members
       allow update: if request.auth != null && 

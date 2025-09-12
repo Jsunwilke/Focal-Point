@@ -36,6 +36,7 @@
 }
 
 .version-history-btn,
+.delete-proof-btn,
 .close-btn {
   width: 36px;
   height: 36px;
@@ -54,6 +55,12 @@
 .close-btn:hover {
   border-color: rgba(255, 255, 255, 0.4);
   color: white;
+}
+
+.delete-proof-btn:hover {
+  background: rgba(220, 53, 69, 0.2);
+  color: #ff6b7a;
+  border-color: rgba(220, 53, 69, 0.5);
 }
 
 /* Main viewing area */

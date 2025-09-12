@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { X, Copy, ExternalLink, Trash2, Clock, Eye, Check, AlertCircle, Archive, ArchiveRestore } from "lucide-react";
-import { getProofsByGalleryId, subscribeToProofs, getGalleryActivity, deleteGallery, batchReplaceProofImages, toggleGalleryArchiveStatus } from "../../services/proofingService";
+import { getProofsByGalleryId, subscribeToProofs, getGalleryActivity, deleteGallery, deleteProof, batchReplaceProofImages, toggleGalleryArchiveStatus } from "../../services/proofingService";
 import { proofingCacheService } from "../../services/proofingCacheService";
 import { readCounter } from "../../services/readCounter";
 import { useToast } from "../../contexts/ToastContext";
@@ -116,6 +116,37 @@ const GalleryDetailsModal = ({ isOpen, onClose, gallery, organization, userEmail
       showToast("Failed to delete gallery", "error");
     }
     setShowDeleteConfirm(false);
+  };
+
+  // Handle delete single proof
+  const handleProofDelete = async (proofToDelete) => {
+    try {
+      await deleteProof(gallery.id, proofToDelete.id);
+      showToast("Photo deleted successfully", "success");
+      
+      // Handle navigation if we're deleting the currently selected proof
+      if (selectedProof && selectedProof.id === proofToDelete.id) {
+        const currentIndex = proofs.findIndex(p => p.id === proofToDelete.id);
+        const remainingProofs = proofs.filter(p => p.id !== proofToDelete.id);
+        
+        if (remainingProofs.length === 0) {
+          // No photos left, close the modal
+          setSelectedProof(null);
+        } else if (currentIndex >= remainingProofs.length) {
+          // We deleted the last photo, go to the previous one
+          const newIndex = remainingProofs.length - 1;
+          setSelectedProof(remainingProofs[newIndex]);
+          setSelectedProofIndex(newIndex);
+        } else {
+          // Stay on the same index (which now shows the next photo)
+          setSelectedProof(remainingProofs[currentIndex]);
+          setSelectedProofIndex(currentIndex);
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting proof:", error);
+      showToast("Failed to delete photo", "error");
+    }
   };
 
   // Format timestamp
@@ -386,6 +417,7 @@ const GalleryDetailsModal = ({ isOpen, onClose, gallery, organization, userEmail
               setSelectedProof(proofs[newIndex]);
             }
           }}
+          onDelete={handleProofDelete}
         />
       )}
 

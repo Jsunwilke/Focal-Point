@@ -1,8 +1,9 @@
 // src/components/proofing/ProofReviewModal.js
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
-import { X, ChevronLeft, ChevronRight, Check, AlertCircle, History } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, Check, AlertCircle, History, Trash2 } from "lucide-react";
 import VersionHistoryModal from "./VersionHistoryModal";
+import ConfirmationModal from "../shared/ConfirmationModal";
 import "./ProofReviewModal.css";
 
 const ProofReviewModal = ({ 
@@ -12,12 +13,14 @@ const ProofReviewModal = ({
   onClose, 
   onApprove, 
   onDeny, 
-  onNavigate 
+  onNavigate,
+  onDelete
 }) => {
   const [denialNotes, setDenialNotes] = useState("");
   const [showDenyForm, setShowDenyForm] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Reset state when proof changes
   useEffect(() => {
@@ -81,6 +84,13 @@ const ProofReviewModal = ({
     }
   };
 
+  const handleDelete = () => {
+    if (onDelete) {
+      onDelete(proof);
+    }
+    setShowDeleteConfirm(false);
+  };
+
   if (!proof) return null;
 
   const modalContent = (
@@ -98,6 +108,15 @@ const ProofReviewModal = ({
               title="View version history"
             >
               <History size={20} />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              className="delete-proof-btn"
+              onClick={() => setShowDeleteConfirm(true)}
+              title="Delete photo"
+            >
+              <Trash2 size={20} />
             </button>
           )}
           <button
@@ -259,6 +278,17 @@ const ProofReviewModal = ({
           isOpen={showVersionHistory}
           onClose={() => setShowVersionHistory(false)}
           proof={proof}
+        />
+      )}
+      {showDeleteConfirm && (
+        <ConfirmationModal
+          isOpen={showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={handleDelete}
+          title="Delete Photo"
+          message={`Are you sure you want to delete "${proof.filename}"? This action cannot be undone.`}
+          confirmText="Delete"
+          type="danger"
         />
       )}
     </>

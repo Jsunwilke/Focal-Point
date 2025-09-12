@@ -662,6 +662,25 @@ export const getGalleryActivity = async (galleryId) => {
   }
 };
 
+// Helper function to get v1 revision for a proof
+const getV1Revision = async (proofId) => {
+  try {
+    const v1Query = query(
+      collection(firestore, "proofRevisions"),
+      where("proofId", "==", proofId),
+      where("versionNumber", "==", 1)
+    );
+    const v1Snapshot = await getDocs(v1Query);
+    if (!v1Snapshot.empty) {
+      return v1Snapshot.docs[0];
+    }
+    return null;
+  } catch (error) {
+    console.error("Error getting v1 revision:", error);
+    return null;
+  }
+};
+
 // Upload new versions of proof images (versioning, not replacing)
 export const batchReplaceProofImages = async (galleryId, replacements, userEmail, onProgress) => {
   try {
@@ -681,20 +700,38 @@ export const batchReplaceProofImages = async (galleryId, replacements, userEmail
       }
     };
 
+    // Pre-fetch v1 revisions for all proofs that need them (avoid queries in batch)
+    const v1RevisionsMap = new Map();
+    for (const replacement of replacements) {
+      const currentVersion = replacement.oldProof.currentVersion || 1;
+      if (currentVersion === 1) {
+        const v1Revision = await getV1Revision(replacement.proofId);
+        if (v1Revision) {
+          v1RevisionsMap.set(replacement.proofId, v1Revision);
+        }
+      }
+    }
+
     // Process each replacement as a new version
     for (const replacement of replacements) {
       const { proofId, oldProof, newFile, studioNotes } = replacement;
       
       try {
+        console.log(`Processing replacement for proof ${proofId}`);
+        
         // Calculate new version number
         const currentVersion = oldProof.currentVersion || 1;
         const newVersion = currentVersion + 1;
+        
+        console.log(`Version info: current=${currentVersion}, new=${newVersion}`);
         
         // Upload new image to versioned path
         const timestamp = Date.now();
         const filename = newFile.name;
         const versionedPath = `proof-images/${galleryId}/versions/${proofId}/v${newVersion}_${timestamp}_${filename}`;
         const storageRef = ref(storage, versionedPath);
+        
+        console.log(`Uploading to path: ${versionedPath}`);
         
         // Use uploadBytesResumable for progress tracking
         const uploadTask = uploadBytesResumable(storageRef, newFile);
@@ -731,10 +768,12 @@ export const batchReplaceProofImages = async (galleryId, replacements, userEmail
         });
         
         const newImageUrl = await uploadPromise;
+        console.log(`Successfully uploaded image for proof ${proofId}`);
         
         // Create revision record for audit trail
+        console.log(`Creating revision record for proof ${proofId}, version ${newVersion}`);
         const revisionRef = doc(collection(firestore, "proofRevisions"));
-        batch.set(revisionRef, {
+        const revisionData = {
           proofId,
           galleryId,
           originalImageUrl: oldProof.imageUrl,
@@ -748,8 +787,13 @@ export const batchReplaceProofImages = async (galleryId, replacements, userEmail
           replacedAt: serverTimestamp(),
           // Store version metadata
           previousVersion: currentVersion,
-          isLatest: true
-        });
+          isLatest: true,
+          isCurrent: true,
+          createdAt: serverTimestamp()
+        };
+        
+        console.log(`Revision data for ${proofId}:`, revisionData);
+        batch.set(revisionRef, revisionData);
         
         // Mark all previous revisions as not latest/current
         if (oldProof.lastRevisionId) {
@@ -760,21 +804,13 @@ export const batchReplaceProofImages = async (galleryId, replacements, userEmail
           });
         }
         
-        // Also update any v1 revision to not be current
+        // Also update any v1 revision to not be current (using pre-fetched data)
         if (currentVersion === 1) {
-          // Find and update the v1 revision
-          const v1Query = query(
-            collection(firestore, "proofRevisions"),
-            where("proofId", "==", proofId),
-            where("versionNumber", "==", 1)
-          );
-          const v1Snapshot = await getDocs(v1Query);
-          if (!v1Snapshot.empty) {
-            v1Snapshot.forEach(doc => {
-              batch.update(doc.ref, {
-                isCurrent: false,
-                isLatest: false
-              });
+          const v1Revision = v1RevisionsMap.get(proofId);
+          if (v1Revision) {
+            batch.update(v1Revision.ref, {
+              isCurrent: false,
+              isLatest: false
             });
           }
         }
@@ -849,7 +885,18 @@ export const batchReplaceProofImages = async (galleryId, replacements, userEmail
       timestamp: serverTimestamp()
     });
     
-    await batch.commit();
+    try {
+      await batch.commit();
+      console.log(`Successfully committed batch with ${uploadedVersions.length} versions`);
+    } catch (batchError) {
+      console.error("Error committing batch:", batchError);
+      console.error("Batch details:", {
+        uploadedVersionsCount: uploadedVersions.length,
+        galleryId,
+        userEmail
+      });
+      throw batchError;
+    }
     
     readCounter.recordRead("write", "multiple", "batchReplaceProofImages", 
       uploadedVersions.length * 2 + 2); // proofs + revisions + gallery + activity
@@ -953,6 +1000,93 @@ export const deleteGallery = async (galleryId) => {
     readCounter.recordRead("delete", "multiple", "deleteGallery", proofs.length + activityDocs.size + 1);
   } catch (error) {
     console.error("Error deleting gallery:", error);
+    throw error;
+  }
+};
+
+// Delete a single proof
+export const deleteProof = async (galleryId, proofId) => {
+  try {
+    const batch = writeBatch(firestore);
+    
+    // Get the proof document first
+    const proofDoc = await getDoc(doc(firestore, "proofs", proofId));
+    if (!proofDoc.exists()) {
+      throw new Error("Proof not found");
+    }
+    
+    const proofData = proofDoc.data();
+    
+    // Delete the proof document
+    batch.delete(doc(firestore, "proofs", proofId));
+    
+    // Delete the image from storage
+    try {
+      if (proofData.imageUrl) {
+        const imageRef = ref(storage, proofData.imageUrl);
+        await deleteObject(imageRef);
+      }
+      
+      // Also delete thumbnail if it exists and is different from main image
+      if (proofData.thumbnailUrl && proofData.thumbnailUrl !== proofData.imageUrl) {
+        const thumbnailRef = ref(storage, proofData.thumbnailUrl);
+        await deleteObject(thumbnailRef);
+      }
+    } catch (err) {
+      console.warn("Failed to delete image from storage:", err);
+    }
+    
+    // Delete any proof revisions
+    const revisionsQuery = query(
+      collection(firestore, "proofRevisions"),
+      where("proofId", "==", proofId)
+    );
+    const revisionDocs = await getDocs(revisionsQuery);
+    revisionDocs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    
+    // Update gallery counts
+    const galleryRef = doc(firestore, "proofGalleries", galleryId);
+    const galleryUpdates = {
+      totalImages: increment(-1),
+      updatedAt: serverTimestamp()
+    };
+    
+    // Adjust approved/denied counts based on proof status
+    if (proofData.status === "approved") {
+      galleryUpdates.approvedCount = increment(-1);
+    } else if (proofData.status === "denied") {
+      galleryUpdates.deniedCount = increment(-1);
+    }
+    
+    batch.update(galleryRef, galleryUpdates);
+    
+    // Add activity log
+    const activityRef = doc(collection(firestore, "proofActivity"));
+    batch.set(activityRef, {
+      galleryId,
+      action: "deleted_proof",
+      proofId,
+      filename: proofData.filename,
+      userEmail: proofData.deletedBy || "unknown",
+      timestamp: serverTimestamp()
+    });
+    
+    await batch.commit();
+    
+    readCounter.recordRead("delete", "multiple", "deleteProof", 
+      revisionDocs.size + 3); // proof + gallery + activity + revisions
+    
+    // Clear cache for this gallery
+    proofingCacheService.clearGalleryCache(galleryId);
+    
+    // Update gallery status after deletion
+    await updateGalleryStatus(galleryId);
+    
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting proof:", error);
     throw error;
   }
 };
