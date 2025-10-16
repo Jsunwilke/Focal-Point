@@ -351,6 +351,27 @@ const TeamManagement = () => {
                       </div>
                     )}
 
+                    {/* Compensation info - admin only */}
+                    {userProfile?.role === "admin" && member.compensationType && (
+                      <div className="team-card__compensation">
+                        {member.compensationType === 'hourly' && member.hourlyRate && (
+                          <span className="compensation-badge compensation-badge--hourly">
+                            ${member.hourlyRate.toFixed(2)}/hr
+                          </span>
+                        )}
+                        {member.compensationType === 'salary' && member.salaryAmount && (
+                          <span className="compensation-badge compensation-badge--salary">
+                            ${(member.salaryAmount / 1000).toFixed(0)}k/yr
+                          </span>
+                        )}
+                        {member.compensationType === 'salary_with_overtime' && member.salaryAmount && (
+                          <span className="compensation-badge compensation-badge--salary-ot">
+                            ${(member.salaryAmount / 1000).toFixed(0)}k + OT
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     <div className="team-card__status">
                       <div
                         className={`status-indicator ${

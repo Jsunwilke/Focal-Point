@@ -8,11 +8,15 @@ import {
   calculateTotalHours,
   formatDuration 
 } from './firestore';
-import { 
+import {
   calculatePayPeriodBoundaries,
   getCurrentPayPeriod,
-  getPreviousPayPeriod 
+  getPreviousPayPeriod
 } from '../utils/payPeriods';
+import {
+  calculateEmployeePayroll,
+  formatCurrency
+} from '../utils/payrollCalculations';
 import dataCacheService from '../services/dataCacheService';
 import { readCounter } from '../services/readCounter';
 
@@ -177,7 +181,11 @@ export const generatePayrollSummary = (timeEntries, teamMembers, startDate, endD
     totalEmployees: 0,
     employeesWithHours: 0,
     totalSessions: 0,
-    avgHoursPerEmployee: 0
+    avgHoursPerEmployee: 0,
+    totalWages: 0,
+    totalRegularPay: 0,
+    totalOvertimePay: 0,
+    totalMileage: 0
   };
 
   // Group time entries by user
@@ -214,6 +222,14 @@ export const generatePayrollSummary = (timeEntries, teamMembers, startDate, endD
       percentage: assignedSessions.length > 0 ? (workedSessions.length / assignedSessions.length) * 100 : 100
     };
 
+    // Calculate wages using new compensation system
+    const payPeriodType = 'bi-weekly'; // Default - could be passed in from organization settings
+    let wages = null;
+
+    if (member.compensationType) {
+      wages = calculateEmployeePayroll(member, userEntries, payPeriodType);
+    }
+
     const employeeSummary = {
       employee: {
         id: member.id,
@@ -222,7 +238,11 @@ export const generatePayrollSummary = (timeEntries, teamMembers, startDate, endD
         lastName: member.lastName,
         email: member.email,
         role: member.role,
-        isActive: member.isActive
+        isActive: member.isActive,
+        compensationType: member.compensationType,
+        hourlyRate: member.hourlyRate,
+        salaryAmount: member.salaryAmount,
+        overtimeThreshold: member.overtimeThreshold
       },
       hours: {
         total: totalHours,
@@ -230,6 +250,7 @@ export const generatePayrollSummary = (timeEntries, teamMembers, startDate, endD
         byDay: calculateDailyHours(userEntries, startDate, endDate),
         overtime: calculateOvertime(userEntries, startDate, endDate, overtimeSettings)
       },
+      wages: wages,
       entries: {
         total: userEntries.length,
         completed: completedEntries.length,
@@ -253,6 +274,14 @@ export const generatePayrollSummary = (timeEntries, teamMembers, startDate, endD
       organizationTotals.employeesWithHours++;
     }
     organizationTotals.totalSessions += uniqueSessions.size;
+
+    // Add wage totals
+    if (wages) {
+      organizationTotals.totalWages += wages.wages.total;
+      organizationTotals.totalRegularPay += wages.wages.regular;
+      organizationTotals.totalOvertimePay += wages.wages.overtime;
+      organizationTotals.totalMileage += wages.mileage;
+    }
   });
 
   organizationTotals.totalEmployees = teamMembers.length;
@@ -269,7 +298,12 @@ export const generatePayrollSummary = (timeEntries, teamMembers, startDate, endD
       ...organizationTotals,
       formatted: {
         totalHours: formatDuration(organizationTotals.totalHours),
-        avgHoursPerEmployee: formatDuration(organizationTotals.avgHoursPerEmployee)
+        avgHoursPerEmployee: formatDuration(organizationTotals.avgHoursPerEmployee),
+        totalWages: formatCurrency(organizationTotals.totalWages),
+        totalRegularPay: formatCurrency(organizationTotals.totalRegularPay),
+        totalOvertimePay: formatCurrency(organizationTotals.totalOvertimePay),
+        totalMileage: formatCurrency(organizationTotals.totalMileage),
+        totalCost: formatCurrency(organizationTotals.totalWages + organizationTotals.totalMileage)
       }
     },
     insights: generatePayrollInsights(employeeSummaries, organizationTotals)

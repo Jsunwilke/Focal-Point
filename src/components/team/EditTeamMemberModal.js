@@ -37,6 +37,10 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
     homeAddress: "", // GPS coordinates in "lat,lng" format
     notifyOnProofingApproval: false, // Email notification for approved galleries
     isPhotographer: false, // Photographer with setup designation
+    compensationType: "hourly", // "hourly", "salary", "salary_with_overtime"
+    hourlyRate: "", // Hourly rate for hourly employees or OT rate for salary+OT
+    salaryAmount: "", // Annual salary for salaried employees
+    overtimeThreshold: "40", // Weekly hours before OT kicks in (for salary+OT)
   });
 
   const [loading, setLoading] = useState(false);
@@ -61,6 +65,10 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
         homeAddress: teamMember.homeAddress || "", // GPS coordinates
         notifyOnProofingApproval: teamMember.notifyOnProofingApproval || false,
         isPhotographer: teamMember.isPhotographer || false,
+        compensationType: teamMember.compensationType || "hourly",
+        hourlyRate: teamMember.hourlyRate ? teamMember.hourlyRate.toFixed(2) : "",
+        salaryAmount: teamMember.salaryAmount ? teamMember.salaryAmount.toString() : "",
+        overtimeThreshold: teamMember.overtimeThreshold ? teamMember.overtimeThreshold.toString() : "40",
       });
       
       // Handle backward compatibility for address field
@@ -90,23 +98,38 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    
-    // Special handling for mileage rate - only allow numbers and decimal point
-    if (name === "amountPerMile") {
+
+    // Special handling for numeric fields (mileage rate, hourly rate, salary, OT threshold)
+    if (name === "amountPerMile" || name === "hourlyRate") {
       // Allow only numbers and one decimal point
       const numericValue = value.replace(/[^0-9.]/g, "");
-      
+
       // Ensure only one decimal point
       const parts = numericValue.split(".");
       if (parts.length > 2) {
         return; // Don't update if more than one decimal point
       }
-      
+
       // Limit to 2 decimal places
       if (parts[1] && parts[1].length > 2) {
         return;
       }
-      
+
+      setFormData((prev) => ({
+        ...prev,
+        [name]: numericValue,
+      }));
+    } else if (name === "salaryAmount") {
+      // Allow only whole numbers for salary
+      const numericValue = value.replace(/[^0-9]/g, "");
+      setFormData((prev) => ({
+        ...prev,
+        [name]: numericValue,
+      }));
+    } else if (name === "overtimeThreshold") {
+      // Allow only whole numbers for OT threshold
+      const numericValue = value.replace(/[^0-9]/g, "");
+      if (numericValue && parseInt(numericValue) > 80) return; // Max 80 hours
       setFormData((prev) => ({
         ...prev,
         [name]: numericValue,
@@ -208,6 +231,56 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
       }
     }
 
+    // Validate compensation fields based on type
+    if (formData.compensationType === 'hourly') {
+      if (!formData.hourlyRate) {
+        newErrors.hourlyRate = "Hourly rate is required";
+      } else {
+        const hourlyValue = parseFloat(formData.hourlyRate);
+        if (isNaN(hourlyValue) || hourlyValue <= 0) {
+          newErrors.hourlyRate = "Please enter a valid hourly rate";
+        } else if (hourlyValue > 999.99) {
+          newErrors.hourlyRate = "Hourly rate cannot exceed $999.99";
+        }
+      }
+    } else if (formData.compensationType === 'salary') {
+      if (!formData.salaryAmount) {
+        newErrors.salaryAmount = "Annual salary is required";
+      } else {
+        const salaryValue = parseInt(formData.salaryAmount);
+        if (isNaN(salaryValue) || salaryValue <= 0) {
+          newErrors.salaryAmount = "Please enter a valid salary amount";
+        }
+      }
+    } else if (formData.compensationType === 'salary_with_overtime') {
+      if (!formData.salaryAmount) {
+        newErrors.salaryAmount = "Annual salary is required";
+      } else {
+        const salaryValue = parseInt(formData.salaryAmount);
+        if (isNaN(salaryValue) || salaryValue <= 0) {
+          newErrors.salaryAmount = "Please enter a valid salary amount";
+        }
+      }
+      if (!formData.hourlyRate) {
+        newErrors.hourlyRate = "Overtime hourly rate is required";
+      } else {
+        const hourlyValue = parseFloat(formData.hourlyRate);
+        if (isNaN(hourlyValue) || hourlyValue <= 0) {
+          newErrors.hourlyRate = "Please enter a valid overtime rate";
+        } else if (hourlyValue > 999.99) {
+          newErrors.hourlyRate = "Overtime rate cannot exceed $999.99";
+        }
+      }
+      if (!formData.overtimeThreshold) {
+        newErrors.overtimeThreshold = "Overtime threshold is required";
+      } else {
+        const thresholdValue = parseInt(formData.overtimeThreshold);
+        if (isNaN(thresholdValue) || thresholdValue <= 0 || thresholdValue > 80) {
+          newErrors.overtimeThreshold = "Please enter a valid threshold (1-80 hours)";
+        }
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -243,6 +316,23 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
         updateData.amountPerMile = parseFloat(formData.amountPerMile);
       } else {
         updateData.amountPerMile = null;
+      }
+
+      // Add compensation data
+      updateData.compensationType = formData.compensationType;
+
+      if (formData.compensationType === 'hourly') {
+        updateData.hourlyRate = formData.hourlyRate ? parseFloat(formData.hourlyRate) : null;
+        updateData.salaryAmount = null;
+        updateData.overtimeThreshold = null;
+      } else if (formData.compensationType === 'salary') {
+        updateData.salaryAmount = formData.salaryAmount ? parseInt(formData.salaryAmount) : null;
+        updateData.hourlyRate = null;
+        updateData.overtimeThreshold = null;
+      } else if (formData.compensationType === 'salary_with_overtime') {
+        updateData.salaryAmount = formData.salaryAmount ? parseInt(formData.salaryAmount) : null;
+        updateData.hourlyRate = formData.hourlyRate ? parseFloat(formData.hourlyRate) : null;
+        updateData.overtimeThreshold = formData.overtimeThreshold ? parseInt(formData.overtimeThreshold) : 40;
       }
 
       // Update user profile in Firestore
@@ -596,6 +686,175 @@ const EditTeamMemberModal = ({ isOpen, onClose, teamMember, onUpdate }) => {
                     Enter the rate in dollars (e.g., 0.30 for $0.30 per mile)
                   </span>
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label">Pay Type</label>
+                  <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.5rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="compensationType"
+                        value="hourly"
+                        checked={formData.compensationType === 'hourly'}
+                        onChange={handleInputChange}
+                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                      />
+                      <span>Hourly</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="compensationType"
+                        value="salary"
+                        checked={formData.compensationType === 'salary'}
+                        onChange={handleInputChange}
+                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                      />
+                      <span>Salary</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="compensationType"
+                        value="salary_with_overtime"
+                        checked={formData.compensationType === 'salary_with_overtime'}
+                        onChange={handleInputChange}
+                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                      />
+                      <span>Salary + Overtime</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Conditional fields based on compensation type */}
+                {formData.compensationType === 'hourly' && (
+                  <div className="form-group">
+                    <label htmlFor="hourlyRate" className="form-label">
+                      Hourly Rate
+                    </label>
+                    <div className="form-input-group">
+                      <span className="form-input-prefix">$</span>
+                      <input
+                        type="text"
+                        id="hourlyRate"
+                        name="hourlyRate"
+                        className={`form-input form-input--with-prefix ${
+                          errors.hourlyRate ? "form-input--error" : ""
+                        }`}
+                        value={formData.hourlyRate}
+                        onChange={handleInputChange}
+                        placeholder="15.00"
+                      />
+                      <span className="form-input-suffix">/hour</span>
+                    </div>
+                    {errors.hourlyRate && (
+                      <span className="form-error-text">{errors.hourlyRate}</span>
+                    )}
+                  </div>
+                )}
+
+                {formData.compensationType === 'salary' && (
+                  <div className="form-group">
+                    <label htmlFor="salaryAmount" className="form-label">
+                      Annual Salary
+                    </label>
+                    <div className="form-input-group">
+                      <span className="form-input-prefix">$</span>
+                      <input
+                        type="text"
+                        id="salaryAmount"
+                        name="salaryAmount"
+                        className={`form-input form-input--with-prefix ${
+                          errors.salaryAmount ? "form-input--error" : ""
+                        }`}
+                        value={formData.salaryAmount}
+                        onChange={handleInputChange}
+                        placeholder="50000"
+                      />
+                      <span className="form-input-suffix">/year</span>
+                    </div>
+                    {errors.salaryAmount && (
+                      <span className="form-error-text">{errors.salaryAmount}</span>
+                    )}
+                  </div>
+                )}
+
+                {formData.compensationType === 'salary_with_overtime' && (
+                  <>
+                    <div className="form-group">
+                      <label htmlFor="salaryAmount" className="form-label">
+                        Annual Salary
+                      </label>
+                      <div className="form-input-group">
+                        <span className="form-input-prefix">$</span>
+                        <input
+                          type="text"
+                          id="salaryAmount"
+                          name="salaryAmount"
+                          className={`form-input form-input--with-prefix ${
+                            errors.salaryAmount ? "form-input--error" : ""
+                          }`}
+                          value={formData.salaryAmount}
+                          onChange={handleInputChange}
+                          placeholder="50000"
+                        />
+                        <span className="form-input-suffix">/year</span>
+                      </div>
+                      {errors.salaryAmount && (
+                        <span className="form-error-text">{errors.salaryAmount}</span>
+                      )}
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label htmlFor="hourlyRate" className="form-label">
+                          Overtime Hourly Rate
+                        </label>
+                        <div className="form-input-group">
+                          <span className="form-input-prefix">$</span>
+                          <input
+                            type="text"
+                            id="hourlyRate"
+                            name="hourlyRate"
+                            className={`form-input form-input--with-prefix ${
+                              errors.hourlyRate ? "form-input--error" : ""
+                            }`}
+                            value={formData.hourlyRate}
+                            onChange={handleInputChange}
+                            placeholder="25.00"
+                          />
+                          <span className="form-input-suffix">/hour</span>
+                        </div>
+                        {errors.hourlyRate && (
+                          <span className="form-error-text">{errors.hourlyRate}</span>
+                        )}
+                      </div>
+
+                      <div className="form-group">
+                        <label htmlFor="overtimeThreshold" className="form-label">
+                          Weekly OT Threshold (hours)
+                        </label>
+                        <input
+                          type="text"
+                          id="overtimeThreshold"
+                          name="overtimeThreshold"
+                          className={`form-input ${
+                            errors.overtimeThreshold ? "form-input--error" : ""
+                          }`}
+                          value={formData.overtimeThreshold}
+                          onChange={handleInputChange}
+                          placeholder="40"
+                        />
+                        {errors.overtimeThreshold && (
+                          <span className="form-error-text">{errors.overtimeThreshold}</span>
+                        )}
+                        <span className="form-hint">
+                          Hours per week before overtime applies (typically 40)
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="form-section">

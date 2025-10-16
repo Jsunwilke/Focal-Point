@@ -70,7 +70,7 @@ const Settings = () => {
       description: "Manage schools and their information",
       icon: <School size={24} />,
       color: "indigo",
-      available: userProfile?.role === 'admin',
+      available: isAdminOrManager,
       action: "navigate",
       path: "/schools"
     }

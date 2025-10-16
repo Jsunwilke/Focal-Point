@@ -491,3 +491,34 @@
   color: var(--text-secondary);
   margin-bottom: var(--spacing-xs);
 }
+
+/* Compensation Badges */
+.team-card__compensation {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.compensation-badge {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.compensation-badge--hourly {
+  background-color: #e0f2fe;
+  color: #0284c7;
+}
+
+.compensation-badge--salary {
+  background-color: #f0fdf4;
+  color: #16a34a;
+}
+
+.compensation-badge--salary-ot {
+  background-color: #fef3c7;
+  color: #f59e0b;
+}
