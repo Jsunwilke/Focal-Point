@@ -109,7 +109,7 @@ const AppContent = () => {
                 </ProtectedRoute>
               }
             />
-            
+
             {/* Payroll route without Layout constraints */}
             <Route
               path="/payroll-timesheets"
@@ -119,7 +119,7 @@ const AppContent = () => {
                 </ProtectedRoute>
               }
             />
-            
+
             {/* Regular app routes with standard layout */}
             <Route
               path="/*"

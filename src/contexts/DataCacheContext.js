@@ -80,6 +80,13 @@ export const DataCacheProvider = ({ children }) => {
     error: null
   });
 
+  const [timeEntriesCache, setTimeEntriesCache] = useState({
+    data: [],
+    loading: true,
+    lastUpdated: null,
+    error: null
+  });
+
   // Ref to access current state without causing re-renders
   const usersCacheRef = useRef(usersCache);
   usersCacheRef.current = usersCache;
@@ -89,6 +96,7 @@ export const DataCacheProvider = ({ children }) => {
     sessions: false,
     users: false,
     timeOff: false,
+    timeEntries: false,
     dailyJobReports: false
   });
 
@@ -97,6 +105,7 @@ export const DataCacheProvider = ({ children }) => {
     sessions: null,
     users: null,
     timeOff: null,
+    timeEntries: null,
     dailyJobReports: null
   });
 
@@ -321,10 +330,32 @@ export const DataCacheProvider = ({ children }) => {
     return calendarEntries;
   }, []);
 
+  // Process time entries data
+  const processTimeEntriesData = useCallback((snapshotOrArray) => {
+    const entries = [];
+
+    // Handle both snapshot and array formats
+    if (Array.isArray(snapshotOrArray)) {
+      // Handle cached array data
+      entries.push(...snapshotOrArray);
+    } else {
+      // Handle Firestore snapshot
+      snapshotOrArray.forEach((doc) => {
+        entries.push({
+          id: doc.id,
+          ...doc.data(),
+        });
+      });
+    }
+
+    // Return entries as-is, no processing needed
+    return entries;
+  }, []);
+
   // Process daily job reports data
   const processDailyJobReportsData = useCallback((snapshotOrArray) => {
     const reports = [];
-    
+
     // Handle both snapshot and array formats
     if (Array.isArray(snapshotOrArray)) {
       // Handle cached array data
@@ -338,7 +369,7 @@ export const DataCacheProvider = ({ children }) => {
         });
       });
     }
-    
+
     // Return reports as-is, no processing needed
     return reports;
   }, []);
@@ -883,6 +914,162 @@ export const DataCacheProvider = ({ children }) => {
     };
   }, [organization?.id, processTimeOffData, setupTimeOffListener]);
 
+  // Set up real-time listener for time entries
+  const setupTimeEntriesListener = useCallback(() => {
+    if (!organization?.id) return;
+
+    // Get recent time entries (last 3 months)
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    const threeMonthsAgoString = formatLocalDate(threeMonthsAgo);
+
+    const timeEntriesQuery = query(
+      collection(firestore, "timeEntries"),
+      where("organizationID", "==", organization.id),
+      where("date", ">=", threeMonthsAgoString),
+      orderBy("date", "desc"),
+      orderBy("clockInTime", "desc"),
+      limit(500)
+    );
+
+    let isInitialLoad = true;
+
+    const unsubscribe = onSnapshot(
+      timeEntriesQuery,
+      { includeMetadataChanges: false },
+      (snapshot) => {
+        if (isInitialLoad) {
+          // Initial load - process all documents
+          const rawEntries = [];
+          snapshot.forEach((doc) => {
+            rawEntries.push({ id: doc.id, ...doc.data() });
+          });
+
+          const processedData = processTimeEntriesData(rawEntries);
+
+          setTimeEntriesCache({
+            data: processedData,
+            loading: false,
+            lastUpdated: new Date(),
+            error: null
+          });
+
+          // Update cache
+          dataCacheService.setCachedTimeEntries(organization.id, rawEntries);
+          dataCacheService.setLastSyncTime(organization.id, 'timeentries');
+
+          // Track initial load reads
+          if (!snapshot.metadata.fromCache) {
+            readCounter.recordRead('onSnapshot-initial', 'timeEntries', 'DataCacheContext', snapshot.size);
+            secureLogger.debug("Time entries initial load:", snapshot.size, "documents");
+          }
+
+          isInitialLoad = false;
+        } else {
+          // Incremental updates - only process changed documents
+          const changes = snapshot.docChanges();
+
+          if (changes.length > 0) {
+            // Get current cached time entries
+            const cachedEntries = dataCacheService.getCachedTimeEntries(organization.id) || [];
+            let updatedEntries = [...cachedEntries];
+
+            changes.forEach((change) => {
+              const docData = { id: change.doc.id, ...change.doc.data() };
+
+              if (change.type === 'added') {
+                // Add new entry
+                updatedEntries.push(docData);
+              } else if (change.type === 'modified') {
+                // Update existing entry
+                const index = updatedEntries.findIndex(e => e.id === docData.id);
+                if (index !== -1) {
+                  updatedEntries[index] = docData;
+                }
+              } else if (change.type === 'removed') {
+                // Remove entry
+                updatedEntries = updatedEntries.filter(e => e.id !== docData.id);
+              }
+            });
+
+            // Process updated data
+            const processedData = processTimeEntriesData(updatedEntries);
+
+            setTimeEntriesCache({
+              data: processedData,
+              loading: false,
+              lastUpdated: new Date(),
+              error: null
+            });
+
+            // Update cache
+            dataCacheService.setCachedTimeEntries(organization.id, updatedEntries);
+            dataCacheService.setLastSyncTime(organization.id, 'timeentries');
+
+            // Track only changed documents
+            readCounter.recordRead('onSnapshot-changes', 'timeEntries', 'DataCacheContext', changes.length);
+            secureLogger.debug("Time entries incremental update:", changes.length, "documents changed");
+          }
+        }
+      },
+      (error) => {
+        secureLogger.error("Time entries listener error:", error);
+        setTimeEntriesCache(prev => ({
+          ...prev,
+          loading: false,
+          error: error.message
+        }));
+      }
+    );
+
+    return unsubscribe;
+  }, [organization?.id, processTimeEntriesData]);
+
+  // Set up time entries real-time listener with cache-first loading
+  useEffect(() => {
+    if (!organization?.id) return;
+
+    let unsubscribe = null;
+    let syncTimeout = null;
+
+    // Load from cache first for instant display
+    const cachedTimeEntries = dataCacheService.getCachedTimeEntries(organization.id);
+    if (cachedTimeEntries) {
+      const processedData = processTimeEntriesData(cachedTimeEntries);
+      setTimeEntriesCache({
+        data: processedData,
+        loading: false,
+        lastUpdated: new Date(),
+        error: null
+      });
+      readCounter.recordCacheHit('timeEntries', 'DataCacheContext', cachedTimeEntries.length);
+
+      // Delay real-time sync to avoid immediate reads when user is just passing through
+      syncTimeout = setTimeout(() => {
+        unsubscribe = setupTimeEntriesListener();
+      }, 5000); // 5 second delay
+    } else {
+      // No cache - need immediate sync
+      setTimeEntriesCache(prev => ({ ...prev, loading: true, error: null }));
+      readCounter.recordCacheMiss('timeEntries', 'DataCacheContext');
+      unsubscribe = setupTimeEntriesListener();
+    }
+
+    // Store cleanup function
+    setListeners(prev => ({
+      ...prev,
+      timeEntries: () => {
+        if (syncTimeout) clearTimeout(syncTimeout);
+        if (unsubscribe) unsubscribe();
+      }
+    }));
+
+    return () => {
+      if (syncTimeout) clearTimeout(syncTimeout);
+      if (unsubscribe) unsubscribe();
+    };
+  }, [organization?.id, processTimeEntriesData, setupTimeEntriesListener]);
+
   // Set up real-time listener for daily job reports
   const setupDailyJobReportsListener = useCallback((useOptimized = false, latestTimestamp = null) => {
     if (!organization?.id) return;
@@ -1078,6 +1265,7 @@ export const DataCacheProvider = ({ children }) => {
         sessions: false,
         users: false,
         timeOff: false,
+        timeEntries: false,
         dailyJobReports: false
       };
       // Call cleanup functions
@@ -1102,6 +1290,9 @@ export const DataCacheProvider = ({ children }) => {
       case 'timeOff':
         setTimeOffCache(prev => ({ ...prev, lastUpdated: null }));
         break;
+      case 'timeEntries':
+        setTimeEntriesCache(prev => ({ ...prev, lastUpdated: null }));
+        break;
       case 'dailyJobReports':
         setDailyJobReportsCache(prev => ({ ...prev, lastUpdated: null }));
         break;
@@ -1109,6 +1300,7 @@ export const DataCacheProvider = ({ children }) => {
         setSessionsCache(prev => ({ ...prev, lastUpdated: null }));
         setUsersCache(prev => ({ ...prev, lastUpdated: null }));
         setTimeOffCache(prev => ({ ...prev, lastUpdated: null }));
+        setTimeEntriesCache(prev => ({ ...prev, lastUpdated: null }));
         setDailyJobReportsCache(prev => ({ ...prev, lastUpdated: null }));
         break;
       default:
@@ -1116,8 +1308,8 @@ export const DataCacheProvider = ({ children }) => {
     }
   }, []);
 
-  const isLoading = sessionsCache.loading || usersCache.loading || timeOffCache.loading || dailyJobReportsCache.loading;
-  const hasErrors = sessionsCache.error || usersCache.error || timeOffCache.error || dailyJobReportsCache.error;
+  const isLoading = sessionsCache.loading || usersCache.loading || timeOffCache.loading || timeEntriesCache.loading || dailyJobReportsCache.loading;
+  const hasErrors = sessionsCache.error || usersCache.error || timeOffCache.error || timeEntriesCache.error || dailyJobReportsCache.error;
 
   // Optimistic update for sessions
   const updateSessionOptimistically = useCallback((sessionId, updateData) => {
@@ -1227,31 +1419,35 @@ export const DataCacheProvider = ({ children }) => {
     timeOffRequests: timeOffCache.data || [],  // Calendar entries for display
     timeOff: timeOffCache.data || [],           // Alias for calendar entries
     timeOffRawRequests: timeOffCache.requests || [],  // Raw requests for approval modal
+    timeEntries: timeEntriesCache.data || [],
     dailyJobReports: dailyJobReportsCache.data || [],
-    
+
     // Status
     loading: {
       sessions: sessionsCache.loading,
       users: usersCache.loading,
       timeOff: timeOffCache.loading,
+      timeEntries: timeEntriesCache.loading,
       dailyJobReports: dailyJobReportsCache.loading,
       any: isLoading
     },
-    
+
     // Errors
     errors: {
       sessions: sessionsCache.error,
       users: usersCache.error,
       timeOff: timeOffCache.error,
+      timeEntries: timeEntriesCache.error,
       dailyJobReports: dailyJobReportsCache.error,
       any: hasErrors
     },
-    
+
     // Metadata
     lastUpdated: {
       sessions: sessionsCache.lastUpdated,
       users: usersCache.lastUpdated,
       timeOff: timeOffCache.lastUpdated,
+      timeEntries: timeEntriesCache.lastUpdated,
       dailyJobReports: dailyJobReportsCache.lastUpdated
     },
     
@@ -1279,6 +1475,12 @@ export const DataCacheProvider = ({ children }) => {
       secureLogger.debug("Manual refresh: Time-off");
       dataCacheService.clearTimeOffCache(organization?.id);
       invalidateCache('timeOff');
+      // Real-time listener will automatically fetch new data
+    },
+    refreshTimeEntries: () => {
+      secureLogger.debug("Manual refresh: Time entries");
+      dataCacheService.clearTimeEntriesCache(organization?.id);
+      invalidateCache('timeEntries');
       // Real-time listener will automatically fetch new data
     },
     refreshDailyJobReports: () => {

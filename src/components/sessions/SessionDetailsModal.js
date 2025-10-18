@@ -26,6 +26,7 @@ import { useDataCache } from "../../contexts/DataCacheContext";
 import YearbookShootListModal from "../yearbook/YearbookShootListModal";
 import { getCurrentSchoolYear } from "../../services/yearbookService";
 import LocationPhotosModal from "./LocationPhotosModal";
+import SessionCostBreakdown from "./SessionCostBreakdown";
 
 const SessionDetailsModal = ({
   isOpen,
@@ -39,7 +40,7 @@ const SessionDetailsModal = ({
   showRescheduleOption = false, // Whether to show reschedule option
   hideEditButton = false, // Whether to hide the edit button (for dashboard context)
 }) => {
-  const { sessions: cachedSessions } = useDataCache();
+  const { sessions: cachedSessions, timeEntries: cachedTimeEntries } = useDataCache();
   const [fullSessionData, setFullSessionData] = useState(null);
   const [schoolDetails, setSchoolDetails] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -252,6 +253,41 @@ const SessionDetailsModal = ({
   const allAssignedPhotographers =
     fullSessionData?.photographers ||
     (session.photographer ? [session.photographer] : []);
+
+  // Helper: Get all time entries for the current week (for OT calculations)
+  const getWeekTimeEntries = () => {
+    if (!session?.date) return [];
+
+    // Check if time entries cache is available
+    if (!cachedTimeEntries) {
+      console.warn('SessionDetailsModal: Time entries cache not yet loaded - overtime calculations may be inaccurate');
+      return [];
+    }
+
+    // Parse session date
+    const sessionDate = typeof session.date === 'string'
+      ? new Date(session.date + 'T00:00:00')
+      : new Date(session.date);
+
+    // Calculate week boundaries (Sunday to Saturday)
+    const weekStart = new Date(sessionDate);
+    weekStart.setDate(sessionDate.getDate() - sessionDate.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    // Filter time entries in this week
+    return cachedTimeEntries.filter(entry => {
+      if (!entry.date) return false;
+
+      const entryDate = entry.date.toDate ? entry.date.toDate() : new Date(entry.date);
+      return entryDate >= weekStart && entryDate <= weekEnd;
+    });
+  };
+
+  const weekTimeEntries = getWeekTimeEntries();
 
   const formatTime = (time) => {
     if (!time) return "";
@@ -704,7 +740,7 @@ const SessionDetailsModal = ({
                   >
                     <User size={16} />
                     NOTES FOR{" "}
-                    {currentPhotographer?.displayName?.toUpperCase() || 
+                    {currentPhotographer?.displayName?.toUpperCase() ||
                      currentPhotographer?.firstName?.toUpperCase() || "YOU"}
                   </div>
                   <div
@@ -720,6 +756,18 @@ const SessionDetailsModal = ({
                     {photographerNotes}
                   </div>
                 </div>
+              )}
+
+              {/* Session Costs - Admin Only */}
+              {userProfile?.role === 'admin' && fullSessionData?.photographers?.length > 0 && schoolDetails && (
+                <SessionCostBreakdown
+                  session={fullSessionData}
+                  photographers={fullSessionData.photographers}
+                  teamMembers={teamMembers}
+                  school={schoolDetails}
+                  allTimeEntriesInWeek={weekTimeEntries}
+                  mode="full"
+                />
               )}
 
               {/* Creator Information - Subtle */}

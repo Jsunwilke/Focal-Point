@@ -1,10 +1,9 @@
 // Orders Context
-// Manages orders state with cache-first loading pattern
+// Manages orders state for Captura integration
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { capturaOrdersService } from '../services/capturaOrdersService';
-import { ordersCacheService } from '../services/ordersCacheService';
 import { readCounter } from '../services/readCounter';
 
 const OrdersContext = createContext({});
@@ -46,7 +45,7 @@ export const OrdersProvider = ({ children }) => {
   // Get account ID from environment or organization
   const accountId = process.env.REACT_APP_CAPTURA_ACCOUNT_ID || organization?.capturaAccountId;
 
-  // Load orders with cache-first pattern
+  // Load orders directly from API
   const loadOrders = useCallback(async (page = 1, currentFilters = filters) => {
     if (!accountId) {
       setError('Captura account not configured');
@@ -56,26 +55,10 @@ export const OrdersProvider = ({ children }) => {
 
     try {
       setError(null);
-      
-      // Load from cache first for instant display
-      const cachedData = ordersCacheService.getCachedOrders(accountId, {
-        ...currentFilters,
-        page,
-        pageSize: pagination.pageSize
-      });
+      setLoading(true);
 
-      if (cachedData) {
-        setOrders(cachedData.orders || []);
-        setPagination(cachedData.pagination || pagination);
-        setOriginalApiResponse(cachedData.originalApiResponse || null);
-        setLoading(false);
-      } else {
-        // Record cache miss
-        readCounter.recordCacheMiss('orders', 'OrdersContext');
-      }
-
-      // Fetch fresh data in background with filters
-      const freshData = await capturaOrdersService.getOrders({
+      // Fetch data from API
+      const data = await capturaOrdersService.getOrders({
         start: (page - 1) * pagination.pageSize + 1,
         end: page * pagination.pageSize,
         orderStartDate: currentFilters.startDate,
@@ -84,17 +67,10 @@ export const OrdersProvider = ({ children }) => {
         orderType: currentFilters.orderType
       });
 
-      // Update state with fresh data
-      setOrders(freshData.orders || []);
-      setPagination(freshData.pagination || pagination);
-      setOriginalApiResponse(freshData.originalApiResponse || null);
-      
-      // Cache the fresh data
-      ordersCacheService.setCachedOrders(accountId, {
-        ...currentFilters,
-        page,
-        pageSize: pagination.pageSize
-      }, freshData);
+      // Update state with data
+      setOrders(data.orders || []);
+      setPagination(data.pagination || pagination);
+      setOriginalApiResponse(data.originalApiResponse || null);
 
       setLoading(false);
     } catch (err) {
@@ -110,45 +86,22 @@ export const OrdersProvider = ({ children }) => {
 
     setLoadingOrderDetails(true);
     try {
-      // First check if we have this order in the current list and display it immediately
+      // Check if we have this order in the current list and display it immediately
       const orderInList = orders.find(o => o.id === orderId);
       if (orderInList) {
         setSelectedOrder(orderInList);
-        // Don't return - continue to fetch detailed data
-      }
-      
-      // Check cache for detailed order
-      const cachedDetailedOrder = ordersCacheService.getCachedOrder(accountId, orderId);
-      
-      if (cachedDetailedOrder && cachedDetailedOrder.items) {
-        // We have a detailed order with items - use it
-        setSelectedOrder(cachedDetailedOrder);
-        readCounter.recordCacheHit('order-detail', 'OrdersContext', 1);
-        setLoadingOrderDetails(false);
-        return; // No need to fetch again
-      } else if (!orderInList && cachedDetailedOrder) {
-        // Show cached version if we don't have list version
-        setSelectedOrder(cachedDetailedOrder);
-      } else {
-        readCounter.recordCacheMiss('order-detail', 'OrdersContext');
       }
 
-      // Always fetch fresh detailed data to get items and full information
-      const freshOrder = await capturaOrdersService.getOrderById(orderId);
-      setSelectedOrder(freshOrder);
-      
-      // Cache the order
-      ordersCacheService.setCachedOrder(accountId, orderId, freshOrder);
-      
-      // Update in list cache if present
-      ordersCacheService.updateCachedOrder(accountId, filters, freshOrder);
+      // Fetch detailed data from API
+      const order = await capturaOrdersService.getOrderById(orderId);
+      setSelectedOrder(order);
     } catch (err) {
       console.error('Error loading order details:', err);
       setError(err.message || 'Failed to load order details');
     } finally {
       setLoadingOrderDetails(false);
     }
-  }, [accountId, filters, orders]);
+  }, [accountId, orders]);
 
   // Load statistics - DISABLED: Captura API doesn't have a statistics endpoint
   const loadStatistics = useCallback(async (range = 'month') => {
@@ -217,21 +170,18 @@ export const OrdersProvider = ({ children }) => {
     await loadOrders(pagination.currentPage, newFilters);
   }, [filters, loadOrders, pagination.currentPage]);
 
-  // Refresh orders (bypass cache)
+  // Refresh orders
   const refreshOrders = useCallback(async () => {
     setRefreshing(true);
-    
-    // Clear cache for current filters
-    ordersCacheService.clearCache(accountId);
-    
+
     // Reload orders
     await loadOrders(pagination.currentPage, filters);
-    
+
     // Skip statistics - endpoint doesn't exist
     // await loadStatistics('month');
-    
+
     setRefreshing(false);
-  }, [accountId, loadOrders, loadStatistics, pagination.currentPage, filters]);
+  }, [loadOrders, loadStatistics, pagination.currentPage, filters]);
 
   // Go to page
   const goToPage = useCallback(async (page) => {
@@ -261,14 +211,6 @@ export const OrdersProvider = ({ children }) => {
       // loadStatistics('month');
     }
   }, [accountId]); // Only depend on accountId to avoid re-fetching
-
-  // Clear cache on unmount (optional - remove if you want persistent cache)
-  useEffect(() => {
-    return () => {
-      // Optionally clear cache on unmount
-      // ordersCacheService.clearCache(accountId);
-    };
-  }, [accountId]);
 
   const value = {
     // State

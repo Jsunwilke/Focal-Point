@@ -99,7 +99,35 @@ export const getPayPeriodsPerYear = (payPeriodType) => {
  * @returns {Object} Cost breakdown for the session
  */
 export const calculateSessionCost = (session, employee, allSessionsInPeriod = []) => {
+  // DEBUG: Log inputs
+  console.group('📊 calculateSessionCost');
+  console.log('Session:', {
+    date: session?.date,
+    dateType: typeof session?.date,
+    hasToDate: session?.date && typeof session?.date?.toDate === 'function',
+    startTime: session?.startTime,
+    endTime: session?.endTime,
+    photographerId: session?.photographerId
+  });
+  console.log('Employee:', {
+    id: employee?.id,
+    name: employee?.displayName || `${employee?.firstName} ${employee?.lastName}`,
+    compensationType: employee?.compensationType,
+    hourlyRate: employee?.hourlyRate,
+    overtimeThreshold: employee?.overtimeThreshold
+  });
+  console.log('All sessions in period (count):', allSessionsInPeriod?.length || 0);
+  console.log('Session types in period:', allSessionsInPeriod?.map(s => ({
+    date: s.date,
+    dateType: typeof s.date,
+    hasToDate: s.date && typeof s.date?.toDate === 'function',
+    startTime: s.startTime,
+    endTime: s.endTime
+  })));
+
   if (!session || !employee) {
+    console.log('❌ Missing session or employee - returning zero cost');
+    console.groupEnd();
     return {
       hours: 0,
       regularPay: 0,
@@ -110,22 +138,26 @@ export const calculateSessionCost = (session, employee, allSessionsInPeriod = []
   }
 
   const sessionHours = calculateHours(session.startTime, session.endTime);
+  console.log('Session hours:', sessionHours);
 
   // Hourly employees: simple calculation
   if (employee.compensationType === 'hourly') {
     const cost = sessionHours * (employee.hourlyRate || 0);
-    return {
+    const result = {
       hours: sessionHours,
       regularPay: cost,
       overtimePay: 0,
       isOvertimeShift: false,
       totalCost: cost
     };
+    console.log('💰 Hourly employee - returning:', result);
+    console.groupEnd();
+    return result;
   }
 
   // Salary employees: session cost is $0 (they get fixed amount regardless)
   if (employee.compensationType === 'salary') {
-    return {
+    const result = {
       hours: sessionHours,
       regularPay: 0,
       overtimePay: 0,
@@ -133,42 +165,93 @@ export const calculateSessionCost = (session, employee, allSessionsInPeriod = []
       totalCost: 0,
       note: 'Salaried - included in base pay'
     };
+    console.log('💼 Salary employee - returning:', result);
+    console.groupEnd();
+    return result;
   }
 
   // Salary + OT employees: need to check weekly hours
   if (employee.compensationType === 'salary_with_overtime') {
+    console.log('⏰ Salary+OT employee - calculating overtime');
     const threshold = employee.overtimeThreshold || 40;
+    console.log('Overtime threshold:', threshold);
 
     // Get the week boundaries for this session
     const weekStart = getWeekStart(session.date);
     const weekEnd = getWeekEnd(session.date);
+    console.log('Week boundaries:', {
+      weekStart: weekStart.toISOString(),
+      weekEnd: weekEnd.toISOString()
+    });
 
     // Find all sessions this week for this employee BEFORE this session
+    console.log('Filtering prior sessions this week...');
     const priorSessionsThisWeek = allSessionsInPeriod.filter(s => {
-      if (s.photographerId !== employee.id) return false;
-      if (!s.date) return false;
+      if (s.photographerId !== employee.id) {
+        console.log('  ❌ Skipping session - different photographer:', s.photographerId);
+        return false;
+      }
+      if (!s.date) {
+        console.log('  ❌ Skipping session - no date');
+        return false;
+      }
 
-      const sessionDate = typeof s.date === 'string' ? new Date(s.date + 'T00:00:00') : new Date(s.date);
-      const currentSessionDate = typeof session.date === 'string' ? new Date(session.date + 'T00:00:00') : new Date(session.date);
+      // FIX: Handle Firestore Timestamps properly
+      const sessionDate = typeof s.date === 'string'
+        ? new Date(s.date + 'T00:00:00')
+        : s.date && typeof s.date.toDate === 'function'
+          ? s.date.toDate()
+          : new Date(s.date);
+
+      const currentSessionDate = typeof session.date === 'string'
+        ? new Date(session.date + 'T00:00:00')
+        : session.date && typeof session.date.toDate === 'function'
+          ? session.date.toDate()
+          : new Date(session.date);
+
+      console.log('  📅 Checking session:', {
+        rawDate: s.date,
+        parsedDate: sessionDate.toISOString(),
+        isValid: !isNaN(sessionDate.getTime()),
+        currentSessionDate: currentSessionDate.toISOString(),
+        inWeek: sessionDate >= weekStart && sessionDate <= weekEnd,
+        beforeCurrent: sessionDate < currentSessionDate
+      });
 
       // Include sessions in same week that are before this one
-      return sessionDate >= weekStart &&
+      const passes = sessionDate >= weekStart &&
              sessionDate <= weekEnd &&
              sessionDate < currentSessionDate;
+
+      console.log(passes ? '  ✅ INCLUDED' : '  ❌ EXCLUDED');
+      return passes;
     });
+
+    console.log(`Found ${priorSessionsThisWeek.length} prior sessions this week`);
 
     // Calculate hours worked before this shift
     const hoursWorkedBeforeShift = priorSessionsThisWeek.reduce((sum, s) => {
-      return sum + calculateHours(s.startTime, s.endTime);
+      const sessionHrs = calculateHours(s.startTime, s.endTime);
+      console.log(`  Prior session: ${s.startTime} - ${s.endTime} = ${sessionHrs} hours`);
+      return sum + sessionHrs;
     }, 0);
 
     const hoursAfterShift = hoursWorkedBeforeShift + sessionHours;
 
+    console.log('Hours calculation:', {
+      hoursWorkedBeforeShift,
+      sessionHours,
+      hoursAfterShift,
+      threshold,
+      willBeOT: hoursAfterShift > threshold
+    });
+
     // Determine OT status
     if (hoursWorkedBeforeShift >= threshold) {
       // Already in OT - entire shift is OT
+      console.log('🔥 Already in OT - entire shift is overtime!');
       const overtimeCost = sessionHours * (employee.hourlyRate || 0);
-      return {
+      const result = {
         hours: sessionHours,
         regularPay: 0,
         overtimePay: overtimeCost,
@@ -178,13 +261,17 @@ export const calculateSessionCost = (session, employee, allSessionsInPeriod = []
         totalCost: overtimeCost,
         weeklyHoursBefore: hoursWorkedBeforeShift
       };
+      console.log('Returning:', result);
+      console.groupEnd();
+      return result;
     } else if (hoursAfterShift > threshold) {
       // Shift crosses into OT
+      console.log('⚠️ Shift crosses into OT');
       const regularHours = threshold - hoursWorkedBeforeShift;
       const overtimeHours = sessionHours - regularHours;
       const overtimeCost = overtimeHours * (employee.hourlyRate || 0);
 
-      return {
+      const result = {
         hours: sessionHours,
         regularPay: 0, // Regular hours covered by salary
         overtimePay: overtimeCost,
@@ -194,9 +281,13 @@ export const calculateSessionCost = (session, employee, allSessionsInPeriod = []
         totalCost: overtimeCost,
         weeklyHoursBefore: hoursWorkedBeforeShift
       };
+      console.log('Returning:', result);
+      console.groupEnd();
+      return result;
     } else {
       // Entirely within regular hours
-      return {
+      console.log('✅ Within regular hours - no overtime');
+      const result = {
         hours: sessionHours,
         regularPay: 0,
         overtimePay: 0,
@@ -207,17 +298,24 @@ export const calculateSessionCost = (session, employee, allSessionsInPeriod = []
         note: 'Within salary threshold',
         weeklyHoursBefore: hoursWorkedBeforeShift
       };
+      console.log('Returning:', result);
+      console.groupEnd();
+      return result;
     }
   }
 
   // Default fallback
-  return {
+  console.log('⚠️ Unknown compensation type - using default');
+  const result = {
     hours: sessionHours,
     regularPay: 0,
     overtimePay: 0,
     isOvertimeShift: false,
     totalCost: 0
   };
+  console.log('Returning:', result);
+  console.groupEnd();
+  return result;
 };
 
 /**
