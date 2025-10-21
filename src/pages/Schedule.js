@@ -1,9 +1,10 @@
 // src/pages/Schedule.js - With Real-time Firestore Listeners and Secure Logging
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { useDataCache } from "../contexts/DataCacheContext";
 import secureLogger from "../utils/secureLogger";
+import { calculateTotalSessionCost } from "../utils/sessionCostCalculations";
 import {
   updateSession,
   getSession,
@@ -30,7 +31,7 @@ import {
   Plus,
   Filter,
   Users,
-  Map,
+  Map as MapIcon,
   X,
   Calendar,
   Shield,
@@ -211,13 +212,15 @@ const loadEmployeeOrder = (organizationId) => {
 const Schedule = () => {
   const { userProfile, organization } = useAuth();
   const { showToast } = useToast();
-  const { 
-    sessions, 
-    teamMembers, 
-    timeOffRequests, 
-    loading: cacheLoading, 
-    pendingTimeOffCount 
+  const {
+    sessions,
+    teamMembers,
+    timeOffRequests,
+    timeEntries,
+    loading: cacheLoading,
+    pendingTimeOffCount
   } = useDataCache();
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const dateRangeRef = React.useRef(null);
   const [viewMode, setViewMode] = useState("week");
@@ -643,8 +646,8 @@ const Schedule = () => {
     // No need for manual state updates
   };
 
-  // Get date range based on view mode
-  const getDateRange = () => {
+  // Get date range based on view mode (memoized to prevent infinite loops)
+  const dateRange = useMemo(() => {
     if (viewMode === "day") {
       const dayStart = new Date(currentDate);
       dayStart.setHours(0, 0, 0, 0);
@@ -675,9 +678,7 @@ const Schedule = () => {
         end: monthEnd,
       };
     }
-  };
-
-  const dateRange = getDateRange();
+  }, [currentDate, viewMode]);
 
   // Navigation functions
   const navigatePrevious = () => {
@@ -842,48 +843,56 @@ const Schedule = () => {
     return `${hour12}:${minutes} ${ampm}`;
   };
 
-  // Filter sessions based on schedule type, visible photographers, and visible schools
-  const filteredSessions = sessions.filter((session) => {
-    // First filter by schedule type (my vs full)
-    const passesScheduleFilter =
-      scheduleType === "my" ? session.photographerId === userProfile?.id : true;
+  // Filter sessions based on schedule type, visible photographers, and visible schools (memoized to prevent infinite loops)
+  const filteredSessions = useMemo(() => {
+    return sessions.filter((session) => {
+      // First filter by schedule type (my vs full)
+      const passesScheduleFilter =
+        scheduleType === "my" ? session.photographerId === userProfile?.id : true;
 
-    // Then filter by visible photographers - INCLUDE unassigned sessions
-    const passesPhotographerFilter = 
-      !session.photographerId || // Include unassigned sessions
-      visiblePhotographers.has(session.photographerId);
+      // Then filter by visible photographers - INCLUDE unassigned sessions
+      const passesPhotographerFilter =
+        !session.photographerId || // Include unassigned sessions
+        visiblePhotographers.has(session.photographerId);
 
-    // Then filter by visible schools (if any schools are selected)
-    const passesSchoolFilter = 
-      visibleSchools.size === 0 || visibleSchools.has(session.schoolId);
+      // Then filter by visible schools (if any schools are selected)
+      const passesSchoolFilter =
+        visibleSchools.size === 0 || visibleSchools.has(session.schoolId);
 
-    // Debug logging for unassigned sessions removed
+      // Debug logging for unassigned sessions removed
 
-    return passesScheduleFilter && passesPhotographerFilter && passesSchoolFilter;
-  });
+      return passesScheduleFilter && passesPhotographerFilter && passesSchoolFilter;
+    });
+  }, [sessions, scheduleType, userProfile?.id, visiblePhotographers, visibleSchools]);
 
   // Filter time off entries based on schedule type only (time off should always be visible for scheduling context)
-  const filteredTimeOff = visibleTimeOffEntries.filter((entry) => {
-    const passesScheduleFilter =
-      scheduleType === "my" ? entry.photographerId === userProfile?.id : true;
-    
-    return passesScheduleFilter;
-  });
+  const filteredTimeOff = useMemo(() => {
+    return visibleTimeOffEntries.filter((entry) => {
+      const passesScheduleFilter =
+        scheduleType === "my" ? entry.photographerId === userProfile?.id : true;
 
-  // Combine sessions and time off for calendar display
-  const allCalendarEntries = [...filteredSessions, ...filteredTimeOff];
+      return passesScheduleFilter;
+    });
+  }, [visibleTimeOffEntries, scheduleType, userProfile?.id]);
 
-  // Get unpublished sessions in current date range only
-  const unpublishedSessionsInView = filteredSessions.filter(session => {
-    // session.date is in "YYYY-MM-DD" format
-    const sessionDateStr = session.date;
-    const rangeStartStr = formatLocalDate(dateRange.start);
-    const rangeEndStr = formatLocalDate(dateRange.end);
-    
-    return sessionDateStr >= rangeStartStr && 
-           sessionDateStr <= rangeEndStr && 
-           session.isPublished === false;
-  });
+  // Combine sessions and time off for calendar display (memoized)
+  const allCalendarEntries = useMemo(() => {
+    return [...filteredSessions, ...filteredTimeOff];
+  }, [filteredSessions, filteredTimeOff]);
+
+  // Get unpublished sessions in current date range only (memoized)
+  const unpublishedSessionsInView = useMemo(() => {
+    return filteredSessions.filter(session => {
+      // session.date is in "YYYY-MM-DD" format
+      const sessionDateStr = session.date;
+      const rangeStartStr = formatLocalDate(dateRange.start);
+      const rangeEndStr = formatLocalDate(dateRange.end);
+
+      return sessionDateStr >= rangeStartStr &&
+             sessionDateStr <= rangeEndStr &&
+             session.isPublished === false;
+    });
+  }, [filteredSessions, dateRange]);
 
   // Sort team members based on saved order
   const sortTeamMembersByOrder = (members, order) => {
@@ -939,20 +948,24 @@ const Schedule = () => {
     }
   };
 
-  // Filter team members for display in calendar
-  const filteredTeamMembers = teamMembers.filter((member) => {
-    const isActiveAndVisible =
-      member.isActive && !member.isAccountant && visiblePhotographers.has(member.id);
+  // Filter team members for display in calendar (memoized)
+  const filteredTeamMembers = useMemo(() => {
+    return teamMembers.filter((member) => {
+      const isActiveAndVisible =
+        member.isActive && !member.isAccountant && visiblePhotographers.has(member.id);
 
-    if (scheduleType === "my") {
-      return member.id === userProfile?.id && isActiveAndVisible;
-    }
+      if (scheduleType === "my") {
+        return member.id === userProfile?.id && isActiveAndVisible;
+      }
 
-    return isActiveAndVisible;
-  });
+      return isActiveAndVisible;
+    });
+  }, [teamMembers, visiblePhotographers, scheduleType, userProfile?.id]);
 
-  // Apply custom order to filtered members
-  const sortedFilteredTeamMembers = sortTeamMembersByOrder(filteredTeamMembers, employeeOrder);
+  // Apply custom order to filtered members (memoized)
+  const sortedFilteredTeamMembers = useMemo(() => {
+    return sortTeamMembersByOrder(filteredTeamMembers, employeeOrder);
+  }, [filteredTeamMembers, employeeOrder]);
 
   // Calculate stats
   const calculateStats = () => {
@@ -983,6 +996,117 @@ const Schedule = () => {
   };
 
   const stats = calculateStats();
+
+  // State for async cost calculations (admin-only)
+  const [sessionCostsData, setSessionCostsData] = useState(null);
+  const [calculatingCosts, setCalculatingCosts] = useState(false);
+
+  // Effect to calculate costs (now synchronous!)
+  useEffect(() => {
+    const calculateCosts = () => {
+      if (!isAdmin) {
+        setSessionCostsData(null);
+        return;
+      }
+
+      setCalculatingCosts(true);
+
+      try {
+        const costs = new Map(); // Map of calendar entry ID → cost data (unique per photographer-session)
+        const photographerTotals = new Map(); // Map of photographer ID → total cost
+        const photographerLaborTotals = new Map(); // Map of photographer ID → total labor cost
+        const photographerMileageTotals = new Map(); // Map of photographer ID → total mileage cost
+        let grandTotal = 0;
+        let grandLaborTotal = 0;
+        let grandMileageTotal = 0;
+
+        // Calculate costs for all visible sessions in current view
+        const sessionsInView = filteredSessions.filter(session => {
+          const sessionDateStr = session.date;
+          const rangeStartStr = formatLocalDate(dateRange.start);
+          const rangeEndStr = formatLocalDate(dateRange.end);
+          return sessionDateStr >= rangeStartStr && sessionDateStr <= rangeEndStr && !session.isTimeOff;
+        });
+
+        // Pre-filter time entries to current date range ONCE (performance optimization)
+        const timeEntriesInRange = (timeEntries || []).filter(entry => {
+          if (!entry.date) return false;
+          const entryDate = entry.date.toDate ? entry.date.toDate() : new Date(entry.date);
+          return entryDate >= dateRange.start && entryDate <= dateRange.end;
+        });
+
+        console.log(`📊 Calculating costs for ${sessionsInView.length} sessions with ${timeEntriesInRange.length} time entries`);
+
+        // Process each session (calendar entry) - now synchronous and fast!
+        const costResults = sessionsInView.map((session) => {
+          // Get photographer details
+          const photographer = teamMembers.find(m => m.id === session.photographerId);
+          if (!photographer) return null; // Skip sessions without valid photographer
+
+          // Get school details
+          const school = schools.find(s => s.id === session.schoolId);
+          if (!school) return null; // Skip sessions without valid school
+
+          // Calculate cost for this photographer-session combination (synchronous)
+          const costData = calculateTotalSessionCost(
+            session,
+            photographer,
+            school,
+            timeEntriesInRange  // Pass pre-filtered time entries
+          );
+
+          return {
+            sessionId: session.id,
+            photographerId: session.photographerId,
+            costData
+          };
+        });
+
+        // Process results
+        costResults.forEach(result => {
+          if (!result) return; // Skip null results
+
+          const { sessionId, photographerId, costData } = result;
+
+          // Store in costs Map using unique calendar entry ID (session.id)
+          costs.set(sessionId, costData);
+
+          // Update photographer totals
+          const currentPhotographerTotal = photographerTotals.get(photographerId) || 0;
+          const currentPhotographerLabor = photographerLaborTotals.get(photographerId) || 0;
+          const currentPhotographerMileage = photographerMileageTotals.get(photographerId) || 0;
+
+          photographerTotals.set(photographerId, currentPhotographerTotal + costData.totalCost);
+          photographerLaborTotals.set(photographerId, currentPhotographerLabor + costData.laborCost);
+          photographerMileageTotals.set(photographerId, currentPhotographerMileage + costData.mileageCost);
+        });
+
+        // Calculate grand totals by summing ALL photographer costs
+        costs.forEach(costData => {
+          grandTotal += costData.totalCost;
+          grandLaborTotal += costData.laborCost;
+          grandMileageTotal += costData.mileageCost;
+        });
+
+        setSessionCostsData({
+          costs, // Map of calendar entry ID → cost data
+          photographerTotals, // Map of photographer ID → total cost
+          photographerLaborTotals, // Map of photographer ID → total labor cost
+          photographerMileageTotals, // Map of photographer ID → total mileage cost
+          grandTotal, // Total cost for all unique sessions in view
+          grandLaborTotal, // Total labor cost for all unique sessions in view
+          grandMileageTotal // Total mileage cost for all unique sessions in view
+        });
+      } catch (error) {
+        console.error('Error calculating session costs:', error);
+        setSessionCostsData(null);
+      } finally {
+        setCalculatingCosts(false);
+      }
+    };
+
+    calculateCosts();
+  }, [filteredSessions, teamMembers, schools, timeEntries, dateRange, isAdmin]);
 
   if (loading) {
     return (
@@ -1104,7 +1228,7 @@ const Schedule = () => {
               }`}
               onClick={() => setShowSchoolFilter(!showSchoolFilter)}
             >
-              <Map size={16} />
+              <MapIcon size={16} />
               <span>Schools ({visibleSchools.size})</span>
             </button>
             <button
@@ -1221,6 +1345,14 @@ const Schedule = () => {
           <span className="schedule__stat-label">SHIFTS</span>
           <span className="schedule__stat-value">{stats.shifts}</span>
         </div>
+        {isAdmin && sessionCostsData && (
+          <div className="schedule__stat">
+            <span className="schedule__stat-label">TOTAL COST</span>
+            <span className="schedule__stat-value">
+              ${sessionCostsData.grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Calendar View */}
@@ -1236,6 +1368,7 @@ const Schedule = () => {
           organization={organization}
           blockedDates={blockedDates}
           isAdmin={isAdmin}
+          sessionCostsData={sessionCostsData}
           onUpdateSession={handleUpdateSession}
           onSessionClick={handleSessionClick}
           onTimeOffClick={handleTimeOffClick}

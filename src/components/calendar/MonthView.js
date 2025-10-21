@@ -11,6 +11,8 @@ const MonthView = ({
   userProfile,
   organization,
   blockedDates = [],
+  isAdmin,
+  sessionCostsData,
   onSessionClick,
   onTimeOffClick,
 }) => {
@@ -374,6 +376,42 @@ const MonthView = ({
         ))}
       </div>
 
+      {/* Period Totals Summary Bar - Admin Only */}
+      {isAdmin && sessionCostsData && sessionCostsData.grandTotal > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "24px",
+            padding: "8px 16px",
+            backgroundColor: "#f8f9fa",
+            borderBottom: "2px solid #dee2e6",
+            fontSize: "14px",
+            fontWeight: "600",
+            position: "sticky",
+            top: 0,
+            zIndex: 9,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ color: "#6c757d" }}>Month Totals:</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#007bff" }}>
+            <span>Labor:</span>
+            <span>${(sessionCostsData.grandLaborTotal || 0).toFixed(2)}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#ff6600" }}>
+            <span>Miles:</span>
+            <span>${(sessionCostsData.grandMileageTotal || 0).toFixed(2)}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#28a745" }}>
+            <span>Total:</span>
+            <span>${(sessionCostsData.grandTotal || 0).toFixed(2)}</span>
+          </div>
+        </div>
+      )}
+
       {/* Calendar Body */}
       <div className="month-body">
         {/* Calendar Grid */}
@@ -555,6 +593,53 @@ const MonthView = ({
                           </span>
                         )}
                       </div>
+                    )}
+                    {/* Cost Badge - Admin Only */}
+                    {isAdmin && sessionCostsData && sessionCostsData.costs && !session.isTimeOff && (
+                      (() => {
+                        const costData = sessionCostsData.costs.get(session.id);
+                        if (costData && costData.totalCost > 0) {
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', marginTop: '2px' }}>
+                              {costData.laborCost > 0 && (
+                                <div
+                                  style={{
+                                    fontSize: "0.5rem",
+                                    backgroundColor: "rgba(255, 255, 255, 0.3)",
+                                    color: "white",
+                                    padding: "1px 2px",
+                                    borderRadius: "2px",
+                                    fontWeight: "600",
+                                    textAlign: "center",
+                                    border: "1px solid rgba(255, 255, 255, 0.6)",
+                                    lineHeight: "1.1"
+                                  }}
+                                >
+                                  Labor: ${costData.laborCost.toFixed(2)}
+                                </div>
+                              )}
+                              {costData.mileageCost > 0 && (
+                                <div
+                                  style={{
+                                    fontSize: "0.5rem",
+                                    backgroundColor: "rgba(255, 255, 255, 0.3)",
+                                    color: "white",
+                                    padding: "1px 2px",
+                                    borderRadius: "2px",
+                                    fontWeight: "600",
+                                    textAlign: "center",
+                                    border: "1px solid rgba(255, 255, 255, 0.6)",
+                                    lineHeight: "1.1"
+                                  }}
+                                >
+                                  Miles: ${costData.mileageCost.toFixed(2)}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()
                     )}
                   </div>
                 );

@@ -15,6 +15,7 @@ const CalendarView = ({
   organization,
   blockedDates,
   isAdmin,
+  sessionCostsData, // Cost data for admin users
   onUpdateSession,
   onSessionClick, // New prop for handling session clicks
   onTimeOffClick, // New prop for handling time off clicks
@@ -37,6 +38,7 @@ const CalendarView = ({
             organization={organization}
             blockedDates={blockedDates}
             isAdmin={isAdmin}
+            sessionCostsData={sessionCostsData}
             onUpdateSession={onUpdateSession}
             onSessionClick={onSessionClick}
             onTimeOffClick={onTimeOffClick}
@@ -58,6 +60,7 @@ const CalendarView = ({
             organization={organization}
             blockedDates={blockedDates}
             isAdmin={isAdmin}
+            sessionCostsData={sessionCostsData}
             onUpdateSession={onUpdateSession}
             onSessionClick={onSessionClick} // Pass the click handler
             onTimeOffClick={onTimeOffClick} // Pass the time off click handler
@@ -79,6 +82,8 @@ const CalendarView = ({
             userProfile={userProfile}
             organization={organization}
             blockedDates={blockedDates}
+            isAdmin={isAdmin}
+            sessionCostsData={sessionCostsData}
             onUpdateSession={onUpdateSession} // Pass the update handler (for future month view drag & drop)
             onSessionClick={onSessionClick} // Pass the click handler
             onTimeOffClick={onTimeOffClick} // Pass the time off click handler
@@ -96,6 +101,7 @@ const CalendarView = ({
             organization={organization}
             blockedDates={blockedDates}
             isAdmin={isAdmin}
+            sessionCostsData={sessionCostsData}
             onUpdateSession={onUpdateSession}
             onSessionClick={onSessionClick} // Pass the click handler
             onTimeOffClick={onTimeOffClick} // Pass the time off click handler

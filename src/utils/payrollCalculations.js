@@ -99,35 +99,7 @@ export const getPayPeriodsPerYear = (payPeriodType) => {
  * @returns {Object} Cost breakdown for the session
  */
 export const calculateSessionCost = (session, employee, allSessionsInPeriod = []) => {
-  // DEBUG: Log inputs
-  console.group('📊 calculateSessionCost');
-  console.log('Session:', {
-    date: session?.date,
-    dateType: typeof session?.date,
-    hasToDate: session?.date && typeof session?.date?.toDate === 'function',
-    startTime: session?.startTime,
-    endTime: session?.endTime,
-    photographerId: session?.photographerId
-  });
-  console.log('Employee:', {
-    id: employee?.id,
-    name: employee?.displayName || `${employee?.firstName} ${employee?.lastName}`,
-    compensationType: employee?.compensationType,
-    hourlyRate: employee?.hourlyRate,
-    overtimeThreshold: employee?.overtimeThreshold
-  });
-  console.log('All sessions in period (count):', allSessionsInPeriod?.length || 0);
-  console.log('Session types in period:', allSessionsInPeriod?.map(s => ({
-    date: s.date,
-    dateType: typeof s.date,
-    hasToDate: s.date && typeof s.date?.toDate === 'function',
-    startTime: s.startTime,
-    endTime: s.endTime
-  })));
-
   if (!session || !employee) {
-    console.log('❌ Missing session or employee - returning zero cost');
-    console.groupEnd();
     return {
       hours: 0,
       regularPay: 0,
@@ -138,65 +110,26 @@ export const calculateSessionCost = (session, employee, allSessionsInPeriod = []
   }
 
   const sessionHours = calculateHours(session.startTime, session.endTime);
-  console.log('Session hours:', sessionHours);
 
-  // Hourly employees: simple calculation
+  // Hourly employees: calculate overtime at 1.5x after 40 hours/week
   if (employee.compensationType === 'hourly') {
-    const cost = sessionHours * (employee.hourlyRate || 0);
-    const result = {
-      hours: sessionHours,
-      regularPay: cost,
-      overtimePay: 0,
-      isOvertimeShift: false,
-      totalCost: cost
-    };
-    console.log('💰 Hourly employee - returning:', result);
-    console.groupEnd();
-    return result;
-  }
-
-  // Salary employees: session cost is $0 (they get fixed amount regardless)
-  if (employee.compensationType === 'salary') {
-    const result = {
-      hours: sessionHours,
-      regularPay: 0,
-      overtimePay: 0,
-      isOvertimeShift: false,
-      totalCost: 0,
-      note: 'Salaried - included in base pay'
-    };
-    console.log('💼 Salary employee - returning:', result);
-    console.groupEnd();
-    return result;
-  }
-
-  // Salary + OT employees: need to check weekly hours
-  if (employee.compensationType === 'salary_with_overtime') {
-    console.log('⏰ Salary+OT employee - calculating overtime');
-    const threshold = employee.overtimeThreshold || 40;
-    console.log('Overtime threshold:', threshold);
+    const threshold = 40; // OT threshold for hourly workers
+    const overtimeRate = (employee.hourlyRate || 0) * 1.5;
 
     // Get the week boundaries for this session
     const weekStart = getWeekStart(session.date);
     const weekEnd = getWeekEnd(session.date);
-    console.log('Week boundaries:', {
-      weekStart: weekStart.toISOString(),
-      weekEnd: weekEnd.toISOString()
-    });
 
     // Find all sessions this week for this employee BEFORE this session
-    console.log('Filtering prior sessions this week...');
     const priorSessionsThisWeek = allSessionsInPeriod.filter(s => {
-      if (s.photographerId !== employee.id) {
-        console.log('  ❌ Skipping session - different photographer:', s.photographerId);
+      if (s.photographerId !== employee.id && s.userId !== employee.id) {
         return false;
       }
       if (!s.date) {
-        console.log('  ❌ Skipping session - no date');
         return false;
       }
 
-      // FIX: Handle Firestore Timestamps properly
+      // Handle Firestore Timestamps properly
       const sessionDate = typeof s.date === 'string'
         ? new Date(s.date + 'T00:00:00')
         : s.date && typeof s.date.toDate === 'function'
@@ -209,49 +142,25 @@ export const calculateSessionCost = (session, employee, allSessionsInPeriod = []
           ? session.date.toDate()
           : new Date(session.date);
 
-      console.log('  📅 Checking session:', {
-        rawDate: s.date,
-        parsedDate: sessionDate.toISOString(),
-        isValid: !isNaN(sessionDate.getTime()),
-        currentSessionDate: currentSessionDate.toISOString(),
-        inWeek: sessionDate >= weekStart && sessionDate <= weekEnd,
-        beforeCurrent: sessionDate < currentSessionDate
-      });
-
       // Include sessions in same week that are before this one
-      const passes = sessionDate >= weekStart &&
+      return sessionDate >= weekStart &&
              sessionDate <= weekEnd &&
              sessionDate < currentSessionDate;
-
-      console.log(passes ? '  ✅ INCLUDED' : '  ❌ EXCLUDED');
-      return passes;
     });
-
-    console.log(`Found ${priorSessionsThisWeek.length} prior sessions this week`);
 
     // Calculate hours worked before this shift
     const hoursWorkedBeforeShift = priorSessionsThisWeek.reduce((sum, s) => {
       const sessionHrs = calculateHours(s.startTime, s.endTime);
-      console.log(`  Prior session: ${s.startTime} - ${s.endTime} = ${sessionHrs} hours`);
       return sum + sessionHrs;
     }, 0);
 
     const hoursAfterShift = hoursWorkedBeforeShift + sessionHours;
 
-    console.log('Hours calculation:', {
-      hoursWorkedBeforeShift,
-      sessionHours,
-      hoursAfterShift,
-      threshold,
-      willBeOT: hoursAfterShift > threshold
-    });
-
     // Determine OT status
     if (hoursWorkedBeforeShift >= threshold) {
-      // Already in OT - entire shift is OT
-      console.log('🔥 Already in OT - entire shift is overtime!');
-      const overtimeCost = sessionHours * (employee.hourlyRate || 0);
-      const result = {
+      // Already in OT - entire shift is OT at 1.5x
+      const overtimeCost = sessionHours * overtimeRate;
+      return {
         hours: sessionHours,
         regularPay: 0,
         overtimePay: overtimeCost,
@@ -261,17 +170,116 @@ export const calculateSessionCost = (session, employee, allSessionsInPeriod = []
         totalCost: overtimeCost,
         weeklyHoursBefore: hoursWorkedBeforeShift
       };
-      console.log('Returning:', result);
-      console.groupEnd();
-      return result;
     } else if (hoursAfterShift > threshold) {
       // Shift crosses into OT
-      console.log('⚠️ Shift crosses into OT');
+      const regularHours = threshold - hoursWorkedBeforeShift;
+      const overtimeHours = sessionHours - regularHours;
+      const regularCost = regularHours * (employee.hourlyRate || 0);
+      const overtimeCost = overtimeHours * overtimeRate;
+
+      return {
+        hours: sessionHours,
+        regularPay: regularCost,
+        overtimePay: overtimeCost,
+        isOvertimeShift: true,
+        overtimeHours: overtimeHours,
+        regularHours: regularHours,
+        totalCost: regularCost + overtimeCost,
+        weeklyHoursBefore: hoursWorkedBeforeShift
+      };
+    } else {
+      // Entirely within regular hours
+      const cost = sessionHours * (employee.hourlyRate || 0);
+      return {
+        hours: sessionHours,
+        regularPay: cost,
+        overtimePay: 0,
+        isOvertimeShift: false,
+        overtimeHours: 0,
+        regularHours: sessionHours,
+        totalCost: cost,
+        weeklyHoursBefore: hoursWorkedBeforeShift
+      };
+    }
+  }
+
+  // Salary employees: session cost is $0 (they get fixed amount regardless)
+  if (employee.compensationType === 'salary') {
+    return {
+      hours: sessionHours,
+      regularPay: 0,
+      overtimePay: 0,
+      isOvertimeShift: false,
+      totalCost: 0,
+      note: 'Salaried - included in base pay'
+    };
+  }
+
+  // Salary + OT employees: need to check weekly hours
+  if (employee.compensationType === 'salary_with_overtime') {
+    const threshold = employee.overtimeThreshold || 40;
+
+    // Get the week boundaries for this session
+    const weekStart = getWeekStart(session.date);
+    const weekEnd = getWeekEnd(session.date);
+
+    // Find all sessions this week for this employee BEFORE this session
+    const priorSessionsThisWeek = allSessionsInPeriod.filter(s => {
+      if (s.photographerId !== employee.id) {
+        return false;
+      }
+      if (!s.date) {
+        return false;
+      }
+
+      // Handle Firestore Timestamps properly
+      const sessionDate = typeof s.date === 'string'
+        ? new Date(s.date + 'T00:00:00')
+        : s.date && typeof s.date.toDate === 'function'
+          ? s.date.toDate()
+          : new Date(s.date);
+
+      const currentSessionDate = typeof session.date === 'string'
+        ? new Date(session.date + 'T00:00:00')
+        : session.date && typeof session.date.toDate === 'function'
+          ? session.date.toDate()
+          : new Date(session.date);
+
+      // Include sessions in same week that are before this one
+      return sessionDate >= weekStart &&
+             sessionDate <= weekEnd &&
+             sessionDate < currentSessionDate;
+    });
+
+    // Calculate hours worked before this shift
+    const hoursWorkedBeforeShift = priorSessionsThisWeek.reduce((sum, s) => {
+      const sessionHrs = calculateHours(s.startTime, s.endTime);
+      return sum + sessionHrs;
+    }, 0);
+
+    const hoursAfterShift = hoursWorkedBeforeShift + sessionHours;
+
+    // Determine OT status
+    if (hoursWorkedBeforeShift >= threshold) {
+      // Already in OT - entire shift is OT
+      const overtimeCost = sessionHours * (employee.hourlyRate || 0);
+      return {
+        hours: sessionHours,
+        regularPay: 0,
+        overtimePay: overtimeCost,
+        isOvertimeShift: true,
+        overtimeHours: sessionHours,
+        regularHours: 0,
+        totalCost: overtimeCost,
+        weeklyHoursBefore: hoursWorkedBeforeShift
+      };
+    } else if (hoursAfterShift > threshold) {
+      // Shift crosses into OT
       const regularHours = threshold - hoursWorkedBeforeShift;
       const overtimeHours = sessionHours - regularHours;
       const overtimeCost = overtimeHours * (employee.hourlyRate || 0);
 
-      const result = {
+      return {
         hours: sessionHours,
         regularPay: 0, // Regular hours covered by salary
         overtimePay: overtimeCost,
@@ -281,13 +289,9 @@ export const calculateSessionCost = (session, employee, allSessionsInPeriod = []
         totalCost: overtimeCost,
         weeklyHoursBefore: hoursWorkedBeforeShift
       };
-      console.log('Returning:', result);
-      console.groupEnd();
-      return result;
     } else {
       // Entirely within regular hours
-      console.log('✅ Within regular hours - no overtime');
-      const result = {
+      return {
         hours: sessionHours,
         regularPay: 0,
         overtimePay: 0,
@@ -298,24 +302,17 @@ export const calculateSessionCost = (session, employee, allSessionsInPeriod = []
         note: 'Within salary threshold',
         weeklyHoursBefore: hoursWorkedBeforeShift
       };
-      console.log('Returning:', result);
-      console.groupEnd();
-      return result;
     }
   }
 
   // Default fallback
-  console.log('⚠️ Unknown compensation type - using default');
-  const result = {
+  return {
     hours: sessionHours,
     regularPay: 0,
     overtimePay: 0,
     isOvertimeShift: false,
     totalCost: 0
   };
-  console.log('Returning:', result);
-  console.groupEnd();
-  return result;
 };
 
 /**
@@ -359,10 +356,41 @@ export const calculateEmployeePayroll = (employee, timeEntries, payPeriodType = 
     return sum;
   }, 0);
 
-  // Hourly employees
+  // Hourly employees: calculate overtime at 1.5x after 40 hours/week
   if (employee.compensationType === 'hourly') {
-    regularPay = totalHours * (employee.hourlyRate || 0);
-    regularHours = totalHours;
+    const threshold = 40;
+    const overtimeRate = (employee.hourlyRate || 0) * 1.5;
+
+    // Calculate OT using weekly breakdown
+    const weeks = groupEntriesByWeek(timeEntries);
+
+    weeks.forEach(week => {
+      const weekHours = week.entries.reduce((sum, entry) => {
+        if (entry.clockInTime && entry.clockOutTime) {
+          const clockIn = entry.clockInTime.toDate ? entry.clockInTime.toDate() : new Date(entry.clockInTime);
+          const clockOut = entry.clockOutTime.toDate ? entry.clockOutTime.toDate() : new Date(entry.clockOutTime);
+          const hours = (clockOut - clockIn) / (1000 * 60 * 60);
+          return sum + hours;
+        }
+        return sum;
+      }, 0);
+
+      if (weekHours > threshold) {
+        // This week has overtime
+        const weekRegularHours = threshold;
+        const weekOT = weekHours - threshold;
+
+        regularHours += weekRegularHours;
+        regularPay += weekRegularHours * (employee.hourlyRate || 0);
+
+        overtimeHours += weekOT;
+        overtimePay += weekOT * overtimeRate;
+      } else {
+        // No overtime this week
+        regularHours += weekHours;
+        regularPay += weekHours * (employee.hourlyRate || 0);
+      }
+    });
   }
 
   // Salary employees

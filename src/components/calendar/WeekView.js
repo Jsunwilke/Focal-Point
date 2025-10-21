@@ -14,6 +14,7 @@ const WeekView = ({
   organization,
   blockedDates = [],
   isAdmin,
+  sessionCostsData, // Cost data for admin users
   onUpdateSession,
   onSessionClick, // New prop for handling session clicks
   onTimeOffClick, // New prop for handling time off clicks
@@ -1154,6 +1155,53 @@ const WeekView = ({
                             {session.notes || (session.photographerNotes ? "Has photographer notes" : "")}
                           </div>
                         )}
+                        {/* Cost Badge - Admin Only */}
+                        {isAdmin && sessionCostsData && sessionCostsData.costs && !session.isTimeOff && (
+                          (() => {
+                            const costData = sessionCostsData.costs.get(session.id);
+                            if (costData && costData.totalCost > 0) {
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '3px', flex: '0 0 auto' }}>
+                                  {costData.laborCost > 0 && (
+                                    <div
+                                      style={{
+                                        fontSize: "8px",
+                                        backgroundColor: "rgba(255, 255, 255, 0.3)",
+                                        color: "white",
+                                        padding: "1px 3px",
+                                        borderRadius: "3px",
+                                        fontWeight: "600",
+                                        textAlign: "center",
+                                        border: "1px solid rgba(255, 255, 255, 0.6)",
+                                        lineHeight: "1.2"
+                                      }}
+                                    >
+                                      Labor: ${costData.laborCost.toFixed(2)}
+                                    </div>
+                                  )}
+                                  {costData.mileageCost > 0 && (
+                                    <div
+                                      style={{
+                                        fontSize: "8px",
+                                        backgroundColor: "rgba(255, 255, 255, 0.3)",
+                                        color: "white",
+                                        padding: "1px 3px",
+                                        borderRadius: "3px",
+                                        fontWeight: "600",
+                                        textAlign: "center",
+                                        border: "1px solid rgba(255, 255, 255, 0.6)",
+                                        lineHeight: "1.2"
+                                      }}
+                                    >
+                                      Miles: ${costData.mileageCost.toFixed(2)}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()
+                        )}
                       </div>
                     );
                   })}
@@ -1287,6 +1335,42 @@ const WeekView = ({
         ))}
       </div>
 
+      {/* Period Totals Summary Bar - Admin Only */}
+      {isAdmin && sessionCostsData && sessionCostsData.grandTotal > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "24px",
+            padding: "8px 16px",
+            backgroundColor: "#f8f9fa",
+            borderBottom: "2px solid #dee2e6",
+            fontSize: "14px",
+            fontWeight: "600",
+            position: "sticky",
+            top: "60px",
+            zIndex: 9,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ color: "#6c757d" }}>Week Totals:</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#007bff" }}>
+            <span>Labor:</span>
+            <span>${(sessionCostsData.grandLaborTotal || 0).toFixed(2)}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#ff6600" }}>
+            <span>Miles:</span>
+            <span>${(sessionCostsData.grandMileageTotal || 0).toFixed(2)}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#28a745" }}>
+            <span>Total:</span>
+            <span>${(sessionCostsData.grandTotal || 0).toFixed(2)}</span>
+          </div>
+        </div>
+      )}
+
       {/* Body with Team Members and Sessions */}
       <div className="calendar-body" style={bodyStyle}>
         {finalDisplayMembers.map((member) => (
@@ -1342,7 +1426,7 @@ const WeekView = ({
             >
               {/* Drag Handle */}
               {(isAdmin || userProfile?.role === 'manager') && (
-                <div 
+                <div
                   style={{
                     color: "#6c757d",
                     cursor: "grab",
@@ -1356,26 +1440,53 @@ const WeekView = ({
               <div className="photographer-avatar">
                 {getUserAvatar(member)}
               </div>
-              <div className="photographer-info" style={{ flex: 1 }}>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
                 <div
-                  className="photographer-name"
                   style={{
                     fontSize: "var(--font-size-sm, 14px)",
                     fontWeight: "var(--font-weight-medium, 500)",
                     color: "var(--text-primary, #333)",
+                    margin: 0,
+                    padding: 0,
                   }}
                 >
                   {member.displayName || `${member.firstName} ${member.lastName}`}
                 </div>
                 <div
-                  className="photographer-stats"
                   style={{
                     fontSize: "var(--font-size-xs, 12px)",
                     color: "var(--text-secondary, #6c757d)",
+                    margin: 0,
+                    padding: 0,
                   }}
                 >
                   {formatHours(calculatePhotographerHours(member.id))}
                 </div>
+                {isAdmin && sessionCostsData && sessionCostsData.photographerTotals && (
+                  <div
+                    style={{
+                      fontSize: "10px",
+                      color: "var(--text-secondary, #6c757d)",
+                      marginTop: "2px",
+                      margin: "2px 0 0 0",
+                      padding: 0,
+                      lineHeight: "1.3",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "1px",
+                    }}
+                  >
+                    <div style={{ fontWeight: '600', color: '#007bff' }}>
+                      L: ${(sessionCostsData.photographerLaborTotals.get(member.id) || 0).toFixed(2)}
+                    </div>
+                    <div style={{ fontWeight: '600', color: '#ff6600' }}>
+                      M: ${(sessionCostsData.photographerMileageTotals.get(member.id) || 0).toFixed(2)}
+                    </div>
+                    <div style={{ fontWeight: '600', color: '#28a745' }}>
+                      Total: ${(sessionCostsData.photographerTotals.get(member.id) || 0).toFixed(2)}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1603,6 +1714,53 @@ const WeekView = ({
                           {session.photographerNotes && !session.notes && "📝 "}
                           {session.notes || (session.photographerNotes ? "Has photographer notes" : "")}
                         </div>
+                      )}
+                      {/* Cost Badge - Admin Only */}
+                      {isAdmin && sessionCostsData && sessionCostsData.costs && !session.isTimeOff && (
+                        (() => {
+                          const costData = sessionCostsData.costs.get(session.id);
+                          if (costData && costData.totalCost > 0) {
+                            return (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '3px', flex: '0 0 auto' }}>
+                                {costData.laborCost > 0 && (
+                                  <div
+                                    style={{
+                                      fontSize: "8px",
+                                      backgroundColor: "rgba(255, 255, 255, 0.3)",
+                                      color: "white",
+                                      padding: "1px 3px",
+                                      borderRadius: "3px",
+                                      fontWeight: "600",
+                                      textAlign: "center",
+                                      border: "1px solid rgba(255, 255, 255, 0.6)",
+                                      lineHeight: "1.2"
+                                    }}
+                                  >
+                                    Labor: ${costData.laborCost.toFixed(2)}
+                                  </div>
+                                )}
+                                {costData.mileageCost > 0 && (
+                                  <div
+                                    style={{
+                                      fontSize: "8px",
+                                      backgroundColor: "rgba(255, 255, 255, 0.3)",
+                                      color: "white",
+                                      padding: "1px 3px",
+                                      borderRadius: "3px",
+                                      fontWeight: "600",
+                                      textAlign: "center",
+                                      border: "1px solid rgba(255, 255, 255, 0.6)",
+                                      lineHeight: "1.2"
+                                    }}
+                                  >
+                                    Miles: ${costData.mileageCost.toFixed(2)}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()
                       )}
                     </div>
                     );

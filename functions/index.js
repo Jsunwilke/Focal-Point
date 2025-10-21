@@ -2923,3 +2923,31 @@ exports.createChatChannel = onCall({
         return { success: false, error: error.message };
     }
 });
+
+// ==========================================
+// SESSION COST CALCULATION FUNCTIONS
+// ==========================================
+// Import cost calculation functions
+const {
+    calculateSessionCostOnCreate,
+    calculateSessionCostOnUpdate
+} = require('./src/calculateSessionCost');
+
+const {
+    recalculatePhotographerCosts,
+    recalculateSchoolCosts
+} = require('./src/recalculatePhotographerCosts');
+
+const {
+    backfillSessionCosts,
+    recalculateSessionCost
+} = require('./src/backfillSessionCosts');
+
+// Export cost calculation functions
+// These functions automatically calculate and store session costs in Firestore
+exports.calculateSessionCostOnCreate = calculateSessionCostOnCreate;
+exports.calculateSessionCostOnUpdate = calculateSessionCostOnUpdate;
+exports.recalculatePhotographerCosts = recalculatePhotographerCosts;
+exports.recalculateSchoolCosts = recalculateSchoolCosts;
+exports.backfillSessionCosts = backfillSessionCosts;
+exports.recalculateSessionCost = recalculateSessionCost;

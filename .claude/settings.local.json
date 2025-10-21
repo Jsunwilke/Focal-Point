@@ -93,7 +93,9 @@
       "WebFetch(domain:getstream.io)",
       "Bash(firebase login:*)",
       "Bash(firebase functions:list:*)",
-      "Read(//mnt/c/Users/jsunw/OneDrive/Pictures/Screenshots/**)"
+      "Read(//mnt/c/Users/jsunw/OneDrive/Pictures/Screenshots/**)",
+      "WebFetch(domain:blog.afi.io)",
+      "Read(//mnt/c/Users/jsunw/iCloudPhotos/Photos/**)"
     ],
     "deny": []
   }

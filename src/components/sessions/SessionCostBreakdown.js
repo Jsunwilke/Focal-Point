@@ -29,6 +29,8 @@ const SessionCostBreakdown = ({
 }) => {
   const [photographerCosts, setPhotographerCosts] = useState([]);
   const [totalCost, setTotalCost] = useState(0);
+  const [totalLaborCost, setTotalLaborCost] = useState(0);
+  const [totalMileageCost, setTotalMileageCost] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -60,21 +62,23 @@ const SessionCostBreakdown = ({
         // Calculate costs for each photographer
         const costs = [];
         let grandTotal = 0;
+        let grandLaborTotal = 0;
+        let grandMileageTotal = 0;
 
-        photographers.forEach((photographer) => {
+        // Calculate costs for all photographers (now synchronous and fast!)
+        const photographerCostResults = photographers.map((photographer) => {
           // Find full team member data
           const photographerId = photographer.id || photographer;
           const teamMember = teamMembers.find(m => m.id === photographerId);
 
           if (!teamMember) {
             // Photographer not found in team members
-            costs.push({
+            return {
               photographer: photographer,
               name: photographer.name || 'Unknown Photographer',
               error: 'Photographer details not found',
               costData: null
-            });
-            return;
+            };
           }
 
           // Calculate costs for this photographer (with all time entries for accurate OT)
@@ -85,18 +89,27 @@ const SessionCostBreakdown = ({
             allTimeEntriesInWeek
           );
 
-          costs.push({
+          return {
             photographer: teamMember,
             name: teamMember.displayName || `${teamMember.firstName} ${teamMember.lastName}`,
             error: null,
             costData: costData
-          });
-
-          grandTotal += costData.totalCost;
+          };
         });
 
-        setPhotographerCosts(costs);
+        // Calculate grand totals
+        photographerCostResults.forEach(cost => {
+          if (cost.costData) {
+            grandTotal += cost.costData.totalCost;
+            grandLaborTotal += cost.costData.laborCost;
+            grandMileageTotal += cost.costData.mileageCost;
+          }
+        });
+
+        setPhotographerCosts(photographerCostResults);
         setTotalCost(grandTotal);
+        setTotalLaborCost(grandLaborTotal);
+        setTotalMileageCost(grandMileageTotal);
         setLoading(false);
       } catch (err) {
         console.error("Error calculating session costs:", err);
@@ -256,23 +269,85 @@ const SessionCostBreakdown = ({
           );
         })}
 
-        {/* Grand Total (only show if multiple photographers) */}
+        {/* Grand Total Breakdown (only show if multiple photographers) */}
         {photographerCosts.length > 1 && (
           <div className="session-cost-grand-total-section">
-            <span className="session-cost-total-label">Total Session Cost</span>
-            <span className="session-cost-total-amount">
-              {formatCurrency(totalCost)}
-            </span>
+            <div style={{
+              backgroundColor: "#007bff",
+              color: "white",
+              padding: "8px 12px",
+              marginBottom: "4px",
+              borderRadius: "4px",
+              fontSize: "0.875rem",
+              fontWeight: "600",
+              display: "block"
+            }}>
+              Labor: {formatCurrency(totalLaborCost)}
+            </div>
+            <div style={{
+              backgroundColor: "#ff6600",
+              color: "white",
+              padding: "8px 12px",
+              marginBottom: "4px",
+              borderRadius: "4px",
+              fontSize: "0.875rem",
+              fontWeight: "600",
+              display: "block"
+            }}>
+              Miles: {formatCurrency(totalMileageCost)}
+            </div>
+            <div style={{
+              backgroundColor: "#28a745",
+              color: "white",
+              padding: "8px 12px",
+              borderRadius: "4px",
+              fontSize: "1rem",
+              fontWeight: "700",
+              display: "block"
+            }}>
+              Total: {formatCurrency(totalCost)}
+            </div>
           </div>
         )}
 
-        {/* Single photographer - show total */}
+        {/* Single photographer - show breakdown */}
         {photographerCosts.length === 1 && (
           <div className="session-cost-total-section">
-            <span className="session-cost-total-label">Total Session Cost</span>
-            <span className="session-cost-total-amount">
-              {formatCurrency(totalCost)}
-            </span>
+            <div style={{
+              backgroundColor: "#007bff",
+              color: "white",
+              padding: "8px 12px",
+              marginBottom: "4px",
+              borderRadius: "4px",
+              fontSize: "0.875rem",
+              fontWeight: "600",
+              display: "block"
+            }}>
+              Labor: {formatCurrency(totalLaborCost)}
+            </div>
+            <div style={{
+              backgroundColor: "#ff6600",
+              color: "white",
+              padding: "8px 12px",
+              marginBottom: "4px",
+              borderRadius: "4px",
+              fontSize: "0.875rem",
+              fontWeight: "600",
+              display: "block"
+            }}>
+              Miles: {formatCurrency(totalMileageCost)}
+            </div>
+            <div style={{
+              backgroundColor: "#28a745",
+              color: "white",
+              padding: "8px 12px",
+              borderRadius: "4px",
+              fontSize: "1rem",
+              fontWeight: "700",
+              display: "block"
+            }}>
+              Total: {formatCurrency(totalCost)}
+            </div>
           </div>
         )}
       </div>
