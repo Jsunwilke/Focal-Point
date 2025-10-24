@@ -192,6 +192,8 @@ export const DataCacheProvider = ({ children }) => {
               location: session.location || session.schoolName || "",
               notes: session.notes,
               photographerNotes: photographer.notes || '',
+              schedulerConfigurationId: session.schedulerConfigurationId,
+              schedulerAssignments: session.schedulerAssignments || [],
             };
           });
         } else {
@@ -214,6 +216,8 @@ export const DataCacheProvider = ({ children }) => {
             schoolName: session.schoolName || session.location || "",
             location: session.location || session.schoolName || "",
             notes: session.notes,
+            schedulerConfigurationId: session.schedulerConfigurationId,
+            schedulerAssignments: session.schedulerAssignments || [],
           }];
         }
       })
@@ -436,7 +440,7 @@ export const DataCacheProvider = ({ children }) => {
             
             changes.forEach((change) => {
               const docData = { id: change.doc.id, ...change.doc.data() };
-              
+
               if (change.type === 'added') {
                 // Add new session
                 updatedSessions.push(docData);

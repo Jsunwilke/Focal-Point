@@ -5,6 +5,7 @@ import { X, School, MapPin, User, Mail, Phone, Save, Map, Building2 } from "luci
 import { useDistricts } from "../../contexts/DistrictContext";
 import Button from "../shared/Button";
 import GoogleMapModal from "../shared/GoogleMapModal";
+import SchedulerConfigurationEditor from "./SchedulerConfigurationEditor";
 import "../shared/Modal.css";
 import "./AddSchoolModal.css";
 
@@ -13,6 +14,7 @@ const AddSchoolModal = ({
   onClose,
   onAdd,
   isEditing = false,
+  organization,
 }) => {
   const { districts, loading: districtsLoading } = useDistricts();
   const [formData, setFormData] = useState({
@@ -39,6 +41,9 @@ const AddSchoolModal = ({
 
     // Notes
     notes: school?.notes || "",
+
+    // Scheduler configurations
+    schedulerConfigurations: school?.schedulerConfigurations || [],
   });
 
   const [loading, setLoading] = useState(false);
@@ -111,8 +116,23 @@ const AddSchoolModal = ({
       // Clean up the data before submitting
       const cleanedData = {};
       Object.keys(formData).forEach((key) => {
-        const value = formData[key]?.trim();
-        if (value) {
+        const value = formData[key];
+
+        // Handle arrays (like schedulerConfigurations)
+        if (Array.isArray(value)) {
+          if (value.length > 0) {
+            cleanedData[key] = value;
+          }
+        }
+        // Handle strings
+        else if (typeof value === 'string') {
+          const trimmed = value.trim();
+          if (trimmed) {
+            cleanedData[key] = trimmed;
+          }
+        }
+        // Handle other types (booleans, numbers, etc.)
+        else if (value !== null && value !== undefined && value !== '') {
           cleanedData[key] = value;
         }
       });
@@ -165,6 +185,13 @@ const AddSchoolModal = ({
   const getFormattedAddress = () => {
     if (!isValidAddress()) return "";
     return `${formData.street.trim()}, ${formData.city.trim()}, ${formData.state.trim()}${formData.zipCode?.trim() ? ` ${formData.zipCode.trim()}` : ""}`;
+  };
+
+  const handleSchedulerConfigurationsChange = (configurations) => {
+    setFormData((prev) => ({
+      ...prev,
+      schedulerConfigurations: configurations,
+    }));
   };
 
   const modalContent = (
@@ -450,6 +477,14 @@ const AddSchoolModal = ({
                 />
               </div>
             </div>
+          </div>
+
+          <div className="form-section">
+            <SchedulerConfigurationEditor
+              configurations={formData.schedulerConfigurations}
+              onChange={handleSchedulerConfigurationsChange}
+              organization={organization}
+            />
           </div>
 
           <div className="form-section">

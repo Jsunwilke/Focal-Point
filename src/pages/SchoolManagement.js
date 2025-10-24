@@ -776,6 +776,7 @@ const SchoolManagement = () => {
         <AddSchoolModal
           onClose={() => setShowAddModal(false)}
           onAdd={handleAddSchool}
+          organization={organization}
         />
       )}
 
@@ -785,6 +786,7 @@ const SchoolManagement = () => {
           onClose={() => setEditingSchool(null)}
           onAdd={handleUpdateSchool}
           isEditing={true}
+          organization={organization}
         />
       )}
 

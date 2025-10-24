@@ -14,6 +14,7 @@ import {
   Check,
   Camera,
   Image,
+  Settings,
 } from "lucide-react";
 import { getSchools, publishSession, getSession } from "../../firebase/firestore";
 import { getSessionTypeColor, getSessionTypeColors, getSessionTypeNames, normalizeSessionTypes } from "../../utils/sessionTypes";
@@ -27,6 +28,7 @@ import YearbookShootListModal from "../yearbook/YearbookShootListModal";
 import { getCurrentSchoolYear } from "../../services/yearbookService";
 import LocationPhotosModal from "./LocationPhotosModal";
 import SessionCostBreakdown from "./SessionCostBreakdown";
+import ConvertToSchedulerModal from "./ConvertToSchedulerModal";
 
 const SessionDetailsModal = ({
   isOpen,
@@ -37,6 +39,7 @@ const SessionDetailsModal = ({
   organization,
   onEditSession, // Callback to open the edit modal
   onRescheduleToNextYear, // Callback to reschedule to next year
+  onConvertToScheduler, // Callback to convert session to scheduler
   showRescheduleOption = false, // Whether to show reschedule option
   hideEditButton = false, // Whether to hide the edit button (for dashboard context)
 }) => {
@@ -50,6 +53,7 @@ const SessionDetailsModal = ({
   const [jobBoxLoading, setJobBoxLoading] = useState(true);
   const [showYearbookModal, setShowYearbookModal] = useState(false);
   const [showLocationPhotos, setShowLocationPhotos] = useState(false);
+  const [showConvertModal, setShowConvertModal] = useState(false);
 
   // Helper function to check if there's a leap day (Feb 29) between two dates
   const hasLeapDayBetween = (startDate, endDate) => {
@@ -910,6 +914,41 @@ const SessionDetailsModal = ({
                 Publish Session
               </button>
             )}
+            {/* Convert to Scheduler Button - Only show for non-scheduler sessions to admins/managers */}
+            {!fullSessionData?.schedulerAssignments &&
+             (userProfile?.role === 'admin' || userProfile?.role === 'manager') &&
+             onConvertToScheduler && (
+              <button
+                type="button"
+                onClick={() => setShowConvertModal(true)}
+                style={{
+                  padding: "0.375rem 0.75rem",
+                  border: "1px solid #17a2b8",
+                  backgroundColor: "#17a2b8",
+                  color: "white",
+                  borderRadius: "0.25rem",
+                  cursor: "pointer",
+                  fontSize: "0.8125rem",
+                  fontWeight: "500",
+                  transition: "all 0.2s",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.375rem",
+                  whiteSpace: "nowrap",
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = "#138496";
+                  e.target.style.borderColor = "#138496";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = "#17a2b8";
+                  e.target.style.borderColor = "#17a2b8";
+                }}
+              >
+                <Settings size={14} />
+                Convert to Scheduler
+              </button>
+            )}
             {!hideEditButton && (
               <button
                 type="button"
@@ -1106,6 +1145,19 @@ const SessionDetailsModal = ({
           photos={schoolDetails.locationPhotos}
           schoolName={schoolDetails.name}
           lastUpdated={schoolDetails.locationPhotosLastUpdated}
+        />
+      )}
+      {showConvertModal && schoolDetails && fullSessionData && (
+        <ConvertToSchedulerModal
+          isOpen={showConvertModal}
+          onClose={() => setShowConvertModal(false)}
+          session={fullSessionData}
+          school={schoolDetails}
+          onConvert={async (sessionId, configId) => {
+            await onConvertToScheduler(sessionId, configId);
+            setShowConvertModal(false);
+            onClose(); // Close details modal to refresh data
+          }}
         />
       )}
     </>

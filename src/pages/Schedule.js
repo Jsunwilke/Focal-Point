@@ -5,6 +5,7 @@ import { useToast } from "../contexts/ToastContext";
 import { useDataCache } from "../contexts/DataCacheContext";
 import secureLogger from "../utils/secureLogger";
 import { calculateTotalSessionCost } from "../utils/sessionCostCalculations";
+import { organizationCacheService } from "../services/organizationCacheService";
 import {
   updateSession,
   getSession,
@@ -13,7 +14,9 @@ import {
 } from "../firebase/firestore";
 // Removed direct Firestore imports - now using cached data
 import CalendarView from "../components/calendar/CalendarView";
+import SchedulerView from "../components/calendar/SchedulerView";
 import CreateSessionModal from "../components/sessions/CreateSessionModal";
+import SchedulerSessionModal from "../components/sessions/SchedulerSessionModal";
 import EditSessionModal from "../components/sessions/EditSessionModal";
 import SessionDetailsModal from "../components/sessions/SessionDetailsModal";
 import StatsModal from "../components/stats/StatsModal";
@@ -251,6 +254,7 @@ const Schedule = () => {
   const [showQuickBlockModal, setShowQuickBlockModal] = useState(false);
   const [selectedDateForBlock, setSelectedDateForBlock] = useState(null);
   const [createSessionInitialData, setCreateSessionInitialData] = useState(null);
+  const [showSchedulerSessionModal, setShowSchedulerSessionModal] = useState(false);
 
   // Use cached sessions data and update loading state
   useEffect(() => {
@@ -321,22 +325,31 @@ const Schedule = () => {
   // Check if user is admin/manager
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager' || userProfile?.role === 'owner';
 
+  // Load schools function (can be called to refresh schools data)
+  const loadSchools = async () => {
+    if (!organization?.id) return;
+
+    try {
+      // Clear cache to force fresh fetch from Firestore
+      organizationCacheService.clearSchoolsCache(organization.id);
+
+      const schoolsData = await getSchools(organization.id);
+      setSchools(schoolsData);
+
+      // Initialize visible schools to show all schools by default (only if empty)
+      setVisibleSchools(prev => {
+        if (prev.size === 0) {
+          return new Set(schoolsData.map(school => school.id));
+        }
+        return prev;
+      });
+    } catch (error) {
+      secureLogger.error("Error loading schools:", error);
+    }
+  };
+
   // Load schools when organization changes
   useEffect(() => {
-    const loadSchools = async () => {
-      if (!organization?.id) return;
-
-      try {
-        const schoolsData = await getSchools(organization.id);
-        setSchools(schoolsData);
-        
-        // Initialize visible schools to show all schools by default
-        setVisibleSchools(new Set(schoolsData.map(school => school.id)));
-      } catch (error) {
-        secureLogger.error("Error loading schools:", error);
-      }
-    };
-
     loadSchools();
   }, [organization?.id]);
 
@@ -469,6 +482,65 @@ const Schedule = () => {
       }
     } catch (error) {
       secureLogger.error("Error updating session:", error);
+      throw error;
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // Handle scheduler assignments update
+  const handleUpdateSchedulerAssignments = async (sessionId, schedulerAssignments) => {
+    setUpdating(true);
+    try {
+      await updateSession(sessionId, {
+        schedulerAssignments
+      });
+      // Note: Real-time listener will automatically update the UI
+    } catch (error) {
+      secureLogger.error("Error updating scheduler assignments:", error);
+      throw error;
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // Handle convert to scheduler
+  const handleConvertToScheduler = async (sessionId, configurationId) => {
+    setUpdating(true);
+    try {
+      // Get the session to find the school
+      const session = await getSession(sessionId);
+      if (!session?.schoolId) {
+        throw new Error("Session school not found");
+      }
+
+      // Get schools to find the configuration
+      const schools = await getSchools(organization.id);
+      const school = schools.find(s => s.id === session.schoolId);
+
+      if (!school) {
+        throw new Error("School not found");
+      }
+
+      const config = school.schedulerConfigurations?.find(c => c.id === configurationId);
+      if (!config) {
+        throw new Error("Scheduler configuration not found");
+      }
+
+      // Create empty scheduler assignments
+      const schedulerAssignments = [];
+
+      // Update the session with scheduler fields
+      await updateSession(sessionId, {
+        schedulerConfigurationId: configurationId,
+        schedulerAssignments,
+      });
+
+      showToast("Session converted to scheduler successfully", "success");
+      // Note: Real-time listener will automatically update the UI
+    } catch (error) {
+      secureLogger.error("Error converting to scheduler:", error);
+      showToast(error.message || "Failed to convert session", "error");
       throw error;
     } finally {
       setUpdating(false);
@@ -648,7 +720,7 @@ const Schedule = () => {
 
   // Get date range based on view mode (memoized to prevent infinite loops)
   const dateRange = useMemo(() => {
-    if (viewMode === "day") {
+    if (viewMode === "day" || viewMode === "scheduler") {
       const dayStart = new Date(currentDate);
       dayStart.setHours(0, 0, 0, 0);
       const dayEnd = new Date(currentDate);
@@ -682,7 +754,7 @@ const Schedule = () => {
 
   // Navigation functions
   const navigatePrevious = () => {
-    if (viewMode === "day") {
+    if (viewMode === "day" || viewMode === "scheduler") {
       setCurrentDate(subDays(currentDate, 1));
     } else if (viewMode === "week") {
       setCurrentDate(subWeeks(currentDate, 1));
@@ -692,7 +764,7 @@ const Schedule = () => {
   };
 
   const navigateNext = () => {
-    if (viewMode === "day") {
+    if (viewMode === "day" || viewMode === "scheduler") {
       setCurrentDate(addDays(currentDate, 1));
     } else if (viewMode === "week") {
       setCurrentDate(addWeeks(currentDate, 1));
@@ -805,7 +877,7 @@ const Schedule = () => {
 
   // Format date range for display
   const formatDateRange = () => {
-    if (viewMode === "day") {
+    if (viewMode === "day" || viewMode === "scheduler") {
       return currentDate.toLocaleDateString("en-US", {
         weekday: "long",
         month: "long",
@@ -1035,8 +1107,6 @@ const Schedule = () => {
           return entryDate >= dateRange.start && entryDate <= dateRange.end;
         });
 
-        console.log(`📊 Calculating costs for ${sessionsInView.length} sessions with ${timeEntriesInRange.length} time entries`);
-
         // Process each session (calendar entry) - now synchronous and fast!
         const costResults = sessionsInView.map((session) => {
           // Get photographer details
@@ -1192,6 +1262,14 @@ const Schedule = () => {
               onClick={() => setViewMode("month")}
             >
               Month
+            </button>
+            <button
+              className={`schedule__view-btn ${
+                viewMode === "scheduler" ? "schedule__view-btn--active" : ""
+              }`}
+              onClick={() => setViewMode("scheduler")}
+            >
+              Scheduler
             </button>
           </div>
 
@@ -1357,27 +1435,39 @@ const Schedule = () => {
 
       {/* Calendar View */}
       <div className="schedule__calendar">
-        <CalendarView
-          viewMode={viewMode}
-          currentDate={currentDate}
-          dateRange={dateRange}
-          sessions={allCalendarEntries}
-          teamMembers={sortedFilteredTeamMembers}
-          scheduleType={scheduleType}
-          userProfile={userProfile}
-          organization={organization}
-          blockedDates={blockedDates}
-          isAdmin={isAdmin}
-          sessionCostsData={sessionCostsData}
-          onUpdateSession={handleUpdateSession}
-          onSessionClick={handleSessionClick}
-          onTimeOffClick={handleTimeOffClick}
-          onHeaderDateClick={handleHeaderDateClick}
-          onAddSession={handleAddSession}
-          onEmployeeReorder={handleEmployeeReorder}
-          onResetEmployeeOrder={handleResetEmployeeOrder}
-          hasCustomOrder={employeeOrder.length > 0}
-        />
+        {viewMode === "scheduler" ? (
+          <SchedulerView
+            dateRange={dateRange}
+            sessions={filteredSessions}
+            teamMembers={sortedFilteredTeamMembers}
+            schools={schools}
+            onUpdateSchedulerAssignments={handleUpdateSchedulerAssignments}
+            onCreateSchedulerSession={() => setShowSchedulerSessionModal(true)}
+            userProfile={userProfile}
+          />
+        ) : (
+          <CalendarView
+            viewMode={viewMode}
+            currentDate={currentDate}
+            dateRange={dateRange}
+            sessions={allCalendarEntries}
+            teamMembers={sortedFilteredTeamMembers}
+            scheduleType={scheduleType}
+            userProfile={userProfile}
+            organization={organization}
+            blockedDates={blockedDates}
+            isAdmin={isAdmin}
+            sessionCostsData={sessionCostsData}
+            onUpdateSession={handleUpdateSession}
+            onSessionClick={handleSessionClick}
+            onTimeOffClick={handleTimeOffClick}
+            onHeaderDateClick={handleHeaderDateClick}
+            onAddSession={handleAddSession}
+            onEmployeeReorder={handleEmployeeReorder}
+            onResetEmployeeOrder={handleResetEmployeeOrder}
+            hasCustomOrder={employeeOrder.length > 0}
+          />
+        )}
       </div>
 
       {/* Create Session Modal */}
@@ -1393,6 +1483,20 @@ const Schedule = () => {
           userProfile={userProfile}
           initialPhotographerId={createSessionInitialData?.photographerId}
           initialDate={createSessionInitialData?.date}
+        />
+      )}
+
+      {/* Scheduler Session Modal */}
+      {showSchedulerSessionModal && (
+        <SchedulerSessionModal
+          isOpen={showSchedulerSessionModal}
+          onClose={() => {
+            setShowSchedulerSessionModal(false);
+            // Reload schools to get fresh scheduler configurations
+            loadSchools();
+          }}
+          organization={organization}
+          userProfile={userProfile}
         />
       )}
 
@@ -1563,6 +1667,7 @@ const Schedule = () => {
           userProfile={userProfile}
           organization={organization}
           onEditSession={handleEditSessionFromDetails}
+          onConvertToScheduler={handleConvertToScheduler}
         />
       )}
 

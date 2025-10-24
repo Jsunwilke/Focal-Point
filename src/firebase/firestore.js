@@ -1009,10 +1009,10 @@ export const getSchools = async (organizationID) => {
       readCounter.recordCacheHit('schools', 'getSchools', cachedSchools.length);
       return cachedSchools;
     }
-    
+
     // Track cache miss
     readCounter.recordCacheMiss('schools', 'getSchools');
-    
+
     const q = query(
       collection(firestore, "schools"),
       where("organizationID", "==", organizationID)
