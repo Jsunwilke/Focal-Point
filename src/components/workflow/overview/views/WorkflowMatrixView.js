@@ -1,287 +1,310 @@
 // src/components/workflow/overview/views/WorkflowMatrixView.js
-import React, { useState } from 'react';
-import { 
-  Info,
-  ZoomIn,
-  ZoomOut,
-  Download
-} from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Check, Clock } from 'lucide-react';
+import { updateWorkflowStep } from '../../../../firebase/firestore';
+import { useAuth } from '../../../../contexts/AuthContext';
+import './WorkflowMatrixView.css';
+
+// Helper functions
+function nowISO() {
+  return new Date().toISOString();
+}
+
+function todayYMD() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Cell status badge component
+function CellBadge({ done }) {
+  return (
+    <span className={`matrix-cell-badge ${done ? 'matrix-cell-badge--done' : 'matrix-cell-badge--pending'}`}>
+      {done ? <Check className="matrix-cell-badge__icon" /> : <Clock className="matrix-cell-badge__icon" />}
+      {done ? 'Done' : 'Pending'}
+    </span>
+  );
+}
+
+// Progress bar component
+function ProgressBar({ pct }) {
+  return (
+    <div className="matrix-progress-bar">
+      <div className="matrix-progress-bar__fill" style={{ width: `${pct}%` }}></div>
+    </div>
+  );
+}
 
 const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
-  const [hoveredCell, setHoveredCell] = useState(null);
-  const [cellSize, setCellSize] = useState('medium'); // small, medium, large
+  const { userProfile } = useAuth();
+  const [activeTab, setActiveTab] = useState(null);
+  const [showDates, setShowDates] = useState(false);
+  const [editingCells, setEditingCells] = useState({}); // Track which cells are being edited
 
-  // Get all unique steps
-  const allSteps = [...new Set(
-    workflows.flatMap(workflow => {
-      const template = workflowTemplates[workflow.templateId];
-      return template ? template.steps.map(step => ({
-        id: step.id,
-        title: step.title
-      })) : [];
-    }).map(step => JSON.stringify(step))
-  )].map(str => JSON.parse(str));
+  // Get unique templates from workflows and create tabs
+  const tabs = useMemo(() => {
+    const templateMap = new Map();
 
-  // Get status for a specific workflow and step
-  const getCellStatus = (workflow, stepTitle) => {
-    const template = workflowTemplates[workflow.templateId];
-    if (!template) return null;
-    
-    const step = template.steps.find(s => s.title === stepTitle);
-    if (!step) return null;
-    
-    return workflow.stepProgress[step.id];
-  };
-
-  // Get cell color based on status
-  const getCellColor = (status) => {
-    if (!status) return '#f3f4f6'; // Not applicable
-    
-    switch (status.status) {
-      case 'completed':
-        return '#10b981';
-      case 'in_progress':
-        return '#f59e0b';
-      case 'overdue':
-        return '#ef4444';
-      case 'pending':
-        return '#93c5fd';
-      default:
-        return '#e5e7eb';
-    }
-  };
-
-  // Get cell intensity based on time
-  const getCellIntensity = (status) => {
-    if (!status) return 1;
-    
-    if (status.status === 'completed') {
-      // Fade based on how long ago it was completed
-      const completedAt = status.completedAt?.toDate() || new Date();
-      const daysSince = Math.floor((new Date() - completedAt) / (1000 * 60 * 60 * 24));
-      return Math.max(0.3, 1 - (daysSince * 0.1));
-    }
-    
-    if (status.status === 'in_progress') {
-      // Pulse effect
-      return 0.8;
-    }
-    
-    return 0.6;
-  };
-
-  // Get cell size styles
-  const getCellStyles = () => {
-    switch (cellSize) {
-      case 'small':
-        return { width: '20px', height: '20px' };
-      case 'large':
-        return { width: '40px', height: '40px' };
-      default:
-        return { width: '30px', height: '30px' };
-    }
-  };
-
-  // Export matrix as CSV
-  const exportMatrix = () => {
-    const headers = ['School/Session', ...allSteps.map(s => s.title)];
-    const rows = workflows.map(workflow => {
-      const session = sessionData[workflow.sessionId];
-      const row = [
-        `${session?.schoolName || 'Unknown'} - ${session?.date ? new Date(session.date).toLocaleDateString() : 'N/A'}`
-      ];
-      
-      allSteps.forEach(step => {
-        const status = getCellStatus(workflow, step.title);
-        row.push(status ? status.status : 'n/a');
-      });
-      
-      return row;
-    });
-    
-    const csv = [headers, ...rows]
-      .map(row => row.map(cell => `"${cell}"`).join(','))
-      .join('\n');
-    
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `workflow_matrix_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Calculate summary statistics
-  const calculateStats = () => {
-    let totalSteps = 0;
-    let completedSteps = 0;
-    let overdueSteps = 0;
-    let inProgressSteps = 0;
-    
     workflows.forEach(workflow => {
       const template = workflowTemplates[workflow.templateId];
-      if (!template) return;
-      
-      template.steps.forEach(step => {
-        totalSteps++;
-        const status = workflow.stepProgress[step.id];
-        if (status?.status === 'completed') completedSteps++;
-        else if (status?.status === 'overdue') overdueSteps++;
-        else if (status?.status === 'in_progress') inProgressSteps++;
-      });
+      if (template && !templateMap.has(workflow.templateId)) {
+        templateMap.set(workflow.templateId, {
+          id: workflow.templateId,
+          name: template.name,
+          steps: template.steps || []
+        });
+      }
     });
-    
-    return {
-      total: totalSteps,
-      completed: completedSteps,
-      overdue: overdueSteps,
-      inProgress: inProgressSteps,
-      completionRate: totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0
-    };
+
+    return Array.from(templateMap.values());
+  }, [workflows, workflowTemplates]);
+
+  // Set initial active tab
+  React.useEffect(() => {
+    if (!activeTab && tabs.length > 0) {
+      setActiveTab(tabs[0].id);
+    }
+  }, [tabs, activeTab]);
+
+  // Get active template
+  const activeTemplate = useMemo(() => {
+    return tabs.find(tab => tab.id === activeTab);
+  }, [tabs, activeTab]);
+
+  // Filter workflows by active template
+  const filteredWorkflows = useMemo(() => {
+    if (!activeTab) return [];
+    return workflows.filter(w => w.templateId === activeTab);
+  }, [workflows, activeTab]);
+
+  // Calculate progress for a workflow
+  const calculateProgress = (workflow) => {
+    if (!activeTemplate) return 0;
+    const totalSteps = activeTemplate.steps.length;
+    if (totalSteps === 0) return 0;
+
+    const completedSteps = activeTemplate.steps.reduce((count, step) => {
+      const progress = workflow.stepProgress?.[step.id];
+      return count + (progress?.status === 'completed' ? 1 : 0);
+    }, 0);
+
+    return Math.round((completedSteps / totalSteps) * 100);
   };
 
-  const stats = calculateStats();
-  const cellStyles = getCellStyles();
+  // Get last completed step index
+  const getLastCompletedIndex = (workflow) => {
+    if (!activeTemplate) return -1;
+    let lastIndex = -1;
+
+    activeTemplate.steps.forEach((step, index) => {
+      const progress = workflow.stepProgress?.[step.id];
+      if (progress?.status === 'completed') {
+        lastIndex = index;
+      }
+    });
+
+    return lastIndex;
+  };
+
+  // Handle cell input change (initials)
+  const handleInitialsChange = async (workflowId, stepId, value) => {
+    const trimmed = value.trim().toUpperCase();
+
+    // Validate initials (2-4 characters, letters only)
+    if (trimmed && !/^[A-Z]{2,4}$/.test(trimmed)) {
+      return; // Invalid format - don't update
+    }
+
+    // Create optimistic update key
+    const cellKey = `${workflowId}-${stepId}`;
+    setEditingCells(prev => ({ ...prev, [cellKey]: true }));
+
+    try {
+      if (trimmed) {
+        // Mark as completed with initials
+        await updateWorkflowStep(workflowId, stepId, {
+          initials: trimmed,
+          status: 'completed',
+          completedBy: userProfile.id,
+          completedDate: todayYMD()
+        });
+      } else {
+        // Clear completion
+        await updateWorkflowStep(workflowId, stepId, {
+          initials: '',
+          status: 'pending',
+          completedBy: null,
+          completedDate: null
+        });
+      }
+    } catch (error) {
+      console.error('Error updating step:', error);
+    } finally {
+      setEditingCells(prev => {
+        const next = { ...prev };
+        delete next[cellKey];
+        return next;
+      });
+    }
+  };
+
+  // Handle date change
+  const handleDateChange = async (workflowId, stepId, currentInitials, value) => {
+    const cellKey = `${workflowId}-${stepId}`;
+    setEditingCells(prev => ({ ...prev, [cellKey]: true }));
+
+    try {
+      const updateData = {
+        completedDate: value || null
+      };
+
+      // If date is set but no initials, mark as done with placeholder
+      if (value && !currentInitials) {
+        updateData.initials = '—';
+        updateData.status = 'completed';
+        updateData.completedBy = userProfile.id;
+      }
+
+      await updateWorkflowStep(workflowId, stepId, updateData);
+    } catch (error) {
+      console.error('Error updating date:', error);
+    } finally {
+      setEditingCells(prev => {
+        const next = { ...prev };
+        delete next[cellKey];
+        return next;
+      });
+    }
+  };
+
+  // Get session info for workflow
+  const getWorkflowInfo = (workflow) => {
+    if (workflow.workflowType === 'tracking') {
+      return {
+        jobId: workflow.id,
+        school: workflow.schoolName || 'Unknown',
+        date: workflow.trackingStartDate || ''
+      };
+    } else {
+      const session = sessionData[workflow.sessionId];
+      return {
+        jobId: workflow.id,
+        school: session?.schoolName || 'Unknown',
+        date: session?.date || ''
+      };
+    }
+  };
+
+  if (!activeTemplate) {
+    return (
+      <div className="workflow-matrix-empty">
+        <p>No workflow templates found. Create workflows to see them here.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="workflow-matrix-view">
-      {/* Controls */}
-      <div className="matrix-controls">
-        <div className="matrix-stats">
-          <div className="stat">
-            <span className="stat-label">Completion Rate:</span>
-            <span className="stat-value">{stats.completionRate}%</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">Total Steps:</span>
-            <span className="stat-value">{stats.total}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">Overdue:</span>
-            <span className="stat-value" style={{ color: '#ef4444' }}>{stats.overdue}</span>
-          </div>
-        </div>
-        
-        <div className="matrix-actions">
-          <div className="size-controls">
-            <button 
-              onClick={() => setCellSize('small')} 
-              className={cellSize === 'small' ? 'active' : ''}
-            >
-              <ZoomOut size={16} />
-            </button>
-            <button 
-              onClick={() => setCellSize('medium')} 
-              className={cellSize === 'medium' ? 'active' : ''}
-            >
-              Medium
-            </button>
-            <button 
-              onClick={() => setCellSize('large')} 
-              className={cellSize === 'large' ? 'active' : ''}
-            >
-              <ZoomIn size={16} />
-            </button>
-          </div>
-          
-          <button onClick={exportMatrix} className="export-button">
-            <Download size={16} />
-            Export
+    <div className="workflow-matrix">
+      {/* Tabs */}
+      <div className="workflow-matrix__tabs">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            className={`workflow-matrix__tab ${activeTab === tab.id ? 'workflow-matrix__tab--active' : ''}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.name}
           </button>
-        </div>
+        ))}
       </div>
 
-      {/* Matrix Legend */}
-      <div className="matrix-legend">
-        <div className="legend-item">
-          <div className="legend-color" style={{ backgroundColor: '#10b981' }} />
-          <span>Completed</span>
-        </div>
-        <div className="legend-item">
-          <div className="legend-color" style={{ backgroundColor: '#f59e0b' }} />
-          <span>In Progress</span>
-        </div>
-        <div className="legend-item">
-          <div className="legend-color" style={{ backgroundColor: '#ef4444' }} />
-          <span>Overdue</span>
-        </div>
-        <div className="legend-item">
-          <div className="legend-color" style={{ backgroundColor: '#93c5fd' }} />
-          <span>Pending</span>
-        </div>
-        <div className="legend-item">
-          <div className="legend-color" style={{ backgroundColor: '#f3f4f6' }} />
-          <span>N/A</span>
-        </div>
+      {/* Controls */}
+      <div className="workflow-matrix__controls">
+        <label className="workflow-matrix__checkbox">
+          <input
+            type="checkbox"
+            checked={showDates}
+            onChange={(e) => setShowDates(e.target.checked)}
+          />
+          Show editable dates
+        </label>
       </div>
 
-      {/* Matrix Table */}
-      <div className="matrix-container">
-        <table className="workflow-matrix">
+      {/* Grid */}
+      <div className="workflow-matrix__grid-container">
+        <table className="workflow-matrix__grid">
           <thead>
-            <tr>
-              <th className="matrix-corner"></th>
-              {allSteps.map((step, index) => (
-                <th key={index} className="matrix-step-header">
-                  <div className="step-header-vertical">
-                    <span>{step.title}</span>
-                  </div>
+            <tr className="workflow-matrix__header-row">
+              <th className="workflow-matrix__header-cell workflow-matrix__header-cell--job">Job</th>
+              <th className="workflow-matrix__header-cell workflow-matrix__header-cell--school">School</th>
+              <th className="workflow-matrix__header-cell workflow-matrix__header-cell--progress">Progress</th>
+              {activeTemplate.steps.map(step => (
+                <th
+                  key={step.id}
+                  className="workflow-matrix__header-cell workflow-matrix__header-cell--task"
+                  title={step.title}
+                >
+                  {step.title}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {workflows.map((workflow, rowIndex) => {
-              const session = sessionData[workflow.sessionId];
-              
+            {filteredWorkflows.map((workflow, rowIndex) => {
+              const info = getWorkflowInfo(workflow);
+              const lastCompletedIdx = getLastCompletedIndex(workflow);
+              const progress = calculateProgress(workflow);
+
               return (
-                <tr key={workflow.id}>
-                  <td className="matrix-row-header">
-                    <div className="row-header-content">
-                      <div className="school-name">{session?.schoolName || 'Unknown'}</div>
-                      <div className="session-date">
-                        {session?.date ? new Date(session.date).toLocaleDateString() : 'N/A'}
-                      </div>
-                    </div>
+                <tr key={workflow.id} className="workflow-matrix__row">
+                  <td className="workflow-matrix__cell workflow-matrix__cell--job">
+                    {info.jobId.substring(0, 8)}
                   </td>
-                  
-                  {allSteps.map((step, colIndex) => {
-                    const status = getCellStatus(workflow, step.title);
-                    const color = getCellColor(status);
-                    const intensity = getCellIntensity(status);
-                    const cellKey = `${rowIndex}-${colIndex}`;
-                    
+                  <td className="workflow-matrix__cell workflow-matrix__cell--school">
+                    {info.school}
+                  </td>
+                  <td className="workflow-matrix__cell workflow-matrix__cell--progress">
+                    <ProgressBar pct={progress} />
+                  </td>
+                  {activeTemplate.steps.map((step, colIndex) => {
+                    const stepProgress = workflow.stepProgress?.[step.id] || {};
+                    const isCompleted = colIndex <= lastCompletedIdx;
+                    const isCurrent = colIndex === lastCompletedIdx + 1 && stepProgress.status !== 'completed';
+                    const isDone = stepProgress.status === 'completed';
+                    const cellKey = `${workflow.id}-${step.id}`;
+                    const isEditing = editingCells[cellKey];
+
                     return (
-                      <td 
-                        key={colIndex}
-                        className="matrix-cell"
-                        onMouseEnter={() => setHoveredCell(cellKey)}
-                        onMouseLeave={() => setHoveredCell(null)}
+                      <td
+                        key={step.id}
+                        className={`workflow-matrix__cell workflow-matrix__cell--task ${
+                          isCompleted ? 'workflow-matrix__cell--completed' : ''
+                        } ${isCurrent ? 'workflow-matrix__cell--current' : ''}`}
                       >
-                        <div 
-                          className={`cell-content ${status?.status === 'in_progress' ? 'pulse' : ''}`}
-                          style={{
-                            ...cellStyles,
-                            backgroundColor: color,
-                            opacity: intensity
-                          }}
-                        />
-                        
-                        {hoveredCell === cellKey && status && (
-                          <div className="cell-tooltip">
-                            <div className="tooltip-header">{step.title}</div>
-                            <div className="tooltip-status">Status: {status.status}</div>
-                            {status.assignedTo && (
-                              <div className="tooltip-assigned">Assigned to: {status.assignedTo}</div>
-                            )}
-                            {status.completedAt && (
-                              <div className="tooltip-date">
-                                Completed: {status.completedAt.toDate().toLocaleDateString()}
-                              </div>
-                            )}
+                        <div className="workflow-matrix__cell-content">
+                          <div className="workflow-matrix__cell-row">
+                            <input
+                              type="text"
+                              className="workflow-matrix__initials-input"
+                              placeholder="Init"
+                              maxLength={4}
+                              value={stepProgress.initials || ''}
+                              onChange={(e) => handleInitialsChange(workflow.id, step.id, e.target.value)}
+                              disabled={isEditing}
+                              aria-label={`${step.title} — ${info.jobId}`}
+                            />
+                            <CellBadge done={isDone} />
                           </div>
-                        )}
+                          {showDates && (
+                            <input
+                              type="date"
+                              className="workflow-matrix__date-input"
+                              value={stepProgress.completedDate || ''}
+                              onChange={(e) => handleDateChange(workflow.id, step.id, stepProgress.initials, e.target.value)}
+                              disabled={isEditing}
+                              tabIndex={-1}
+                            />
+                          )}
+                        </div>
                       </td>
                     );
                   })}
@@ -291,6 +314,12 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
           </tbody>
         </table>
       </div>
+
+      {filteredWorkflows.length === 0 && (
+        <div className="workflow-matrix__empty-state">
+          <p>No workflows found for {activeTemplate.name}</p>
+        </div>
+      )}
     </div>
   );
 };
