@@ -1,7 +1,7 @@
 // src/components/workflow/WorkflowTemplateGallery.js
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { X, Plus, Eye, Copy, Settings, Clock, Users, ArrowRight, Wrench, Trash2, AlertCircle } from 'lucide-react';
+import { X, Plus, Eye, Copy, Settings, Clock, Users, ArrowRight, Wrench, Trash2, AlertCircle, Upload } from 'lucide-react';
 import { 
   createWorkflowTemplate,
   getWorkflowTemplates,
@@ -561,6 +561,24 @@ const WorkflowTemplateGallery = ({
             </p>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button
+              onClick={() => setShowTemplateBuilder(true)}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '0.375rem',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              <Upload size={16} />
+              Import JSON
+            </button>
             <button
               onClick={() => setShowTemplateBuilder(true)}
               style={{

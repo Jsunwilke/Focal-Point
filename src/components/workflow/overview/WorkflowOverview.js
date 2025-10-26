@@ -1,9 +1,8 @@
 // src/components/workflow/overview/WorkflowOverview.js
 import React, { useState, useEffect } from 'react';
-import { 
-  Table2, 
-  LayoutGrid, 
-  Calendar, 
+import {
+  LayoutGrid,
+  Calendar,
   LayoutList,
   Grid3x3,
   Layers,
@@ -15,7 +14,6 @@ import { useAuth } from '../../../contexts/AuthContext';
 import WorkflowViewSwitcher from './WorkflowViewSwitcher';
 import WorkflowFilters from './WorkflowFilters';
 import WorkflowStats from './WorkflowStats';
-import WorkflowTableView from './views/WorkflowTableView';
 import WorkflowKanbanView from './views/WorkflowKanbanView';
 import WorkflowTimelineView from './views/WorkflowTimelineView';
 import WorkflowCardView from './views/WorkflowCardView';
@@ -24,8 +22,8 @@ import WorkflowListView from './views/WorkflowListView';
 import '../WorkflowOverview.css';
 
 const WorkflowOverview = () => {
-  const [currentView, setCurrentView] = useState(() => 
-    localStorage.getItem('workflowViewPreference') || 'table'
+  const [currentView, setCurrentView] = useState(() =>
+    localStorage.getItem('workflowViewPreference') || 'matrix'
   );
   const [filters, setFilters] = useState({
     status: 'all',
@@ -53,11 +51,10 @@ const WorkflowOverview = () => {
 
   // Define available views
   const views = [
-    { id: 'table', name: 'Table View', icon: Table2, description: 'Spreadsheet-style view like Google Sheets' },
+    { id: 'matrix', name: 'Matrix View', icon: Layers, description: 'Editable task tracking grid' },
     { id: 'kanban', name: 'Kanban Board', icon: LayoutGrid, description: 'Drag and drop workflow steps' },
     { id: 'timeline', name: 'Timeline', icon: Calendar, description: 'Gantt chart view of workflows' },
     { id: 'cards', name: 'Card Grid', icon: Grid3x3, description: 'Compact card layout' },
-    { id: 'matrix', name: 'Matrix View', icon: Layers, description: 'Heat map visualization' },
     { id: 'list', name: 'List View', icon: LayoutList, description: 'Detailed list with grouping' }
   ];
 
@@ -239,20 +236,18 @@ const WorkflowOverview = () => {
   // Render current view
   const renderView = () => {
     switch (currentView) {
-      case 'table':
-        return <WorkflowTableView {...viewData} />;
+      case 'matrix':
+        return <WorkflowMatrixView {...viewData} />;
       case 'kanban':
         return <WorkflowKanbanView {...viewData} />;
       case 'timeline':
         return <WorkflowTimelineView {...viewData} />;
       case 'cards':
         return <WorkflowCardView {...viewData} />;
-      case 'matrix':
-        return <WorkflowMatrixView {...viewData} />;
       case 'list':
         return <WorkflowListView {...viewData} />;
       default:
-        return <WorkflowTableView {...viewData} />;
+        return <WorkflowMatrixView {...viewData} />;
     }
   };
 

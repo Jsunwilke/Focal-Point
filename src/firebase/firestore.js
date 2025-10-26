@@ -31,6 +31,7 @@ import sessionCacheService from '../services/sessionCacheService';
 import timeEntryCacheService from '../services/timeEntryCacheService';
 import sessionsCacheService from '../services/sessionsCacheService';
 import dailyJobReportsCacheService from '../services/dailyJobReportsCacheService';
+import workflowCacheService from '../services/workflowCacheService';
 
 // Shared function to recalculate session colors for a specific date
 const recalculateSessionColorsForDate = async (organizationID, date, orgData = null) => {
@@ -2710,6 +2711,13 @@ export const createWorkflowInstance = async (workflowData) => {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+
+    // Clear workflow caches to ensure new workflow appears immediately
+    if (workflowData.organizationID) {
+      workflowCacheService.clearWorkflowCaches(workflowData.organizationID);
+      console.log('[createWorkflowInstance] Cleared workflow caches after creation');
+    }
+
     return workflowRef.id;
   } catch (error) {
     throw error;
@@ -2976,26 +2984,22 @@ export const getWorkflowStatistics = async (organizationID) => {
 export const updateWorkflowStep = async (workflowId, stepId, stepData) => {
   try {
     const workflowRef = doc(firestore, "workflows", workflowId);
-    const workflowDoc = await getDoc(workflowRef);
-    
-    if (!workflowDoc.exists()) {
-      throw new Error("Workflow not found");
-    }
 
-    const workflow = workflowDoc.data();
-    const updatedStepProgress = {
-      ...workflow.stepProgress,
-      [stepId]: {
-        ...workflow.stepProgress[stepId],
-        ...stepData,
-        updatedAt: serverTimestamp(),
-      }
+    // Build update object using field paths to update nested fields without reading first
+    // This saves 1 Firebase read per update (previously did getDoc before updateDoc)
+    const updates = {
+      updatedAt: serverTimestamp(),
     };
 
-    await updateDoc(workflowRef, {
-      stepProgress: updatedStepProgress,
-      updatedAt: serverTimestamp(),
+    // Add each stepData field using field path syntax
+    Object.keys(stepData).forEach(key => {
+      updates[`stepProgress.${stepId}.${key}`] = stepData[key];
     });
+
+    // Always update the step's updatedAt timestamp
+    updates[`stepProgress.${stepId}.updatedAt`] = serverTimestamp();
+
+    await updateDoc(workflowRef, updates);
 
     return true;
   } catch (error) {

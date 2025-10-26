@@ -1,11 +1,11 @@
 // src/pages/WorkflowSettings.js
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   ArrowLeft,
-  Plus, 
-  Eye, 
-  Edit2, 
-  Trash2, 
+  Plus,
+  Eye,
+  Edit2,
+  Trash2,
   Settings,
   FileText,
   Download,
@@ -14,7 +14,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { 
+import {
   getWorkflowTemplatesForOrganization,
   deleteWorkflowTemplate,
   updateWorkflowTemplate
@@ -36,7 +36,7 @@ const WorkflowSettings = () => {
   const [loading, setLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState(null);
-  
+
   const navigate = useNavigate();
   const { userProfile, organization } = useAuth();
   const { showToast } = useToast();
@@ -183,7 +183,7 @@ const WorkflowSettings = () => {
     if (!window.confirm('Reset to default groups? This will remove all customizations.')) {
       return;
     }
-    
+
     setWorkflowGroups(getWorkflowGroups());
     showToast('Groups Reset', 'Workflow groups have been reset to defaults', 'success');
   };

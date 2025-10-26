@@ -1,20 +1,21 @@
 // src/components/workflow/WorkflowTemplateBuilder.js
 import React, { useState, useCallback } from 'react';
 import ReactDOM from 'react-dom';
-import { 
-  X, 
-  Plus, 
-  Trash2, 
-  Move, 
-  Clock, 
-  Users, 
+import {
+  X,
+  Plus,
+  Trash2,
+  Move,
+  Clock,
+  Users,
   Tag,
   Save,
   ArrowUp,
   ArrowDown,
   Settings,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Upload
 } from 'lucide-react';
 import { 
   createWorkflowTemplate,
@@ -33,6 +34,7 @@ import {
 } from '../../utils/sessionTypes';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import workflowCacheService from '../../services/workflowCacheService';
 import StepEditor from './StepEditor';
 import FormFieldEditor from './FormFieldEditor';
 
@@ -65,6 +67,9 @@ const WorkflowTemplateBuilder = ({
   const [draggedStep, setDraggedStep] = useState(null);
   const [showFormFieldEditor, setShowFormFieldEditor] = useState(false);
   const [activeFormField, setActiveFormField] = useState(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importJSON, setImportJSON] = useState('');
+  const [importErrors, setImportErrors] = useState([]);
 
   // Get available options
   const stepTypes = getStepTypes();
@@ -243,6 +248,7 @@ const WorkflowTemplateBuilder = ({
       estimatedHours: 1,
       dueOffsetDays: 0,
       dependencies: [],
+      micros: [],
       notifications: {
         onStart: true,
         onComplete: true,
@@ -253,12 +259,12 @@ const WorkflowTemplateBuilder = ({
         outputs: []
       }
     };
-    
+
     setFormData(prev => ({
       ...prev,
       steps: [...prev.steps, newStep]
     }));
-    
+
     setActiveStep(newStep);
     setShowStepEditor(true);
   };
@@ -331,13 +337,145 @@ const WorkflowTemplateBuilder = ({
     setDraggedStep(null);
   };
 
+  // Import template from JSON
+  const handleImportJSON = () => {
+    setImportErrors([]);
+
+    try {
+      // Parse JSON
+      const data = JSON.parse(importJSON);
+      const errors = [];
+
+      // Validate required fields
+      if (!data.name || typeof data.name !== 'string') {
+        errors.push('Template must have a "name" field');
+      }
+      if (!Array.isArray(data.steps)) {
+        errors.push('Template must have a "steps" array');
+      }
+
+      if (errors.length > 0) {
+        setImportErrors(errors);
+        return;
+      }
+
+      // Validate each step
+      const validStepTypes = stepTypes.map(t => t.id);
+      const validGroups = workflowGroups.map(g => g.id);
+      const validAssigneeRules = assigneeRules.map(r => r.id);
+      const validRoles = ['photographer', 'editor', 'admin', 'manager'];
+
+      data.steps.forEach((step, index) => {
+        const stepNum = index + 1;
+
+        if (!step.title) {
+          errors.push(`Step ${stepNum}: Missing "title" field`);
+        }
+        if (!step.type) {
+          errors.push(`Step ${stepNum}: Missing "type" field`);
+        } else if (!validStepTypes.includes(step.type)) {
+          errors.push(`Step ${stepNum}: Invalid type "${step.type}". Valid types: ${validStepTypes.join(', ')}`);
+        }
+        if (!step.group) {
+          errors.push(`Step ${stepNum}: Missing "group" field`);
+        } else if (!validGroups.includes(step.group)) {
+          errors.push(`Step ${stepNum}: Invalid group "${step.group}". Valid groups: ${validGroups.join(', ')}`);
+        }
+        if (!step.assigneeRule) {
+          errors.push(`Step ${stepNum}: Missing "assigneeRule" field`);
+        } else if (!validAssigneeRules.includes(step.assigneeRule)) {
+          errors.push(`Step ${stepNum}: Invalid assigneeRule "${step.assigneeRule}". Valid rules: ${validAssigneeRules.join(', ')}`);
+        }
+        if ((step.assigneeRule === 'role' || step.assigneeRule === 'specific') && !step.assigneeValue) {
+          errors.push(`Step ${stepNum}: Missing "assigneeValue" (required for assigneeRule "${step.assigneeRule}")`);
+        }
+        if (step.assigneeRule === 'role' && step.assigneeValue && !validRoles.includes(step.assigneeValue)) {
+          errors.push(`Step ${stepNum}: Invalid assigneeValue "${step.assigneeValue}". Valid roles: ${validRoles.join(', ')}`);
+        }
+
+        // Validate micros if present
+        if (step.micros && Array.isArray(step.micros)) {
+          step.micros.forEach((micro, microIndex) => {
+            if (!micro.label) {
+              errors.push(`Step ${stepNum}, Micro ${microIndex + 1}: Missing "label" field`);
+            }
+          });
+        }
+      });
+
+      if (errors.length > 0) {
+        setImportErrors(errors);
+        return;
+      }
+
+      // Generate step IDs and micro keys
+      const prefix = data.name.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'imported';
+      const processedSteps = data.steps.map((step, index) => {
+        const stepId = `${prefix}_step_${index + 1}`;
+
+        // Process micros and generate keys
+        const processedMicros = step.micros && Array.isArray(step.micros)
+          ? step.micros.map((micro, microIndex) => ({
+              key: `${stepId}_micro_${microIndex + 1}`,
+              label: micro.label
+            }))
+          : [];
+
+        return {
+          id: stepId,
+          title: step.title,
+          description: step.description || '',
+          type: step.type,
+          group: step.group,
+          assigneeRule: step.assigneeRule,
+          assigneeValue: step.assigneeValue || '',
+          estimatedHours: step.estimatedHours || 1,
+          dueOffsetDays: step.dueOffsetDays || 0,
+          dependencies: step.dependencies || [],
+          micros: processedMicros,
+          notifications: step.notifications || {
+            onStart: true,
+            onComplete: true,
+            escalationHours: 24
+          },
+          files: step.files || {
+            required: [],
+            outputs: []
+          }
+        };
+      });
+
+      // Update form data
+      setFormData(prev => ({
+        ...prev,
+        name: data.name,
+        description: data.description || '',
+        sessionTypes: data.sessionTypes || [],
+        estimatedDays: data.estimatedDays || 7,
+        steps: processedSteps
+      }));
+
+      // Close import modal and show success
+      setShowImportModal(false);
+      setImportJSON('');
+      showToast('Success', `Imported ${processedSteps.length} steps successfully!`, 'success');
+
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        setImportErrors(['Invalid JSON format. Please check your JSON syntax.']);
+      } else {
+        setImportErrors([error.message || 'Failed to import template']);
+      }
+    }
+  };
+
   // Save template
   const handleSave = async () => {
     if (!validateForm()) {
       showToast('Validation Error', 'Please fix the errors before saving', 'error');
       return;
     }
-    
+
     setLoading(true);
     try {
       const templateData = {
@@ -347,19 +485,23 @@ const WorkflowTemplateBuilder = ({
         isDefault: false,
         version: editTemplate?.version ? editTemplate.version + 1 : 1
       };
-      
+
       let templateId;
       if (editTemplate) {
         // Update existing template
         await updateWorkflowTemplate(editTemplate.id, templateData);
         templateId = editTemplate.id;
-        showToast('Success', 'Workflow template updated successfully', 'success');
+
+        // Clear template from cache so next load gets fresh data
+        workflowCacheService.clearTemplate(templateId);
+
+        showToast('Success', 'Template updated! Refresh your browser (F5) to see changes in existing workflows.', 'success');
       } else {
         // Create new template
         templateId = await createWorkflowTemplate(templateData);
         showToast('Success', 'Workflow template created successfully', 'success');
       }
-      
+
       onTemplateCreated?.(templateId);
       onClose();
     } catch (error) {
@@ -822,24 +964,44 @@ const WorkflowTemplateBuilder = ({
               <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: '600' }}>
                 Workflow Steps ({formData.steps.length})
               </h3>
-              <button
-                onClick={handleAddStep}
-                style={{
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#3b82f6',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '0.375rem',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                <Plus size={16} />
-                Add Step
-              </button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: '#10b981',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}
+                >
+                  <Upload size={16} />
+                  Import JSON
+                </button>
+                <button
+                  onClick={handleAddStep}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}
+                >
+                  <Plus size={16} />
+                  Add Step
+                </button>
+              </div>
             </div>
 
             <div style={{ flex: 1, overflow: 'auto', padding: '1rem' }}>
@@ -1117,6 +1279,174 @@ const WorkflowTemplateBuilder = ({
           onSave={handleUpdateFormField}
           formFieldTypes={formFieldTypes}
         />
+      )}
+
+      {/* Import JSON Modal */}
+      {showImportModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10002,
+          padding: '1rem'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '0.5rem',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+            maxWidth: '600px',
+            width: '100%',
+            maxHeight: '80vh',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '1.5rem',
+              borderBottom: '1px solid #e5e7eb',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600' }}>
+                Import Workflow Template
+              </h2>
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportJSON('');
+                  setImportErrors([]);
+                }}
+                style={{
+                  padding: '0.5rem',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  borderRadius: '0.375rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: '#6b7280'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '1.5rem', flex: 1, overflow: 'auto' }}>
+              <p style={{ margin: '0 0 1rem 0', color: '#6b7280', fontSize: '0.875rem' }}>
+                Paste the JSON template from ChatGPT below. See <code style={{
+                  backgroundColor: '#f3f4f6',
+                  padding: '0.125rem 0.375rem',
+                  borderRadius: '0.25rem',
+                  fontSize: '0.875rem'
+                }}>WORKFLOW_TEMPLATE_FORMAT.md</code> for format details.
+              </p>
+
+              <textarea
+                value={importJSON}
+                onChange={(e) => setImportJSON(e.target.value)}
+                placeholder='Paste JSON here...\n\n{\n  "name": "Template Name",\n  "steps": [\n    {\n      "title": "Step Title",\n      "type": "task",\n      "group": "pre_shoot",\n      "assigneeRule": "role",\n      "assigneeValue": "photographer"\n    }\n  ]\n}'
+                style={{
+                  width: '100%',
+                  minHeight: '300px',
+                  padding: '0.75rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  fontFamily: 'monospace',
+                  resize: 'vertical'
+                }}
+              />
+
+              {/* Error Messages */}
+              {importErrors.length > 0 && (
+                <div style={{
+                  marginTop: '1rem',
+                  padding: '1rem',
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '0.375rem'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    marginBottom: '0.5rem'
+                  }}>
+                    <AlertCircle size={16} color="#dc2626" />
+                    <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: '600', color: '#dc2626' }}>
+                      Validation Errors
+                    </h4>
+                  </div>
+                  <ul style={{
+                    margin: '0.5rem 0 0 0',
+                    paddingLeft: '1.5rem',
+                    fontSize: '0.875rem',
+                    color: '#991b1b'
+                  }}>
+                    {importErrors.map((error, index) => (
+                      <li key={index} style={{ marginBottom: '0.25rem' }}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '1.5rem',
+              borderTop: '1px solid #e5e7eb',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '0.75rem'
+            }}>
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportJSON('');
+                  setImportErrors([]);
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: 'white',
+                  color: '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImportJSON}
+                disabled={!importJSON.trim()}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: !importJSON.trim() ? '#9ca3af' : '#10b981',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  cursor: !importJSON.trim() ? 'not-allowed' : 'pointer',
+                  fontSize: '0.875rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                <Upload size={16} />
+                Import Template
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

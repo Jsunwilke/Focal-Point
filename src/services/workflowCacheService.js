@@ -167,9 +167,9 @@ class WorkflowCacheService {
       if (!cached) return null;
 
       const cacheData = JSON.parse(cached);
-      
+
       // Check cache version and age
-      if (cacheData.version !== this.CACHE_VERSION || 
+      if (cacheData.version !== this.CACHE_VERSION ||
           Date.now() - cacheData.timestamp > this.TEMPLATE_CACHE_AGE) {
         localStorage.removeItem(key);
         return null;
@@ -179,6 +179,16 @@ class WorkflowCacheService {
     } catch (error) {
       console.warn(`Failed to retrieve cached template ${templateId}:`, error);
       return null;
+    }
+  }
+
+  // Clear single template from cache
+  clearTemplate(templateId) {
+    try {
+      const key = this.getTemplateKey(templateId);
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.warn(`Failed to clear template ${templateId}:`, error);
     }
   }
 

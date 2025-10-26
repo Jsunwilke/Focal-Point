@@ -774,28 +774,34 @@ service cloud.firestore {
                        (!request.resource.data.keys().hasAny(['currentStep']) || request.resource.data.currentStep is string);
       
       // Granular step-level permissions for workflow updates
-      allow update: if request.auth != null && 
+      allow update: if request.auth != null &&
                        belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
-                       // Prevent changing core identity fields
-                       request.resource.data.organizationID == resource.data.organizationID &&
-                       request.resource.data.templateId == resource.data.templateId &&
                        (
-                         // Session-based workflow: prevent changing sessionId
-                         (resource.data.keys().hasAny(['sessionId']) &&
-                          request.resource.data.sessionId == resource.data.sessionId) ||
-                         // Tracking workflow: prevent changing tracking identity fields
-                         (resource.data.workflowType == 'tracking' &&
-                          request.resource.data.schoolId == resource.data.schoolId &&
-                          request.resource.data.trackingTemplateId == resource.data.trackingTemplateId &&
-                          request.resource.data.academicYear == resource.data.academicYear &&
-                          request.resource.data.workflowType == resource.data.workflowType)
-                       ) &&
-                       (
-                         // Admins/Managers can update any workflow
-                         isAdminOrManager(request.auth.uid) ||
-                         // Regular users can update workflows (simplified for now)
-                         // TODO: Add granular step-level permissions in future iteration
-                         true
+                         // Admins can update ANY workflow fields (including templateId for migrations)
+                         isAdmin(request.auth.uid) ||
+                         // Non-admins have field restrictions
+                         (
+                           // Prevent changing core identity fields
+                           request.resource.data.organizationID == resource.data.organizationID &&
+                           request.resource.data.templateId == resource.data.templateId &&
+                           (
+                             // Session-based workflow: prevent changing sessionId
+                             (resource.data.keys().hasAny(['sessionId']) &&
+                              request.resource.data.sessionId == resource.data.sessionId) ||
+                             // Tracking workflow: prevent changing tracking identity fields
+                             (resource.data.workflowType == 'tracking' &&
+                              request.resource.data.schoolId == resource.data.schoolId &&
+                              request.resource.data.trackingTemplateId == resource.data.trackingTemplateId &&
+                              request.resource.data.academicYear == resource.data.academicYear &&
+                              request.resource.data.workflowType == resource.data.workflowType)
+                           ) &&
+                           (
+                             // Managers can update workflows
+                             isAdminOrManager(request.auth.uid) ||
+                             // Regular users can update workflows (simplified for now)
+                             true
+                           )
+                         )
                        );
       
       // Admins can delete workflows

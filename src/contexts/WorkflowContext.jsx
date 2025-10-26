@@ -316,23 +316,28 @@ export const WorkflowProvider = ({ children }) => {
   // Delete workflow
   const deleteWorkflow = useCallback(async (workflowId) => {
     try {
-      // Optimistically remove from state
-      setUserWorkflows(prev => prev.filter(w => w.id !== workflowId));
-      setOrganizationWorkflows(prev => prev.filter(w => w.id !== workflowId));
-      
-      // Delete from Firebase
+      // Delete from Firebase first
       await deleteWorkflowInstance(workflowId);
-      
+
+      // Clear workflow caches to ensure fresh data
+      if (organization?.id) {
+        workflowCacheService.clearWorkflowCaches(organization.id);
+        console.log('[WorkflowContext] Cleared workflow caches after deletion');
+      }
+
+      // Refresh workflows from Firestore to update UI immediately
+      await refreshWorkflows();
+
       showToast('Workflow Deleted', 'Workflow has been permanently deleted', 'success');
     } catch (error) {
       console.error('Error deleting workflow:', error);
       showToast('Error', 'Failed to delete workflow', 'error');
-      
-      // Revert optimistic update by refreshing workflows
+
+      // Refresh workflows to ensure state is correct
       await refreshWorkflows();
       throw error;
     }
-  }, [showToast, refreshWorkflows]);
+  }, [organization, showToast, refreshWorkflows]);
 
   // Get workflow with template
   const getWorkflowWithTemplate = useCallback((workflowId) => {
@@ -428,10 +433,26 @@ export const WorkflowProvider = ({ children }) => {
 
   // Removed periodic refresh - real-time listeners handle updates
 
-  // Set up real-time listener for workflows (only for immediate updates)
+  // DISABLED: Broad real-time listener replaced with tab-scoped listener in WorkflowMatrixView
+  // This broad listener was causing 100+ reads on every workflow change
+  // The tab-scoped listener only listens to 10-20 workflows at a time (95% reduction)
   useEffect(() => {
     if (!organization?.id || !userProfile?.id) return;
 
+    console.log('[WorkflowContext] Broad listener DISABLED - using cache-first loading only');
+    console.log('[WorkflowContext] Real-time updates handled by tab-scoped listener in MatrixView');
+
+    // Load cached workflows for initial display
+    const cachedWorkflows = workflowCacheService.getCachedWorkflows(userProfile.id, organization.id, 'active');
+    if (cachedWorkflows && cachedWorkflows.length > 0) {
+      console.log(`[WorkflowContext] Loaded ${cachedWorkflows.length} workflows from cache`);
+      setUserWorkflows(cachedWorkflows);
+    }
+
+    // No listener setup - relying on tab-scoped listener in MatrixView for real-time updates
+    return; // Early return - no listener to clean up
+
+    /* COMMENTED OUT - Original broad listener code
     // Clean up any existing listener
     if (listenerUnsubscribeRef.current) {
       listenerUnsubscribeRef.current();
@@ -439,9 +460,6 @@ export const WorkflowProvider = ({ children }) => {
     }
 
     // Query for active workflows in the organization
-    // For now, we still need to fetch all org workflows because Firestore doesn't support
-    // querying nested fields in stepProgress. This should be refactored to add assignedTo
-    // array at the root level of workflow documents.
     const workflowsQuery = query(
       collection(firestore, 'workflows'),
       where('organizationID', '==', organization.id),
@@ -449,12 +467,6 @@ export const WorkflowProvider = ({ children }) => {
       orderBy('createdAt', 'desc'),
       limit(100) // Limit to most recent 100 workflows to prevent excessive reads
     );
-
-    // Check if we have cached data first
-    const cachedWorkflows = workflowCacheService.getCachedWorkflows(userProfile.id, organization.id, 'active');
-    if (cachedWorkflows && cachedWorkflows.length > 0) {
-      setUserWorkflows(cachedWorkflows);
-    }
 
     // Set up the listener for real-time updates only
     const unsubscribe = onSnapshot(
@@ -479,41 +491,63 @@ export const WorkflowProvider = ({ children }) => {
           return;
         }
 
+        // Process only the changed documents, not the entire snapshot
+        // This prevents re-reading all 100 documents on every single update
+        setUserWorkflows(prev => {
+          let updated = [...prev];
 
-        // Process workflow changes
-        const workflows = [];
-        snapshot.forEach((doc) => {
-          workflows.push({ id: doc.id, ...doc.data() });
-        });
+          changes.forEach(change => {
+            const workflow = { id: change.doc.id, ...change.doc.data() };
 
-        // Filter for user's workflows
-        const userWorkflows = workflows.filter(workflow => {
-          if (!workflow.stepProgress) return false;
-          
-          const hasAssignedSteps = Object.values(workflow.stepProgress).some(step => 
-            step.assignedTo === userProfile.id
-          );
-          
-          const hasUnassignedSteps = Object.values(workflow.stepProgress).some(step => 
-            !step.assignedTo || step.assignedTo === null
-          );
-          
-          return hasAssignedSteps || hasUnassignedSteps;
-        });
+            if (change.type === 'added') {
+              // Only add if it's relevant to the user
+              if (workflow.stepProgress) {
+                const hasAssignedSteps = Object.values(workflow.stepProgress).some(step =>
+                  step.assignedTo === userProfile.id
+                );
+                const hasUnassignedSteps = Object.values(workflow.stepProgress).some(step =>
+                  !step.assignedTo || step.assignedTo === null
+                );
 
-        // Load templates for new workflows
-        const templatesToLoad = [];
-        
-        userWorkflows.forEach(workflow => {
-          if (workflow.templateId && !workflowTemplatesRef.current[workflow.templateId]) {
-            // First check cache
-            const cachedTemplate = workflowCacheService.getCachedTemplate(workflow.templateId);
-            if (cachedTemplate) {
-              workflowTemplatesRef.current[workflow.templateId] = cachedTemplate;
-              setWorkflowTemplates(prev => ({ ...prev, [workflow.templateId]: cachedTemplate }));
-            } else {
-              templatesToLoad.push(workflow.templateId);
+                if (hasAssignedSteps || hasUnassignedSteps) {
+                  updated.push(workflow);
+                }
+              }
+            } else if (change.type === 'modified') {
+              // Update existing workflow
+              const index = updated.findIndex(w => w.id === workflow.id);
+              if (index !== -1) {
+                updated[index] = workflow;
+              }
+            } else if (change.type === 'removed') {
+              // Remove workflow
+              updated = updated.filter(w => w.id !== workflow.id);
             }
+          });
+
+          return updated;
+        });
+
+        // Get unique template IDs from the changes only
+        const changedTemplateIds = new Set();
+        changes.forEach(change => {
+          const workflow = change.doc.data();
+          if (workflow.templateId && !workflowTemplatesRef.current[workflow.templateId]) {
+            changedTemplateIds.add(workflow.templateId);
+          }
+        });
+
+        // Load templates for new workflows (only if needed)
+        const templatesToLoad = [];
+
+        changedTemplateIds.forEach(templateId => {
+          // First check cache
+          const cachedTemplate = workflowCacheService.getCachedTemplate(templateId);
+          if (cachedTemplate) {
+            workflowTemplatesRef.current[templateId] = cachedTemplate;
+            setWorkflowTemplates(prev => ({ ...prev, [templateId]: cachedTemplate }));
+          } else {
+            templatesToLoad.push(templateId);
           }
         });
         
@@ -566,28 +600,14 @@ export const WorkflowProvider = ({ children }) => {
             setWorkflowTemplates(prev => ({ ...prev, ...newTemplates }));
           }
         }
-        
-        setUserWorkflows(userWorkflows);
-        
-        // Update cache with new data
-        workflowCacheService.setCachedWorkflows(userProfile.id, organization.id, 'active', userWorkflows);
-        
-        // Check for notifications on changes (debounced)
-        if (changes.length > 0) {
-          // Only check notifications if we have actual changes
-          const hasRelevantChanges = changes.some(change => {
-            const workflow = { id: change.doc.id, ...change.doc.data() };
-            if (!workflow.stepProgress) return false;
-            
-            return Object.values(workflow.stepProgress).some(step => 
-              step.assignedTo === userProfile.id
-            );
-          });
-          
-          if (hasRelevantChanges) {
-            checkForNotifications(userWorkflows);
-          }
-        }
+
+        // Note: userWorkflows is now updated incrementally via setState callback above
+        // No need to call setUserWorkflows again or update cache on every change
+        // Cache is only updated on initial load to reduce Firebase costs
+
+        // Note: Notification checking disabled in incremental update mode
+        // TODO: Re-implement notifications to work with incremental updates
+        // instead of requiring the full workflows array
       },
       (error) => {
         console.error('Error in workflows listener:', error);
@@ -606,6 +626,7 @@ export const WorkflowProvider = ({ children }) => {
         listenerUnsubscribeRef.current = null;
       }
     };
+    */
   }, [organization?.id, userProfile?.id]);
 
 

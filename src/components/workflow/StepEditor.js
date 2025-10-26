@@ -37,6 +37,7 @@ const StepEditor = ({
     estimatedHours: step?.estimatedHours || 1,
     dueOffsetDays: step?.dueOffsetDays || 0,
     dependencies: step?.dependencies || [],
+    micros: step?.micros || [],
     notifications: {
       onStart: step?.notifications?.onStart ?? true,
       onComplete: step?.notifications?.onComplete ?? true,
@@ -139,11 +140,41 @@ const StepEditor = ({
     }));
   };
 
+  // Micro-step management
+  const generateMicroKey = () => {
+    const stepPrefix = formData.id || 'step';
+    const microNumber = formData.micros.length + 1;
+    return `${stepPrefix}_micro_${microNumber}`;
+  };
+
+  const handleMicroAdd = () => {
+    setFormData(prev => ({
+      ...prev,
+      micros: [...prev.micros, { key: generateMicroKey(), label: '' }]
+    }));
+  };
+
+  const handleMicroChange = (index, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      micros: prev.micros.map((micro, i) =>
+        i === index ? { ...micro, [field]: value } : micro
+      )
+    }));
+  };
+
+  const handleMicroRemove = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      micros: prev.micros.filter((_, i) => i !== index)
+    }));
+  };
+
   const handleSave = () => {
     if (!validateForm()) {
       return;
     }
-    
+
     onSave(formData);
   };
 
@@ -654,6 +685,72 @@ const StepEditor = ({
                       Add Output File
                     </button>
                   </div>
+                </div>
+              </div>
+
+              {/* Micro-Steps */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: '600' }}>
+                  Micro-Steps
+                </h3>
+                <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: '#6b7280' }}>
+                  Add checklist items that appear in the matrix view. Users can track completion of each micro-step.
+                </p>
+
+                <div style={{ border: '1px solid #d1d5db', borderRadius: '0.375rem', padding: '0.5rem' }}>
+                  {formData.micros.map((micro, index) => (
+                    <div key={index} style={{ marginBottom: '0.5rem' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>
+                        Key: {micro.key}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <input
+                          type="text"
+                          value={micro.label}
+                          onChange={(e) => handleMicroChange(index, 'label', e.target.value)}
+                          placeholder="Micro-step label (e.g., 'White Balance', 'Exposure')"
+                          style={{
+                            flex: 1,
+                            padding: '0.25rem 0.5rem',
+                            border: '1px solid #d1d5db',
+                            borderRadius: '0.25rem',
+                            fontSize: '0.875rem'
+                          }}
+                        />
+                        <button
+                          onClick={() => handleMicroRemove(index)}
+                          style={{
+                            padding: '0.25rem',
+                            border: '1px solid #ef4444',
+                            backgroundColor: 'white',
+                            color: '#ef4444',
+                            borderRadius: '0.25rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    onClick={handleMicroAdd}
+                    style={{
+                      padding: '0.25rem 0.5rem',
+                      border: '1px solid #3b82f6',
+                      backgroundColor: 'white',
+                      color: '#3b82f6',
+                      borderRadius: '0.25rem',
+                      cursor: 'pointer',
+                      fontSize: '0.75rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.25rem'
+                    }}
+                  >
+                    <Plus size={12} />
+                    Add Micro-Step
+                  </button>
                 </div>
               </div>
             </div>
