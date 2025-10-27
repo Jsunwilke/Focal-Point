@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { Check, Clock, EyeOff, Eye } from 'lucide-react';
 import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { List } from 'react-window';
 import { firestore } from '../../../../firebase/config';
 import { updateWorkflowStep, getSchools } from '../../../../firebase/firestore';
 import { useAuth } from '../../../../contexts/AuthContext';
@@ -61,6 +62,156 @@ function getTemplateColors(templateName) {
 
   return TEMPLATE_COLORS.default;
 }
+
+// Row height for virtual scrolling
+const ROW_HEIGHT = 90;
+
+// Virtual scrolling row component
+const VirtualRow = React.memo(({
+  ariaAttributes,
+  index,
+  style,
+  filteredWorkflows,
+  activeTemplate,
+  columnWidths,
+  taskColumnWidths,
+  showDates,
+  getWorkflowInfo,
+  getLastCompletedIndex,
+  calculateProgress,
+  handleInitialsChange,
+  handleDateChange,
+  handleMicroToggle,
+  handleSchoolClick,
+  toggleWorkflowHidden,
+  optimisticUpdates,
+  optimisticallyHidden
+}) => {
+  const workflow = filteredWorkflows[index];
+  const info = getWorkflowInfo(workflow);
+  const lastCompletedIdx = getLastCompletedIndex(workflow);
+  const progress = calculateProgress(workflow);
+  const colors = getTemplateColors(activeTemplate.name);
+
+  const isHidden = optimisticallyHidden.hasOwnProperty(workflow.id)
+    ? optimisticallyHidden[workflow.id]
+    : workflow.hidden;
+
+  return (
+    <div style={style}>
+      <div className="workflow-matrix__row">
+        <div
+          className="workflow-matrix__cell workflow-matrix__cell--school"
+          style={{ width: `${columnWidths.school}px`, backgroundColor: colors.light }}
+        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleWorkflowHidden(workflow.id, isHidden);
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '2px',
+              display: 'flex',
+              alignItems: 'center',
+              color: isHidden ? '#ef4444' : '#6b7280',
+              opacity: 0.7,
+              transition: 'opacity 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+            onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
+            title={isHidden ? 'Unhide workflow' : 'Hide workflow'}
+          >
+            {isHidden ? <Eye size={16} /> : <EyeOff size={16} />}
+          </button>
+          <span
+            className="workflow-matrix__cell--clickable"
+            onClick={() => handleSchoolClick(workflow)}
+            style={{ flex: 1, cursor: 'pointer' }}
+          >
+            {info.school}
+          </span>
+        </div>
+      </div>
+      <div
+        className="workflow-matrix__cell workflow-matrix__cell--date"
+        style={{ width: `${columnWidths.date}px`, left: `${columnWidths.school - 1}px`, backgroundColor: colors.light }}
+      >
+        {formatDateToMMDDYYYY(info.date)}
+      </div>
+      <div
+        className="workflow-matrix__cell workflow-matrix__cell--progress"
+        style={{ width: `${columnWidths.progress}px`, backgroundColor: colors.light }}
+      >
+        <ProgressBar pct={progress} />
+      </div>
+      {activeTemplate.steps.map((step, colIndex) => {
+        const columnKey = `task-${step.id}`;
+        const width = taskColumnWidths[columnKey] || columnWidths.taskDefault;
+        const stepProgress = workflow.stepProgress?.[step.id] || {};
+        const isCompleted = colIndex <= lastCompletedIdx;
+        const isCurrent = colIndex === lastCompletedIdx + 1 && stepProgress.status !== 'completed';
+        const isDone = stepProgress.status === 'completed';
+        const cellKey = `${workflow.id}-${step.id}`;
+
+        const normalizedMicros = normalizeMicros(step, stepProgress);
+
+        const optimistic = optimisticUpdates[cellKey];
+        const displayInitials = optimistic?.initials ?? stepProgress.initials ?? '';
+        const displayMicros = optimistic?.micro ?? normalizedMicros;
+
+        return (
+          <div
+            key={step.id}
+            className={`workflow-matrix__cell workflow-matrix__cell--task ${
+              isCompleted ? 'workflow-matrix__cell--completed' : ''
+            } ${isCurrent ? 'workflow-matrix__cell--current' : ''}`}
+            style={{
+              width: `${width}px`,
+              backgroundColor: isCompleted ? undefined : colors.light
+            }}
+          >
+            <div className="workflow-matrix__cell-content">
+              <div className="workflow-matrix__cell-row">
+                <input
+                  type="text"
+                  className="workflow-matrix__initials-input"
+                  placeholder="Init"
+                  maxLength={4}
+                  value={displayInitials}
+                  onChange={(e) => handleInitialsChange(workflow.id, step.id, e.target.value, normalizedMicros)}
+                  aria-label={`${step.title} — ${info.jobId}`}
+                />
+                <CellBadge done={isDone} />
+              </div>
+              {displayMicros && displayMicros.length > 0 && (
+                <MicroMeter
+                  label={step.title}
+                  templateMicros={step.micros}
+                  normalizedMicros={displayMicros}
+                  onToggle={(microKey) => handleMicroToggle(workflow.id, step.id, microKey, displayMicros, displayInitials)}
+                />
+              )}
+              {showDates && (
+                <input
+                  type="date"
+                  className="workflow-matrix__date-input"
+                  value={stepProgress.completedDate || ''}
+                  onChange={(e) => handleDateChange(workflow.id, step.id, displayInitials, e.target.value, normalizedMicros)}
+                  tabIndex={-1}
+                />
+              )}
+            </div>
+          </div>
+        );
+      })}
+      </div>
+    </div>
+  );
+});
 
 // Normalize micro-steps: merge template definition with workflow progress
 function normalizeMicros(templateStep, stepProgress) {
@@ -177,6 +328,8 @@ function MicroMeter({ label, templateMicros, normalizedMicros, onToggle }) {
     </div>
   );
 }
+
+VirtualRow.displayName = 'VirtualRow';
 
 const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
   const { userProfile, organization } = useAuth();
@@ -371,6 +524,56 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
   const activeTemplate = useMemo(() => {
     return tabs.find(tab => tab.id === activeTab);
   }, [tabs, activeTab]);
+
+  // Calculate total grid width for horizontal scrolling
+  const totalGridWidth = useMemo(() => {
+    if (!activeTemplate) return 'auto';
+
+    let width = columnWidths.school + columnWidths.date + columnWidths.progress;
+
+    // Add widths for all task columns
+    activeTemplate.steps.forEach(step => {
+      const columnKey = `task-${step.id}`;
+      width += taskColumnWidths[columnKey] || columnWidths.taskDefault;
+    });
+
+    return `${width}px`;
+  }, [activeTemplate, columnWidths, taskColumnWidths]);
+
+  // Load saved column widths from localStorage when template changes
+  useEffect(() => {
+    if (!activeTemplate || !activeTemplate.steps) return;
+
+    const storageKey = `workflow-matrix-widths-${activeTemplate.id}`;
+    const savedWidths = localStorage.getItem(storageKey);
+
+    if (savedWidths) {
+      try {
+        const parsed = JSON.parse(savedWidths);
+        if (parsed.columnWidths) {
+          setColumnWidths(prev => ({ ...prev, ...parsed.columnWidths }));
+        }
+        if (parsed.taskColumnWidths) {
+          setTaskColumnWidths(parsed.taskColumnWidths);
+        }
+        return; // Use saved widths, skip auto-sizing
+      } catch (error) {
+        console.error('Error loading saved column widths:', error);
+      }
+    }
+
+    // No saved widths, auto-size columns based on header text
+    const newTaskWidths = {};
+    activeTemplate.steps.forEach(step => {
+      // Calculate width needed: approximately 6px per character + minimal padding
+      const headerWidth = step.title.length * 6 + 20;
+      // Use minimum of 155px (to fit cell content comfortably) or calculated width
+      const columnKey = `task-${step.id}`;
+      newTaskWidths[columnKey] = Math.max(155, headerWidth);
+    });
+
+    setTaskColumnWidths(newTaskWidths);
+  }, [activeTemplate]);
 
   // Filter workflows by active template
   // Use real-time workflows when available (tab-scoped listener), otherwise use props
@@ -741,8 +944,17 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
   }, [resizing]);
 
   const handleResizeEnd = React.useCallback(() => {
+    // Save column widths to localStorage
+    if (activeTemplate && resizing) {
+      const storageKey = `workflow-matrix-widths-${activeTemplate.id}`;
+      const widthsToSave = {
+        columnWidths,
+        taskColumnWidths
+      };
+      localStorage.setItem(storageKey, JSON.stringify(widthsToSave));
+    }
     setResizing(null);
-  }, []);
+  }, [activeTemplate, resizing, columnWidths, taskColumnWidths]);
 
   // Add/remove mouse event listeners for resize
   React.useEffect(() => {
@@ -901,205 +1113,107 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
         </label>
       </div>
 
-      {/* Grid */}
+      {/* Grid - Div-based for virtual scrolling */}
       <div className="workflow-matrix__grid-container" ref={gridContainerRef}>
-        <table className="workflow-matrix__grid">
-          <thead>
-            <tr className="workflow-matrix__header-row">
-              {(() => {
-                const colors = getTemplateColors(activeTemplate.name);
-                return (
-                  <>
-                    <th
-                      className="workflow-matrix__header-cell workflow-matrix__header-cell--school"
-                      style={{ width: `${columnWidths.school}px`, backgroundColor: colors.main, color: 'white' }}
-                    >
-                      <div className="workflow-matrix__header-content">
-                        School
-                        <div
-                          className="workflow-matrix__resize-handle"
-                          onMouseDown={(e) => handleResizeStart('school', e.clientX, columnWidths.school)}
-                        />
-                      </div>
-                    </th>
-                    <th
-                      className="workflow-matrix__header-cell workflow-matrix__header-cell--date"
-                      style={{ width: `${columnWidths.date}px`, left: `${columnWidths.school - 1}px`, backgroundColor: colors.main, color: 'white' }}
-                    >
-                      <div className="workflow-matrix__header-content">
-                        Date
-                        <div
-                          className="workflow-matrix__resize-handle"
-                          onMouseDown={(e) => handleResizeStart('date', e.clientX, columnWidths.date)}
-                        />
-                      </div>
-                    </th>
-                    <th
-                      className="workflow-matrix__header-cell workflow-matrix__header-cell--progress"
-                      style={{ width: `${columnWidths.progress}px`, backgroundColor: colors.main, color: 'white' }}
-                    >
-                      <div className="workflow-matrix__header-content">
-                        Progress
-                        <div
-                          className="workflow-matrix__resize-handle"
-                          onMouseDown={(e) => handleResizeStart('progress', e.clientX, columnWidths.progress)}
-                        />
-                      </div>
-                    </th>
-                    {activeTemplate.steps.map(step => {
-                      const columnKey = `task-${step.id}`;
-                      const width = taskColumnWidths[columnKey] || columnWidths.taskDefault;
-                      return (
-                        <th
-                          key={step.id}
-                          className="workflow-matrix__header-cell workflow-matrix__header-cell--task"
-                          title={step.title}
-                          style={{ width: `${width}px`, backgroundColor: colors.main, color: 'white' }}
-                        >
-                          <div className="workflow-matrix__header-content">
-                            {step.title}
-                            <div
-                              className="workflow-matrix__resize-handle"
-                              onMouseDown={(e) => handleResizeStart(columnKey, e.clientX, width)}
-                            />
-                          </div>
-                        </th>
-                      );
-                    })}
-                  </>
-                );
-              })()}
-            </tr>
-          </thead>
-          <tbody>
-            {filteredWorkflows.map((workflow, rowIndex) => {
-              const info = getWorkflowInfo(workflow);
-              const lastCompletedIdx = getLastCompletedIndex(workflow);
-              const progress = calculateProgress(workflow);
+        <div className="workflow-matrix__grid" style={{ width: totalGridWidth }}>
+          {/* Header */}
+          <div className="workflow-matrix__header-row">
+            {(() => {
               const colors = getTemplateColors(activeTemplate.name);
-
-              // Check for optimistic hidden state
-              const isHidden = optimisticallyHidden.hasOwnProperty(workflow.id)
-                ? optimisticallyHidden[workflow.id]
-                : workflow.hidden;
-
               return (
-                <tr key={workflow.id} className="workflow-matrix__row">
-                  <td
-                    className="workflow-matrix__cell workflow-matrix__cell--school"
-                    style={{ width: `${columnWidths.school}px`, backgroundColor: colors.light }}
+                <>
+                  <div
+                    className="workflow-matrix__header-cell workflow-matrix__header-cell--school"
+                    style={{ width: `${columnWidths.school}px`, backgroundColor: colors.main, color: 'white' }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleWorkflowHidden(workflow.id, isHidden);
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: '2px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          color: isHidden ? '#ef4444' : '#6b7280',
-                          opacity: 0.7,
-                          transition: 'opacity 0.2s'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                        onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
-                        title={isHidden ? 'Unhide workflow' : 'Hide workflow'}
-                      >
-                        {isHidden ? <Eye size={16} /> : <EyeOff size={16} />}
-                      </button>
-                      <span
-                        className="workflow-matrix__cell--clickable"
-                        onClick={() => handleSchoolClick(workflow)}
-                        style={{ flex: 1, cursor: 'pointer' }}
-                      >
-                        {info.school}
-                      </span>
+                    <div className="workflow-matrix__header-content">
+                      School
+                      <div
+                        className="workflow-matrix__resize-handle"
+                        onMouseDown={(e) => handleResizeStart('school', e.clientX, columnWidths.school)}
+                      />
                     </div>
-                  </td>
-                  <td
-                    className="workflow-matrix__cell workflow-matrix__cell--date"
-                    style={{ width: `${columnWidths.date}px`, left: `${columnWidths.school - 1}px`, backgroundColor: colors.light }}
+                  </div>
+                  <div
+                    className="workflow-matrix__header-cell workflow-matrix__header-cell--date"
+                    style={{ width: `${columnWidths.date}px`, left: `${columnWidths.school - 1}px`, backgroundColor: colors.main, color: 'white' }}
                   >
-                    {formatDateToMMDDYYYY(info.date)}
-                  </td>
-                  <td
-                    className="workflow-matrix__cell workflow-matrix__cell--progress"
-                    style={{ width: `${columnWidths.progress}px`, backgroundColor: colors.light }}
+                    <div className="workflow-matrix__header-content">
+                      Date
+                      <div
+                        className="workflow-matrix__resize-handle"
+                        onMouseDown={(e) => handleResizeStart('date', e.clientX, columnWidths.date)}
+                      />
+                    </div>
+                  </div>
+                  <div
+                    className="workflow-matrix__header-cell workflow-matrix__header-cell--progress"
+                    style={{ width: `${columnWidths.progress}px`, backgroundColor: colors.main, color: 'white' }}
                   >
-                    <ProgressBar pct={progress} />
-                  </td>
-                  {activeTemplate.steps.map((step, colIndex) => {
+                    <div className="workflow-matrix__header-content">
+                      Progress
+                      <div
+                        className="workflow-matrix__resize-handle"
+                        onMouseDown={(e) => handleResizeStart('progress', e.clientX, columnWidths.progress)}
+                      />
+                    </div>
+                  </div>
+                  {activeTemplate.steps.map(step => {
                     const columnKey = `task-${step.id}`;
                     const width = taskColumnWidths[columnKey] || columnWidths.taskDefault;
-                    const stepProgress = workflow.stepProgress?.[step.id] || {};
-                    const isCompleted = colIndex <= lastCompletedIdx;
-                    const isCurrent = colIndex === lastCompletedIdx + 1 && stepProgress.status !== 'completed';
-                    const isDone = stepProgress.status === 'completed';
-                    const cellKey = `${workflow.id}-${step.id}`;
-
-                    // Normalize micros: sync template definition with workflow progress
-                    const normalizedMicros = normalizeMicros(step, stepProgress);
-
-                    // Use optimistic value if available, otherwise use actual data
-                    const optimistic = optimisticUpdates[cellKey];
-                    const displayInitials = optimistic?.initials ?? stepProgress.initials ?? '';
-                    const displayMicros = optimistic?.micro ?? normalizedMicros;
-
                     return (
-                      <td
+                      <div
                         key={step.id}
-                        className={`workflow-matrix__cell workflow-matrix__cell--task ${
-                          isCompleted ? 'workflow-matrix__cell--completed' : ''
-                        } ${isCurrent ? 'workflow-matrix__cell--current' : ''}`}
-                        style={{
-                          width: `${width}px`,
-                          backgroundColor: isCompleted ? undefined : colors.light
-                        }}
+                        className="workflow-matrix__header-cell workflow-matrix__header-cell--task"
+                        title={step.title}
+                        style={{ width: `${width}px`, backgroundColor: colors.main, color: 'white' }}
                       >
-                        <div className="workflow-matrix__cell-content">
-                          <div className="workflow-matrix__cell-row">
-                            <input
-                              type="text"
-                              className="workflow-matrix__initials-input"
-                              placeholder="Init"
-                              maxLength={4}
-                              value={displayInitials}
-                              onChange={(e) => handleInitialsChange(workflow.id, step.id, e.target.value, normalizedMicros)}
-                              aria-label={`${step.title} — ${info.jobId}`}
-                            />
-                            <CellBadge done={isDone} />
-                          </div>
-                          {displayMicros && displayMicros.length > 0 && (
-                            <MicroMeter
-                              label={step.title}
-                              templateMicros={step.micros}
-                              normalizedMicros={displayMicros}
-                              onToggle={(microKey) => handleMicroToggle(workflow.id, step.id, microKey, displayMicros, displayInitials)}
-                            />
-                          )}
-                          {showDates && (
-                            <input
-                              type="date"
-                              className="workflow-matrix__date-input"
-                              value={stepProgress.completedDate || ''}
-                              onChange={(e) => handleDateChange(workflow.id, step.id, displayInitials, e.target.value, normalizedMicros)}
-                              tabIndex={-1}
-                            />
-                          )}
+                        <div className="workflow-matrix__header-content">
+                          {step.title}
+                          <div
+                            className="workflow-matrix__resize-handle"
+                            onMouseDown={(e) => handleResizeStart(columnKey, e.clientX, width)}
+                          />
                         </div>
-                      </td>
+                      </div>
                     );
                   })}
-                </tr>
+                </>
               );
-            })}
-          </tbody>
-        </table>
+            })()}
+          </div>
+
+          {/* Virtualized Body */}
+          {filteredWorkflows.length > 0 && (
+            <List
+              rowComponent={VirtualRow}
+              rowCount={filteredWorkflows.length}
+              rowHeight={ROW_HEIGHT}
+              overscanCount={5}
+              style={{
+                height: `${Math.min(filteredWorkflows.length * ROW_HEIGHT, window.innerHeight - 300)}px`,
+                overflow: "hidden"
+              }}
+              rowProps={{
+                filteredWorkflows,
+                activeTemplate,
+                columnWidths,
+                taskColumnWidths,
+                showDates,
+                getWorkflowInfo,
+                getLastCompletedIndex,
+                calculateProgress,
+                handleInitialsChange,
+                handleDateChange,
+                handleMicroToggle,
+                handleSchoolClick,
+                toggleWorkflowHidden,
+                optimisticUpdates,
+                optimisticallyHidden
+              }}
+            />
+          )}
+        </div>
       </div>
 
       {filteredWorkflows.length === 0 && (

@@ -70,7 +70,7 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
   overscroll-behavior-y: auto;
-  padding: 0 16px 16px 0;
+  padding: 0;
   position: relative;
   /* Force visible scrollbars for trackpad gesture recognition */
   scrollbar-width: thin;
@@ -101,8 +101,6 @@
 }
 
 .workflow-matrix__grid {
-  width: max-content;
-  border-collapse: collapse;
   border-left: 1px solid #e5e7eb;
   border-right: 1px solid #e5e7eb;
   border-bottom: 1px solid #e5e7eb;
@@ -112,6 +110,7 @@
 
 /* Header */
 .workflow-matrix__header-row {
+  display: flex;
   background: white;
   position: sticky;
   top: 0;
@@ -131,6 +130,7 @@
   text-overflow: ellipsis;
   position: relative;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .workflow-matrix__header-content {
@@ -142,7 +142,7 @@
 
 .workflow-matrix__resize-handle {
   position: absolute;
-  right: 0;
+  right: -13px;
   top: 0;
   bottom: 0;
   width: 8px;
@@ -199,6 +199,7 @@
 
 /* Body Rows */
 .workflow-matrix__row {
+  display: flex;
   border-bottom: 1px solid #e5e7eb;
 }
 
@@ -208,6 +209,7 @@
   padding: 8px;
   font-size: 13px;
   color: #111827;
+  flex-shrink: 0;
 }
 
 .workflow-matrix__cell--school {
