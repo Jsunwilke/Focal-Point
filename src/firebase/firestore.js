@@ -555,22 +555,27 @@ export const createDailyJobReport = async (reportData) => {
       updatedAt: serverTimestamp(),
     };
 
+    // Add sessionId if provided (for linking to workflows)
+    if (reportData.sessionId) {
+      finalReportData.sessionId = reportData.sessionId;
+    }
+
     // Check if this is a template-based report
     if (reportData.templateId) {
       // Template-based report structure
       finalReportData.templateId = reportData.templateId;
       finalReportData.templateName = reportData.templateName;
       finalReportData.templateVersion = reportData.templateVersion || 1;
-      
+
       // Core fields that all reports have
       // Normalize date to YYYY-MM-DD format for consistent storage
       finalReportData.date = normalizeDateToISO(reportData.date);
       finalReportData.yourName = reportData.photographer;
-      
+
       // Store template-specific fields in customFields
       finalReportData.customFields = {};
       Object.keys(reportData).forEach(key => {
-        if (!['organizationID', 'userId', 'templateId', 'templateName', 'templateVersion', 'date', 'photographer'].includes(key)) {
+        if (!['organizationID', 'userId', 'templateId', 'templateName', 'templateVersion', 'date', 'photographer', 'sessionId'].includes(key)) {
           finalReportData.customFields[key] = reportData[key];
         }
       });
@@ -997,6 +1002,129 @@ export const getDailyJobReportsOlder = async (organizationID, beforeDate, limit 
     return reports;
   } catch (error) {
     throw error;
+  }
+};
+
+// Get daily job reports by school name and date (for workflow modal)
+export const getDailyJobReportsBySchoolAndDate = async (organizationID, schoolName, date, sessionId = null) => {
+  try {
+    console.log('getDailyJobReportsBySchoolAndDate called with:', {
+      organizationID,
+      schoolName,
+      date,
+      sessionId
+    });
+
+    // Fetch reports for the organization
+    // Increased limit to 500 to ensure we capture reports from the target date
+    const q = query(
+      collection(firestore, "dailyJobReports"),
+      where("organizationID", "==", organizationID),
+      orderBy("timestamp", "desc"),
+      limit(500)
+    );
+
+    const querySnapshot = await getDocs(q);
+    readCounter.recordRead('getDocs', 'dailyJobReports', 'getDailyJobReportsBySchoolAndDate', querySnapshot.size);
+
+    console.log(`Fetched ${querySnapshot.size} total reports, now filtering...`);
+
+    // Filter client-side for school name and date matching
+    const reports = [];
+    const targetDate = new Date(date).toISOString().split('T')[0]; // Normalize to YYYY-MM-DD
+    const normalizedSchoolName = schoolName.toLowerCase().trim();
+
+    console.log('Target criteria:', {
+      targetDate,
+      normalizedSchoolName
+    });
+
+    // Track what we're seeing in the data
+    const dateRange = { earliest: null, latest: null };
+    const uniqueSchools = new Set();
+
+    let firstReportLogged = false;
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+
+      // Extract report fields (handle both top-level and customFields locations)
+      const reportSchool = data.schoolOrDestination || data.customFields?.schoolOrDestination || '';
+      const reportDate = data.date || '';
+      const normalizedReportDate = reportDate ? reportDate.split('T')[0] : ''; // YYYY-MM-DD
+      const normalizedReportSchool = reportSchool.toLowerCase().trim();
+
+      // Track date range
+      if (normalizedReportDate) {
+        if (!dateRange.earliest || normalizedReportDate < dateRange.earliest) dateRange.earliest = normalizedReportDate;
+        if (!dateRange.latest || normalizedReportDate > dateRange.latest) dateRange.latest = normalizedReportDate;
+      }
+
+      // Track unique schools
+      if (reportSchool) uniqueSchools.add(reportSchool);
+
+      // Log the first report in full to see the structure
+      if (!firstReportLogged) {
+        console.log('EXAMPLE REPORT STRUCTURE (first report):');
+        console.log('ID:', doc.id);
+        console.log('Full Data (auto-expanded):', JSON.stringify(data, null, 2));
+        console.log('Key fields:', {
+          sessionId: data.sessionId || 'NOT PRESENT',
+          date: data.date || 'NOT PRESENT',
+          timestamp: data.timestamp || 'NOT PRESENT',
+          schoolOrDestination: reportSchool || 'NOT PRESENT',
+          yourName: data.yourName || data.customFields?.yourName || 'NOT PRESENT',
+          photoshootNoteText: data.photoshootNoteText ? 'PRESENT' : 'NOT PRESENT',
+          jobDescriptionText: data.jobDescriptionText ? 'PRESENT' : 'NOT PRESENT'
+        });
+        firstReportLogged = true;
+      }
+
+      // Priority 1: Match by sessionId if available (most accurate)
+      if (sessionId && data.sessionId === sessionId) {
+        console.log('✓ Found report matching sessionId:', doc.id, data);
+        reports.push({
+          id: doc.id,
+          ...data,
+        });
+        return;
+      }
+
+      // Priority 2: Match by school name and date
+      const schoolMatch = normalizedReportSchool.includes(normalizedSchoolName) || normalizedSchoolName.includes(normalizedReportSchool);
+      const dateMatch = normalizedReportDate === targetDate;
+
+      if (schoolMatch && dateMatch) {
+        console.log('Potential match found:', {
+          id: doc.id,
+          reportSchool,
+          reportDate,
+          normalizedReportDate,
+          targetDate
+        });
+      }
+
+      // Match by school name (case-insensitive) and date
+      if (schoolMatch && dateMatch) {
+        console.log('✓ Found report matching school+date:', doc.id, data);
+        reports.push({
+          id: doc.id,
+          ...data,
+        });
+      }
+    });
+
+    console.log('=== DATA SUMMARY ===');
+    console.log('Date range earliest:', dateRange.earliest || 'NULL');
+    console.log('Date range latest:', dateRange.latest || 'NULL');
+    console.log('Target date:', targetDate);
+    console.log('Target date in range?', dateRange.earliest && dateRange.latest ? (targetDate >= dateRange.earliest && targetDate <= dateRange.latest) : 'UNKNOWN');
+    console.log('Total unique schools:', uniqueSchools.size);
+    console.log('All schools in reports:', JSON.stringify(Array.from(uniqueSchools).sort(), null, 2));
+    console.log(`Found ${reports.length} matching reports`);
+    return reports;
+  } catch (error) {
+    console.error('Error fetching daily job reports by school and date:', error);
+    return [];
   }
 };
 
@@ -3422,16 +3550,135 @@ export const autoCreateWorkflowForSession = async (sessionId, organizationID, se
       stepProgress,
       status: "active",
       sessionDate: sessionData.date,
+
+      // Denormalize school data for faster lookups (matches tracking workflow pattern)
+      schoolId: sessionData.schoolId,
+      schoolName: sessionData.schoolName || "Unknown School",
     };
 
     const workflowId = await createWorkflowInstance(workflowData);
-    
+
     if (workflowId) {
     } else {
     }
-    
+
     return workflowId;
   } catch (error) {
+    throw error;
+  }
+};
+
+// Migration function: Backfill school data and shoot dates for existing workflows
+export const backfillWorkflowSchoolData = async (organizationID) => {
+  try {
+    console.log('[backfillWorkflowSchoolData] Starting migration for organization:', organizationID);
+
+    // Query all workflows (both session-based and tracking)
+    // Note: Firestore doesn't support querying for missing fields directly,
+    // so we get all workflows and filter in JavaScript
+    const workflowsRef = collection(firestore, 'workflows');
+    const q = query(
+      workflowsRef,
+      where('organizationID', '==', organizationID),
+      where('status', '==', 'active')
+    );
+
+    const snapshot = await getDocs(q);
+    console.log(`[backfillWorkflowSchoolData] Found ${snapshot.size} active workflows`);
+
+    const workflowsToUpdate = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      // Process session-based workflows without school data or session date
+      if (data.sessionId && (!data.schoolName || !data.sessionDate)) {
+        workflowsToUpdate.push({
+          id: doc.id,
+          ...data,
+          type: 'session'
+        });
+      }
+    });
+
+    console.log(`[backfillWorkflowSchoolData] ${workflowsToUpdate.length} workflows need metadata`);
+
+    if (workflowsToUpdate.length === 0) {
+      return {
+        success: true,
+        updated: 0,
+        skipped: 0,
+        failed: 0,
+        message: 'No workflows need updating'
+      };
+    }
+
+    // Update each workflow individually (security rules work better with individual updates)
+    let updated = 0;
+    let failed = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const workflow of workflowsToUpdate) {
+      try {
+        const updateData = {};
+
+        if (workflow.type === 'session') {
+          // Fetch session data
+          const sessionData = await getSession(workflow.sessionId);
+
+          if (!sessionData) {
+            console.warn(`[backfillWorkflowSchoolData] Session not found for workflow ${workflow.id}`);
+            skipped++;
+            continue;
+          }
+
+          // Add school data if missing
+          if (!workflow.schoolName && sessionData.schoolId && sessionData.schoolName) {
+            updateData.schoolId = sessionData.schoolId;
+            updateData.schoolName = sessionData.schoolName;
+          }
+
+          // Add session date if missing
+          if (!workflow.sessionDate && sessionData.date) {
+            updateData.sessionDate = sessionData.date;
+          }
+        }
+
+        // Skip if nothing to update
+        if (Object.keys(updateData).length === 0) {
+          skipped++;
+          continue;
+        }
+
+        // Update workflow with metadata
+        const workflowRef = doc(firestore, 'workflows', workflow.id);
+        await updateDoc(workflowRef, updateData);
+
+        updated++;
+        console.log(`[backfillWorkflowSchoolData] Updated workflow ${workflow.id} with:`, updateData);
+
+      } catch (error) {
+        console.error(`[backfillWorkflowSchoolData] Error updating workflow ${workflow.id}:`, error);
+        failed++;
+        errors.push({
+          workflowId: workflow.id,
+          error: error.message
+        });
+      }
+    }
+
+    console.log(`[backfillWorkflowSchoolData] Migration complete. Updated: ${updated}, Skipped: ${skipped}, Failed: ${failed}`);
+
+    return {
+      success: true,
+      updated,
+      skipped,
+      failed,
+      errors,
+      message: `Migration complete. Updated ${updated} workflows, skipped ${skipped}, failed ${failed}`
+    };
+
+  } catch (error) {
+    console.error('[backfillWorkflowSchoolData] Migration failed:', error);
     throw error;
   }
 };

@@ -74,7 +74,8 @@ export const WorkflowProvider = ({ children }) => {
         const templatePromises = cachedWorkflows.map(async (workflow) => {
           if (!workflowTemplatesRef.current[workflow.templateId]) {
             const cachedTemplate = workflowCacheService.getCachedTemplate(workflow.templateId);
-            if (cachedTemplate) {
+            // Only use cached template if it's not null (valid template)
+            if (cachedTemplate && cachedTemplate !== null) {
               readCounter.recordCacheHit('workflowTemplates', 'WorkflowContext-template', 1);
               return { templateId: workflow.templateId, template: cachedTemplate };
             }
@@ -108,19 +109,22 @@ export const WorkflowProvider = ({ children }) => {
       
       // Load templates for each workflow if not already loaded
       const templatePromises = workflows.map(async (workflow) => {
-        // Check template cache first
+        // Check template cache first - only use if it's a valid template (not null)
         const cachedTemplate = workflowCacheService.getCachedTemplate(workflow.templateId);
-        if (cachedTemplate) {
+        if (cachedTemplate && cachedTemplate !== null) {
           readCounter.recordCacheHit('workflowTemplates', 'WorkflowContext-template', 1);
           return { templateId: workflow.templateId, template: cachedTemplate };
         }
-        
+
         if (!workflowTemplatesRef.current[workflow.templateId]) {
           try {
             readCounter.recordCacheMiss('workflowTemplates', 'WorkflowContext-template');
             const template = await getWorkflowTemplate(workflow.templateId);
-            workflowCacheService.setCachedTemplate(workflow.templateId, template);
-            workflowTemplatesRef.current[workflow.templateId] = template;
+            // Only cache if template is valid (not null)
+            if (template && template !== null) {
+              workflowCacheService.setCachedTemplate(workflow.templateId, template);
+              workflowTemplatesRef.current[workflow.templateId] = template;
+            }
             return { templateId: workflow.templateId, template };
           } catch (error) {
             // Log as warning for missing templates
@@ -190,23 +194,89 @@ export const WorkflowProvider = ({ children }) => {
   // Load organization workflows (for admins) with caching
   const loadOrganizationWorkflows = useCallback(async () => {
     if (!organization?.id || userProfile?.role !== 'admin') return;
-    
+
     try {
       // Check cache first
       const cachedWorkflows = workflowCacheService.getCachedOrgWorkflows(organization.id);
       if (cachedWorkflows) {
         setOrganizationWorkflows(cachedWorkflows);
         readCounter.recordCacheHit('workflows', 'WorkflowContext-org', cachedWorkflows.length);
-        return; // Exit early if cache hit - don't make API call
+
+        // Still need to load templates for cached workflows
+        const templatePromises = cachedWorkflows.map(async (workflow) => {
+          if (!workflowTemplatesRef.current[workflow.templateId]) {
+            const cachedTemplate = workflowCacheService.getCachedTemplate(workflow.templateId);
+            // Only use cached template if it's not null (valid template)
+            if (cachedTemplate && cachedTemplate !== null) {
+              readCounter.recordCacheHit('workflowTemplates', 'WorkflowContext-org-template', 1);
+              return { templateId: workflow.templateId, template: cachedTemplate };
+            }
+          }
+          return null;
+        }).filter(p => p !== null);
+
+        const templateResults = await Promise.all(templatePromises);
+        const newTemplates = {};
+        templateResults.forEach(result => {
+          if (result) {
+            newTemplates[result.templateId] = result.template;
+            workflowTemplatesRef.current[result.templateId] = result.template;
+          }
+        });
+
+        if (Object.keys(newTemplates).length > 0) {
+          setWorkflowTemplates(prev => ({ ...prev, ...newTemplates }));
+        }
+
+        return; // Exit early if cache hit - workflows already set
       }
-      
+
       // Only call API if cache miss
       readCounter.recordCacheMiss('workflows', 'WorkflowContext-org');
       const workflows = await getWorkflowsForOrganization(organization.id);
-      setOrganizationWorkflows(workflows);
-      
+
       // Cache the workflows
       workflowCacheService.setCachedOrgWorkflows(organization.id, workflows);
+
+      // Load templates for each workflow if not already loaded
+      const templatePromises = workflows.map(async (workflow) => {
+        // Check template cache first - only use if it's a valid template (not null)
+        const cachedTemplate = workflowCacheService.getCachedTemplate(workflow.templateId);
+        if (cachedTemplate && cachedTemplate !== null) {
+          readCounter.recordCacheHit('workflowTemplates', 'WorkflowContext-org-template', 1);
+          return { templateId: workflow.templateId, template: cachedTemplate };
+        }
+
+        if (!workflowTemplatesRef.current[workflow.templateId]) {
+          try {
+            readCounter.recordCacheMiss('workflowTemplates', 'WorkflowContext-org-template');
+            const template = await getWorkflowTemplate(workflow.templateId);
+            // Only cache if template is valid (not null)
+            if (template && template !== null) {
+              workflowCacheService.setCachedTemplate(workflow.templateId, template);
+              workflowTemplatesRef.current[workflow.templateId] = template;
+            }
+            return { templateId: workflow.templateId, template };
+          } catch (error) {
+            // Log as warning for missing templates
+            console.warn(`Template ${workflow.templateId} not found or no permission:`, error.message);
+            return { templateId: workflow.templateId, template: null };
+          }
+        }
+        return null;
+      });
+
+      const templateResults = await Promise.all(templatePromises);
+      const newTemplates = {};
+      templateResults.forEach(result => {
+        if (result && result.template) {
+          newTemplates[result.templateId] = result.template;
+        }
+      });
+
+      setWorkflowTemplates(prev => ({ ...prev, ...newTemplates }));
+      setOrganizationWorkflows(workflows);
+
     } catch (error) {
       console.error('Error loading organization workflows:', error);
       // Set empty arrays on error to prevent repeated failed requests
@@ -630,6 +700,18 @@ export const WorkflowProvider = ({ children }) => {
   }, [organization?.id, userProfile?.id]);
 
 
+  // Clear template from cache (for debugging)
+  const clearTemplateCache = useCallback((templateId) => {
+    workflowCacheService.clearTemplate(templateId);
+    console.log(`✅ Cleared cache for template: ${templateId}`);
+  }, []);
+
+  // Clear all workflow caches (for debugging)
+  const clearAllCaches = useCallback(() => {
+    workflowCacheService.clearAllWorkflowCaches();
+    console.log('✅ Cleared all workflow caches');
+  }, []);
+
   const value = {
     // Data
     userWorkflows,
@@ -638,7 +720,7 @@ export const WorkflowProvider = ({ children }) => {
     teamMembers,
     sessionData,
     loading,
-    
+
     // Functions
     refreshWorkflows,
     refreshSingleWorkflow,
@@ -647,10 +729,14 @@ export const WorkflowProvider = ({ children }) => {
     getWorkflowWithTemplate,
     getUserPendingTasks,
     getWorkflowStats,
-    
+
     // Helper functions
     loadUserWorkflows,
-    loadOrganizationWorkflows
+    loadOrganizationWorkflows,
+
+    // Debug functions
+    clearTemplateCache,
+    clearAllCaches
   };
 
   return (

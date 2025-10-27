@@ -44,10 +44,84 @@ const WorkflowOverview = () => {
     getWorkflowWithTemplate,
     loading,
     refreshWorkflows,
-    refreshSingleWorkflow
+    refreshSingleWorkflow,
+    clearTemplateCache,
+    clearAllCaches
   } = useWorkflow();
-  
+
   const { userProfile, organization } = useAuth();
+
+  // Expose debug functions to window for console access
+  useEffect(() => {
+    window.workflowDebug = {
+      clearTemplateCache: (templateId) => {
+        clearTemplateCache(templateId);
+        refreshWorkflows();
+      },
+      clearAllCaches: () => {
+        clearAllCaches();
+        refreshWorkflows();
+      },
+      getTemplates: () => {
+        console.log('Current workflow templates:', workflowTemplates);
+        return workflowTemplates;
+      },
+      getOrphanedWorkflows: () => {
+        const orphaned = [...userWorkflows, ...organizationWorkflows].filter(
+          wf => !workflowTemplates[wf.templateId]
+        );
+        console.log('Orphaned workflows:', orphaned);
+        return orphaned;
+      },
+      fetchTemplate: async (templateId) => {
+        console.log(`🔍 Attempting to fetch template: ${templateId}`);
+        try {
+          const { getWorkflowTemplate } = await import('../../../firebase/firestore');
+          const template = await getWorkflowTemplate(templateId);
+          console.log('✅ Template fetched successfully:', template);
+          return template;
+        } catch (error) {
+          console.error('❌ Error fetching template:', error);
+          return null;
+        }
+      },
+      checkTemplatePermissions: async (templateId) => {
+        console.log(`🔒 Checking permissions for template: ${templateId}`);
+        console.log('Current organization:', organization);
+        console.log('Current user:', userProfile);
+        try {
+          const { getWorkflowTemplate } = await import('../../../firebase/firestore');
+          const template = await getWorkflowTemplate(templateId);
+          if (template) {
+            console.log('✅ Template accessible:', {
+              id: template.id,
+              name: template.name,
+              organizationID: template.organizationID,
+              isActive: template.isActive
+            });
+          } else {
+            console.warn('⚠️ Template returned null - may not exist or permission denied');
+          }
+          return template;
+        } catch (error) {
+          console.error('❌ Permission error:', error.code, error.message);
+          return null;
+        }
+      }
+    };
+
+    console.log('🔧 Workflow debug functions available via window.workflowDebug');
+    console.log('  - clearTemplateCache(templateId): Clear cache for specific template');
+    console.log('  - clearAllCaches(): Clear all workflow caches');
+    console.log('  - getTemplates(): View current loaded templates');
+    console.log('  - getOrphanedWorkflows(): Find workflows with missing templates');
+    console.log('  - fetchTemplate(templateId): Try to fetch a template directly');
+    console.log('  - checkTemplatePermissions(templateId): Check if template is accessible');
+
+    return () => {
+      delete window.workflowDebug;
+    };
+  }, [clearTemplateCache, clearAllCaches, workflowTemplates, userWorkflows, organizationWorkflows, refreshWorkflows, organization, userProfile]);
 
   // Define available views
   const views = [

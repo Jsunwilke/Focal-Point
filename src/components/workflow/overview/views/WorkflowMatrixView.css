@@ -5,6 +5,7 @@
   flex-direction: column;
   height: 100%;
   background: white;
+  touch-action: pan-x pan-y;
 }
 
 /* Tabs */
@@ -63,14 +64,48 @@
 /* Grid Container */
 .workflow-matrix__grid-container {
   flex: 1;
-  overflow: auto;
-  padding: 16px;
+  max-height: calc(100vh - 250px);
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
+  padding: 0 16px 16px 0;
+  position: relative;
+  /* Force visible scrollbars for trackpad gesture recognition */
+  scrollbar-width: thin;
+  /* Enable all touch/trackpad gestures */
+  touch-action: pan-x pan-y pinch-zoom;
+  /* Ensure container is recognized as scrollable */
+  will-change: scroll-position;
+}
+
+/* Force horizontal scrollbar to always be visible */
+.workflow-matrix__grid-container::-webkit-scrollbar {
+  height: 12px;
+  -webkit-appearance: none;
+}
+
+.workflow-matrix__grid-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 6px;
+}
+
+.workflow-matrix__grid-container::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 6px;
+}
+
+.workflow-matrix__grid-container::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
 .workflow-matrix__grid {
-  width: auto;
+  width: max-content;
   border-collapse: collapse;
-  border: 1px solid #e5e7eb;
+  border-left: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
   border-radius: 8px;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
 }
@@ -82,6 +117,7 @@
   top: 0;
   z-index: 10;
   border-bottom: 2px solid #e5e7eb;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .workflow-matrix__header-cell {
@@ -124,15 +160,32 @@
   opacity: 0.5;
 }
 
-.workflow-matrix__header-cell--job {
+.workflow-matrix__header-cell--school {
   position: sticky;
-  left: 0;
+  left: -1px;
   background: white;
-  z-index: 11;
+  z-index: 20;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+  padding-left: 8px;
 }
 
-.workflow-matrix__header-cell--school {
-  /* Width controlled by state */
+.workflow-matrix__header-cell--date {
+  position: sticky;
+  /* left position controlled by inline style */
+  background: white;
+  z-index: 20;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+.workflow-matrix__header-cell--date::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 2px;
+  background-color: #cbd5e1;
+  pointer-events: none;
 }
 
 .workflow-matrix__header-cell--progress {
@@ -141,6 +194,7 @@
 
 .workflow-matrix__header-cell--task {
   /* Width controlled by state */
+  border-right: 1px solid #e5e7eb;
 }
 
 /* Body Rows */
@@ -148,17 +202,7 @@
   border-bottom: 1px solid #e5e7eb;
 }
 
-.workflow-matrix__row:nth-child(odd) {
-  background: white;
-}
-
-.workflow-matrix__row:nth-child(even) {
-  background: #f9fafb;
-}
-
-.workflow-matrix__row:hover {
-  background: #f3f4f6;
-}
+/* Row colors now handled by inline styles with template colors */
 
 .workflow-matrix__cell {
   padding: 8px;
@@ -166,16 +210,46 @@
   color: #111827;
 }
 
-.workflow-matrix__cell--job {
+.workflow-matrix__cell--school {
   font-weight: 500;
   position: sticky;
-  left: 0;
-  background: inherit;
+  left: -1px;
   z-index: 5;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+  padding-left: 8px;
+  /* Background color handled by inline styles with template colors */
 }
 
-.workflow-matrix__cell--school {
-  color: #374151;
+.workflow-matrix__cell--clickable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.workflow-matrix__cell--clickable:hover {
+  background: #dbeafe !important; /* bg-blue-100 */
+  color: #1e40af; /* text-blue-700 */
+  font-weight: 500;
+}
+
+.workflow-matrix__cell--date {
+  position: sticky;
+  /* left position controlled by inline style */
+  z-index: 5;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+  font-size: 12px;
+  /* Background color handled by inline styles with template colors */
+}
+
+.workflow-matrix__cell--date::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 2px;
+  background-color: #cbd5e1;
+  pointer-events: none;
 }
 
 .workflow-matrix__cell--progress {
@@ -185,15 +259,16 @@
 /* Task Cells */
 .workflow-matrix__cell--task {
   vertical-align: top;
+  border-right: 1px solid #e5e7eb;
 }
 
 .workflow-matrix__cell--completed {
   background-color: #bfdbfe !important; /* bg-blue-200 */
-  color: #1e3a8a; /* text-blue-900 */
+  color: #1e3a8a !important; /* text-blue-900 */
 }
 
 .workflow-matrix__cell--current {
-  background-color: #dbeafe !important; /* bg-blue-100 */
+  /* Light template color applied via inline styles */
 }
 
 .workflow-matrix__cell-content {

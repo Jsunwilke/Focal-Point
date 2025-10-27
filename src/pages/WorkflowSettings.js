@@ -17,7 +17,8 @@ import { useToast } from '../contexts/ToastContext';
 import {
   getWorkflowTemplatesForOrganization,
   deleteWorkflowTemplate,
-  updateWorkflowTemplate
+  updateWorkflowTemplate,
+  backfillWorkflowSchoolData
 } from '../firebase/firestore';
 import { getWorkflowGroups } from '../utils/workflowTemplates';
 import WorkflowTemplateBuilder from '../components/workflow/WorkflowTemplateBuilder';
@@ -36,6 +37,8 @@ const WorkflowSettings = () => {
   const [loading, setLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState(null);
+  const [migrationRunning, setMigrationRunning] = useState(false);
+  const [migrationResult, setMigrationResult] = useState(null);
 
   const navigate = useNavigate();
   const { userProfile, organization } = useAuth();
@@ -186,6 +189,41 @@ const WorkflowSettings = () => {
 
     setWorkflowGroups(getWorkflowGroups());
     showToast('Groups Reset', 'Workflow groups have been reset to defaults', 'success');
+  };
+
+  // Migration: Backfill school data to existing workflows
+  const handleMigrateWorkflowSchoolData = async () => {
+    if (!organization?.id) {
+      showToast('Error', 'No organization found', 'error');
+      return;
+    }
+
+    if (!window.confirm('This will update all workflows without school data. Continue?')) {
+      return;
+    }
+
+    setMigrationRunning(true);
+    setMigrationResult(null);
+
+    try {
+      const result = await backfillWorkflowSchoolData(organization.id);
+      setMigrationResult(result);
+
+      if (result.success) {
+        showToast(
+          'Migration Complete',
+          `Updated ${result.updated} workflows, skipped ${result.skipped}`,
+          result.failed > 0 ? 'warning' : 'success'
+        );
+      } else {
+        showToast('Migration Failed', 'See console for details', 'error');
+      }
+    } catch (error) {
+      console.error('[handleMigrateWorkflowSchoolData] Error:', error);
+      showToast('Migration Error', error.message, 'error');
+    } finally {
+      setMigrationRunning(false);
+    }
   };
 
   return (
@@ -400,15 +438,49 @@ const WorkflowSettings = () => {
           {activeTab === 'settings' && (
             <div className="general-settings-section">
               <h3 className="section-title">Workflow Settings</h3>
-              
+
               <div className="settings-content">
-                <p>Additional workflow settings will be available here in future updates.</p>
-                <ul>
-                  <li>Default workflow assignments</li>
-                  <li>Notification preferences</li>
-                  <li>Workflow automation rules</li>
-                  <li>Integration settings</li>
-                </ul>
+                {/* Data Migration Tools */}
+                <div className="settings-card">
+                  <h4>Data Migration</h4>
+                  <p>Backfill school names and shoot dates to existing workflows that are missing this data.</p>
+
+                  <button
+                    onClick={handleMigrateWorkflowSchoolData}
+                    disabled={migrationRunning}
+                    className="secondary-button"
+                    style={{ marginTop: '12px' }}
+                  >
+                    {migrationRunning ? 'Migrating...' : 'Migrate Workflow Metadata'}
+                  </button>
+
+                  {migrationResult && (
+                    <div style={{
+                      marginTop: '12px',
+                      padding: '12px',
+                      background: migrationResult.failed > 0 ? '#fef3c7' : '#d1fae5',
+                      borderRadius: '6px',
+                      fontSize: '13px'
+                    }}>
+                      <div><strong>Migration Results:</strong></div>
+                      <div>✅ Updated: {migrationResult.updated} workflows</div>
+                      <div>⏭️ Skipped: {migrationResult.skipped} workflows</div>
+                      {migrationResult.failed > 0 && (
+                        <div style={{ color: '#dc2626' }}>❌ Failed: {migrationResult.failed} workflows</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ marginTop: '24px', color: '#6b7280', fontSize: '14px' }}>
+                  <p>Additional workflow settings will be available here in future updates.</p>
+                  <ul>
+                    <li>Default workflow assignments</li>
+                    <li>Notification preferences</li>
+                    <li>Workflow automation rules</li>
+                    <li>Integration settings</li>
+                  </ul>
+                </div>
               </div>
             </div>
           )}

@@ -1,0 +1,240 @@
+/* Shoot Details Modal Styles */
+
+.shoot-details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.shoot-details-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.shoot-details-close {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.shoot-details-close:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.shoot-details-content {
+  padding: 24px;
+}
+
+.shoot-details-section {
+  margin-bottom: 32px;
+}
+
+.shoot-details-section:last-child {
+  margin-bottom: 0;
+}
+
+.shoot-details-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 16px 0;
+}
+
+.shoot-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.shoot-details-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.shoot-details-item svg {
+  color: #6b7280;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.shoot-details-item label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.shoot-details-item p {
+  margin: 0;
+  font-size: 14px;
+  color: #111827;
+}
+
+/* Progress Bar */
+.shoot-details-progress-bar {
+  height: 8px;
+  background-color: #e5e7eb;
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.shoot-details-progress-fill {
+  height: 100%;
+  background-color: #1e40af;
+  transition: width 0.3s ease;
+}
+
+/* Workflow Steps */
+.shoot-details-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shoot-details-step {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+}
+
+.shoot-details-step.completed {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.shoot-details-step.in-progress {
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+
+.shoot-details-step-icon {
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.shoot-details-step.completed .shoot-details-step-icon {
+  color: #1e40af;
+}
+
+.shoot-details-step.in-progress .shoot-details-step-icon {
+  color: #d97706;
+}
+
+.shoot-details-step-info {
+  flex: 1;
+}
+
+.shoot-details-step-info h4 {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.shoot-details-step-assignee,
+.shoot-details-step-completed {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Daily Reports */
+.shoot-details-loading,
+.shoot-details-empty {
+  text-align: center;
+  padding: 32px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.shoot-details-reports {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.shoot-details-report {
+  padding: 16px;
+  border-radius: 6px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+}
+
+.shoot-details-report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.shoot-details-report-date {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.shoot-details-report-author {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.shoot-details-report-notes,
+.shoot-details-report-school {
+  margin-top: 8px;
+}
+
+.shoot-details-report-notes label,
+.shoot-details-report-school label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.shoot-details-report-notes p,
+.shoot-details-report-school p {
+  margin: 0;
+  font-size: 14px;
+  color: #111827;
+  white-space: pre-wrap;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .shoot-details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .shoot-details-header {
+    padding: 16px;
+  }
+
+  .shoot-details-content {
+    padding: 16px;
+  }
+}

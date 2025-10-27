@@ -16,7 +16,7 @@ import Button from "../shared/Button";
 import "../shared/Modal.css";
 import "./CreateReportModal.css";
 
-const CreateReportModal = ({ onClose, onReportCreated }) => {
+const CreateReportModal = ({ onClose, onReportCreated, sessionId = null }) => {
   const { userProfile, organization } = useAuth();
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -29,6 +29,7 @@ const CreateReportModal = ({ onClose, onReportCreated }) => {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     photographer: userProfile?.firstName || "",
+    sessionId: sessionId, // Optional session ID for linking to workflows
   });
 
   useEffect(() => {
@@ -122,6 +123,7 @@ const CreateReportModal = ({ onClose, onReportCreated }) => {
       photographer: userProfile?.firstName || "",
       templateId: template.id,
       templateName: template.name,
+      sessionId: formData.sessionId, // Preserve sessionId when switching templates
     };
 
     // Initialize all form fields based on template
