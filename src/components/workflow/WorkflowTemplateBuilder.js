@@ -43,7 +43,9 @@ const WorkflowTemplateBuilder = ({
   onClose,
   organizationID,
   onTemplateCreated,
-  editTemplate = null // If provided, we're editing an existing template
+  editTemplate = null, // If provided, we're editing an existing template
+  refreshWorkflows = null, // Function to refresh workflows in parent context
+  reloadTemplates = null // Function to clear in-memory template state
 }) => {
   const { organization } = useAuth();
   const { showToast } = useToast();
@@ -70,6 +72,8 @@ const WorkflowTemplateBuilder = ({
   const [showImportModal, setShowImportModal] = useState(false);
   const [importJSON, setImportJSON] = useState('');
   const [importErrors, setImportErrors] = useState([]);
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [editingGroup, setEditingGroup] = useState(null);
 
   // Get available options
   const stepTypes = getStepTypes();
@@ -226,12 +230,94 @@ const WorkflowTemplateBuilder = ({
       const fields = [...prev.customFormFields];
       const index = fields.findIndex(field => field.id === fieldId);
       const newIndex = direction === 'up' ? index - 1 : index + 1;
-      
+
       if (newIndex >= 0 && newIndex < fields.length) {
         [fields[index], fields[newIndex]] = [fields[newIndex], fields[index]];
       }
-      
+
       return { ...prev, customFormFields: fields };
+    });
+  };
+
+  // Group management
+  const handleAddGroup = () => {
+    const newGroup = {
+      id: `custom_group_${Date.now()}`,
+      name: '',
+      description: '',
+      color: '#6b7280', // Default gray color
+      order: formData.groups.length + 1
+    };
+    setEditingGroup(newGroup);
+    setShowGroupModal(true);
+  };
+
+  const handleEditGroup = (group) => {
+    setEditingGroup({ ...group });
+    setShowGroupModal(true);
+  };
+
+  const handleSaveGroup = (groupData) => {
+    // Validate group data
+    if (!groupData.name.trim()) {
+      showToast('Validation Error', 'Group name is required', 'error');
+      return;
+    }
+
+    setFormData(prev => {
+      const existingIndex = prev.groups.findIndex(g => g.id === groupData.id);
+      let updatedGroups;
+
+      if (existingIndex >= 0) {
+        // Update existing group
+        updatedGroups = prev.groups.map(g => g.id === groupData.id ? groupData : g);
+      } else {
+        // Add new group
+        updatedGroups = [...prev.groups, groupData];
+      }
+
+      return { ...prev, groups: updatedGroups };
+    });
+
+    setShowGroupModal(false);
+    setEditingGroup(null);
+    showToast('Success', 'Group saved successfully', 'success');
+  };
+
+  const handleDeleteGroup = (groupId) => {
+    // Check if any steps use this group
+    const stepsUsingGroup = formData.steps.filter(s => s.group === groupId);
+
+    if (stepsUsingGroup.length > 0) {
+      showToast(
+        'Cannot Delete Group',
+        `This group is used by ${stepsUsingGroup.length} step${stepsUsingGroup.length !== 1 ? 's' : ''}. Please reassign or delete those steps first.`,
+        'error'
+      );
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      groups: prev.groups.filter(g => g.id !== groupId)
+    }));
+
+    showToast('Success', 'Group deleted successfully', 'success');
+  };
+
+  const handleMoveGroup = (groupId, direction) => {
+    setFormData(prev => {
+      const groups = [...prev.groups];
+      const index = groups.findIndex(g => g.id === groupId);
+      const newIndex = direction === 'up' ? index - 1 : index + 1;
+
+      if (newIndex >= 0 && newIndex < groups.length) {
+        [groups[index], groups[newIndex]] = [groups[newIndex], groups[index]];
+        // Update order values
+        groups.forEach((g, i) => g.order = i + 1);
+      }
+
+      return { ...prev, groups };
     });
   };
 
@@ -492,14 +578,27 @@ const WorkflowTemplateBuilder = ({
         await updateWorkflowTemplate(editTemplate.id, templateData);
         templateId = editTemplate.id;
 
-        // Clear template from cache so next load gets fresh data
+        // Clear all template caches to ensure fresh data loads
         workflowCacheService.clearTemplate(templateId);
+        workflowCacheService.clearWorkflowCaches(organizationID);
 
-        showToast('Success', 'Template updated! Refresh your browser (F5) to see changes in existing workflows.', 'success');
+        showToast('Success', 'Template updated successfully!', 'success');
       } else {
         // Create new template
         templateId = await createWorkflowTemplate(templateData);
+
+        // Clear organization templates cache so new template appears immediately
+        workflowCacheService.clearWorkflowCaches(organizationID);
+
         showToast('Success', 'Workflow template created successfully', 'success');
+      }
+
+      // Clear in-memory template state and refresh workflows to immediately update UI
+      if (reloadTemplates) {
+        reloadTemplates();
+      }
+      if (refreshWorkflows) {
+        await refreshWorkflows();
       }
 
       onTemplateCreated?.(templateId);
@@ -950,6 +1049,161 @@ const WorkflowTemplateBuilder = ({
                 )}
               </div>
             )}
+
+            {/* Workflow Groups Editor */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '1rem'
+              }}>
+                <div>
+                  <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
+                    Workflow Groups ({formData.groups.length})
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#6b7280' }}>
+                    Define workflow stages with custom colors for the matrix view
+                  </p>
+                </div>
+                <button
+                  onClick={handleAddGroup}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: '#10b981',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    cursor: 'pointer',
+                    fontSize: '0.75rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                  }}
+                >
+                  <Plus size={14} />
+                  Add Group
+                </button>
+              </div>
+
+              {formData.groups.length === 0 ? (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '2rem',
+                  backgroundColor: '#f9fafb',
+                  borderRadius: '0.375rem',
+                  border: '1px dashed #d1d5db'
+                }}>
+                  <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
+                    No workflow groups defined
+                  </p>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#9ca3af' }}>
+                    Add groups to organize your workflow steps
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {formData.groups.map((group, index) => (
+                    <div
+                      key={group.id}
+                      style={{
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        padding: '1rem',
+                        backgroundColor: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '1rem'
+                      }}
+                    >
+                      {/* Color Preview */}
+                      <div
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '6px',
+                          backgroundColor: group.color,
+                          flexShrink: 0,
+                          border: '2px solid #e5e7eb'
+                        }}
+                      />
+
+                      {/* Group Info */}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                          <h5 style={{ margin: 0, fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
+                            {group.name || 'Untitled Group'}
+                          </h5>
+                        </div>
+                        {group.description && (
+                          <p style={{ margin: 0, fontSize: '0.75rem', color: '#6b7280' }}>
+                            {group.description}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <button
+                          onClick={() => handleMoveGroup(group.id, 'up')}
+                          disabled={index === 0}
+                          style={{
+                            padding: '0.25rem',
+                            border: '1px solid #d1d5db',
+                            backgroundColor: 'white',
+                            borderRadius: '0.25rem',
+                            cursor: index === 0 ? 'not-allowed' : 'pointer',
+                            opacity: index === 0 ? 0.5 : 1
+                          }}
+                        >
+                          <ArrowUp size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleMoveGroup(group.id, 'down')}
+                          disabled={index === formData.groups.length - 1}
+                          style={{
+                            padding: '0.25rem',
+                            border: '1px solid #d1d5db',
+                            backgroundColor: 'white',
+                            borderRadius: '0.25rem',
+                            cursor: index === formData.groups.length - 1 ? 'not-allowed' : 'pointer',
+                            opacity: index === formData.groups.length - 1 ? 0.5 : 1
+                          }}
+                        >
+                          <ArrowDown size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleEditGroup(group)}
+                          style={{
+                            padding: '0.25rem',
+                            border: '1px solid #3b82f6',
+                            backgroundColor: 'white',
+                            color: '#3b82f6',
+                            borderRadius: '0.25rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Settings size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteGroup(group.id)}
+                          style={{
+                            padding: '0.25rem',
+                            border: '1px solid #ef4444',
+                            backgroundColor: 'white',
+                            color: '#ef4444',
+                            borderRadius: '0.25rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Right Panel - Steps */}
@@ -1443,6 +1697,247 @@ const WorkflowTemplateBuilder = ({
               >
                 <Upload size={16} />
                 Import Template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Group Editor Modal */}
+      {showGroupModal && editingGroup && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10002,
+          padding: '1rem'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '0.5rem',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+            maxWidth: '500px',
+            width: '100%',
+            maxHeight: '80vh',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '1.5rem',
+              borderBottom: '1px solid #e5e7eb',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600' }}>
+                {formData.groups.find(g => g.id === editingGroup.id) ? 'Edit Group' : 'Add Group'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowGroupModal(false);
+                  setEditingGroup(null);
+                }}
+                style={{
+                  padding: '0.5rem',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  borderRadius: '0.375rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: '#6b7280'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '1.5rem', flex: 1, overflow: 'auto' }}>
+              {/* Group Name */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  marginBottom: '0.5rem',
+                  color: '#374151'
+                }}>
+                  Group Name *
+                </label>
+                <input
+                  type="text"
+                  value={editingGroup.name}
+                  onChange={(e) => setEditingGroup(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g., Pre-Shoot, Editing, Production"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '0.375rem',
+                    fontSize: '0.875rem'
+                  }}
+                />
+              </div>
+
+              {/* Group Description */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  marginBottom: '0.5rem',
+                  color: '#374151'
+                }}>
+                  Description
+                </label>
+                <textarea
+                  value={editingGroup.description}
+                  onChange={(e) => setEditingGroup(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Describe this workflow stage..."
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '0.375rem',
+                    fontSize: '0.875rem',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+
+              {/* Group Color */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  marginBottom: '0.5rem',
+                  color: '#374151'
+                }}>
+                  Color *
+                </label>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                  {/* Color Preview */}
+                  <div
+                    style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: '8px',
+                      backgroundColor: editingGroup.color,
+                      border: '2px solid #e5e7eb',
+                      flexShrink: 0
+                    }}
+                  />
+
+                  {/* Color Picker */}
+                  <div style={{ flex: 1 }}>
+                    <input
+                      type="color"
+                      value={editingGroup.color}
+                      onChange={(e) => setEditingGroup(prev => ({ ...prev, color: e.target.value }))}
+                      style={{
+                        width: '100%',
+                        height: '40px',
+                        padding: '0.25rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '0.375rem',
+                        cursor: 'pointer'
+                      }}
+                    />
+                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
+                      This color will appear in the matrix view for all steps in this group
+                    </p>
+                  </div>
+                </div>
+
+                {/* Preset Colors */}
+                <div style={{ marginTop: '1rem' }}>
+                  <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.75rem', fontWeight: '500', color: '#6b7280' }}>
+                    Quick colors:
+                  </p>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {[
+                      { name: 'Blue', color: '#3b82f6' },
+                      { name: 'Green', color: '#10b981' },
+                      { name: 'Amber', color: '#f59e0b' },
+                      { name: 'Purple', color: '#8b5cf6' },
+                      { name: 'Red', color: '#ef4444' },
+                      { name: 'Pink', color: '#ec4899' },
+                      { name: 'Indigo', color: '#6366f1' },
+                      { name: 'Teal', color: '#14b8a6' }
+                    ].map(preset => (
+                      <button
+                        key={preset.color}
+                        onClick={() => setEditingGroup(prev => ({ ...prev, color: preset.color }))}
+                        title={preset.name}
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '6px',
+                          backgroundColor: preset.color,
+                          border: editingGroup.color === preset.color ? '3px solid #1e40af' : '2px solid #e5e7eb',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '1.5rem',
+              borderTop: '1px solid #e5e7eb',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '0.75rem'
+            }}>
+              <button
+                onClick={() => {
+                  setShowGroupModal(false);
+                  setEditingGroup(null);
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: 'white',
+                  color: '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleSaveGroup(editingGroup)}
+                disabled={!editingGroup.name.trim()}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: !editingGroup.name.trim() ? '#9ca3af' : '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  cursor: !editingGroup.name.trim() ? 'not-allowed' : 'pointer',
+                  fontSize: '0.875rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                <Save size={16} />
+                Save Group
               </button>
             </div>
           </div>

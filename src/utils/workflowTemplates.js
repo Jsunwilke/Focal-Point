@@ -1300,3 +1300,30 @@ export const getOrganizationTrackingTemplates = async (organizationID, getWorkfl
     return [];
   }
 };
+
+// Get color for a step based on its group
+export const getStepGroupColor = (step, templateGroups = []) => {
+  if (!step || !step.group) {
+    return '#6b7280'; // Default gray if no group specified
+  }
+
+  // Try to find group in template-specific groups first
+  const templateGroup = templateGroups.find(g => g.id === step.group);
+  if (templateGroup && templateGroup.color) {
+    return templateGroup.color;
+  }
+
+  // Fallback to default WORKFLOW_GROUPS
+  const defaultGroup = WORKFLOW_GROUPS.find(g => g.id === step.group);
+  if (defaultGroup && defaultGroup.color) {
+    return defaultGroup.color;
+  }
+
+  // Final fallback to gray
+  return '#6b7280';
+};
+
+// Get all colors for steps in a template (for matrix view headers)
+export const getStepColors = (steps, templateGroups = []) => {
+  return steps.map(step => getStepGroupColor(step, templateGroups));
+};

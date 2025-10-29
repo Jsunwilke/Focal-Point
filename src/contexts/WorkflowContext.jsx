@@ -712,6 +712,14 @@ export const WorkflowProvider = ({ children }) => {
     console.log('✅ Cleared all workflow caches');
   }, []);
 
+  // Force reload templates by clearing in-memory state
+  const reloadTemplates = useCallback(() => {
+    // Clear in-memory template state
+    setWorkflowTemplates({});
+    workflowTemplatesRef.current = {};
+    console.log('✅ Cleared in-memory template state, will reload on next workflow load');
+  }, []);
+
   const value = {
     // Data
     userWorkflows,
@@ -736,7 +744,8 @@ export const WorkflowProvider = ({ children }) => {
 
     // Debug functions
     clearTemplateCache,
-    clearAllCaches
+    clearAllCaches,
+    reloadTemplates
   };
 
   return (

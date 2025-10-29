@@ -13,6 +13,7 @@ import {
   getStepTypes 
 } from '../../utils/workflowTemplates';
 import { useToast } from '../../contexts/ToastContext';
+import { useWorkflow } from '../../contexts/WorkflowContext';
 import WorkflowTemplateBuilder from './WorkflowTemplateBuilder';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
 
@@ -32,6 +33,7 @@ const WorkflowTemplateGallery = ({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState(null);
   const { showToast } = useToast();
+  const { refreshWorkflows, reloadTemplates } = useWorkflow();
 
   useEffect(() => {
     const loadCustomTemplates = async () => {
@@ -712,6 +714,8 @@ const WorkflowTemplateGallery = ({
           isOpen={showTemplateBuilder}
           onClose={() => setShowTemplateBuilder(false)}
           organizationID={organizationID}
+          refreshWorkflows={refreshWorkflows}
+          reloadTemplates={reloadTemplates}
           onTemplateCreated={(templateId) => {
             setShowTemplateBuilder(false);
             // Reload custom templates

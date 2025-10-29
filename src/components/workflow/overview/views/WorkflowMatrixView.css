@@ -1,9 +1,10 @@
-/* Workflow Matrix View Styles */
+/* Workflow Matrix View Styles - FLEXBOX TEST */
 
 .workflow-matrix {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1; /* Fill parent container */
+  min-height: 0; /* Critical for flex overflow */
   background: white;
   touch-action: pan-x pan-y;
 }
@@ -12,20 +13,25 @@
 .workflow-matrix__tabs {
   display: flex;
   gap: 8px;
-  padding: 16px 16px 0 16px;
+  padding: 8px 12px 0 12px;
   border-bottom: 1px solid #e5e7eb;
 }
 
 .workflow-matrix__tab {
-  padding: 8px 16px;
-  font-size: 14px;
+  padding: 5px 12px;
+  font-size: 13px;
   font-weight: 500;
   color: #6b7280;
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  cursor: pointer;
-  transition: all 0.2s;
+  cursor: grab;
+  transition: background-color 0.2s, color 0.2s;
+  user-select: none;
+}
+
+.workflow-matrix__tab:active {
+  cursor: grabbing;
 }
 
 .workflow-matrix__tab:hover {
@@ -41,18 +47,18 @@
 
 /* Controls */
 .workflow-matrix__controls {
-  padding: 12px 16px;
+  padding: 6px 12px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   border-bottom: 1px solid #e5e7eb;
 }
 
 .workflow-matrix__checkbox {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: 6px;
+  font-size: 13px;
   color: #374151;
   cursor: pointer;
 }
@@ -61,23 +67,13 @@
   cursor: pointer;
 }
 
-/* Grid Container */
+/* Grid Container - FLEXBOX TEST */
 .workflow-matrix__grid-container {
-  flex: 1;
-  max-height: calc(100vh - 250px);
-  overflow-x: auto;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-  overscroll-behavior-y: auto;
+  flex: 1; /* Fill remaining space dynamically */
+  min-height: 0; /* Critical for flex overflow */
+  overflow: hidden; /* Let react-data-grid handle scrolling */
   padding: 0;
   position: relative;
-  /* Force visible scrollbars for trackpad gesture recognition */
-  scrollbar-width: thin;
-  /* Enable all touch/trackpad gestures */
-  touch-action: pan-x pan-y pinch-zoom;
-  /* Ensure container is recognized as scrollable */
-  will-change: scroll-position;
 }
 
 /* Force horizontal scrollbar to always be visible */
@@ -385,12 +381,12 @@
   position: relative;
   width: 96px;
   user-select: none;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .micro-meter-button {
   width: 100%;
-  font-size: 10px;
+  font-size: 12px;
   border: 1px solid #d1d5db;
   border-radius: 4px;
   overflow: hidden;
@@ -404,7 +400,7 @@
 }
 
 .micro-meter-bar {
-  height: 12px;
+  height: 8px;
   background-color: #f4f4f5;
   position: relative;
 }
@@ -416,10 +412,11 @@
 }
 
 .micro-meter-text {
-  padding: 2px 0;
+  padding: 1px 0;
   color: #1e3a8a;
   background-color: #eff6ff;
   font-weight: 500;
+  font-size: 12px;
 }
 
 /* Hover tooltip */
@@ -484,15 +481,17 @@
   color: #9ca3af;
 }
 
-/* Inline checklist */
+/* Checklist - rendered as portal with fixed positioning */
 .micro-meter-checklist {
-  margin-top: 8px;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   background-color: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
   padding: 8px;
   font-size: 11px;
+  min-width: 200px;
+  max-width: 280px;
+  transition: top 0.15s ease-out, left 0.15s ease-out;
 }
 
 .micro-meter-checklist-item {

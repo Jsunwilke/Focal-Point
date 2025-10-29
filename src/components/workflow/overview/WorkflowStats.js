@@ -79,11 +79,11 @@ const WorkflowStats = ({ workflows }) => {
         const Icon = stat.icon;
         return (
           <div key={index} className="stat-card">
-            <div 
-              className="stat-icon" 
+            <div
+              className="stat-icon"
               style={{ backgroundColor: stat.color + '20', color: stat.color }}
             >
-              <Icon size={20} />
+              <Icon size={12} />
             </div>
             <div className="stat-content">
               <div className="stat-value">{stat.value}</div>

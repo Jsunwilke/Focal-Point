@@ -1,30 +1,15 @@
 // src/components/workflow/overview/WorkflowOverview.js
 import React, { useState, useEffect } from 'react';
-import {
-  LayoutGrid,
-  Calendar,
-  LayoutList,
-  Grid3x3,
-  Layers,
-  Settings
-} from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useWorkflow } from '../../../contexts/WorkflowContext';
 import { useAuth } from '../../../contexts/AuthContext';
-import WorkflowViewSwitcher from './WorkflowViewSwitcher';
 import WorkflowFilters from './WorkflowFilters';
 import WorkflowStats from './WorkflowStats';
-import WorkflowKanbanView from './views/WorkflowKanbanView';
-import WorkflowTimelineView from './views/WorkflowTimelineView';
-import WorkflowCardView from './views/WorkflowCardView';
 import WorkflowMatrixView from './views/WorkflowMatrixView';
-import WorkflowListView from './views/WorkflowListView';
 import '../WorkflowOverview.css';
 
 const WorkflowOverview = () => {
-  const [currentView, setCurrentView] = useState(() =>
-    localStorage.getItem('workflowViewPreference') || 'matrix'
-  );
   const [filters, setFilters] = useState({
     status: 'all',
     school: 'all',
@@ -32,8 +17,6 @@ const WorkflowOverview = () => {
     dateRange: 'all',
     search: ''
   });
-  const [sortBy, setSortBy] = useState('date');
-  const [sortOrder, setSortOrder] = useState('desc');
   
   const navigate = useNavigate();
   const {
@@ -122,20 +105,6 @@ const WorkflowOverview = () => {
       delete window.workflowDebug;
     };
   }, [clearTemplateCache, clearAllCaches, workflowTemplates, userWorkflows, organizationWorkflows, refreshWorkflows, organization, userProfile]);
-
-  // Define available views
-  const views = [
-    { id: 'matrix', name: 'Matrix View', icon: Layers, description: 'Editable task tracking grid' },
-    { id: 'kanban', name: 'Kanban Board', icon: LayoutGrid, description: 'Drag and drop workflow steps' },
-    { id: 'timeline', name: 'Timeline', icon: Calendar, description: 'Gantt chart view of workflows' },
-    { id: 'cards', name: 'Card Grid', icon: Grid3x3, description: 'Compact card layout' },
-    { id: 'list', name: 'List View', icon: LayoutList, description: 'Detailed list with grouping' }
-  ];
-
-  // Save view preference
-  useEffect(() => {
-    localStorage.setItem('workflowViewPreference', currentView);
-  }, [currentView]);
 
   // Get workflows based on user role
   const workflows = userProfile?.role === 'admin' 
@@ -236,54 +205,6 @@ const WorkflowOverview = () => {
     return true;
   });
 
-  // Sort workflows
-  const sortedWorkflows = [...filteredWorkflows].sort((a, b) => {
-    let compareValue = 0;
-    
-    switch (sortBy) {
-      case 'date':
-        let dateA, dateB;
-        if (a.workflowType === 'tracking') {
-          dateA = a.trackingStartDate || a.createdAt?.toDate()?.toISOString() || '';
-        } else {
-          dateA = sessionData[a.sessionId]?.date || '';
-        }
-        if (b.workflowType === 'tracking') {
-          dateB = b.trackingStartDate || b.createdAt?.toDate()?.toISOString() || '';
-        } else {
-          dateB = sessionData[b.sessionId]?.date || '';
-        }
-        compareValue = dateA.localeCompare(dateB);
-        break;
-      case 'school':
-        let schoolA, schoolB;
-        if (a.workflowType === 'tracking') {
-          schoolA = a.schoolName || '';
-        } else {
-          schoolA = sessionData[a.sessionId]?.schoolName || '';
-        }
-        if (b.workflowType === 'tracking') {
-          schoolB = b.schoolName || '';
-        } else {
-          schoolB = sessionData[b.sessionId]?.schoolName || '';
-        }
-        compareValue = schoolA.localeCompare(schoolB);
-        break;
-      case 'progress':
-        const progressA = calculateProgress(a);
-        const progressB = calculateProgress(b);
-        compareValue = progressA - progressB;
-        break;
-      case 'status':
-        compareValue = a.status.localeCompare(b.status);
-        break;
-      default:
-        compareValue = 0;
-    }
-    
-    return sortOrder === 'asc' ? compareValue : -compareValue;
-  });
-
   // Calculate workflow progress
   function calculateProgress(workflow) {
     const template = workflowTemplates[workflow.templateId];
@@ -296,33 +217,15 @@ const WorkflowOverview = () => {
     return (completedSteps / template.steps.length) * 100;
   }
 
-  // Prepare data for views
+  // Prepare data for matrix view
   const viewData = {
-    workflows: sortedWorkflows,
+    workflows: filteredWorkflows,
     sessionData,
     workflowTemplates,
     getWorkflowWithTemplate,
     calculateProgress,
     refreshWorkflows,
     refreshSingleWorkflow
-  };
-
-  // Render current view
-  const renderView = () => {
-    switch (currentView) {
-      case 'matrix':
-        return <WorkflowMatrixView {...viewData} />;
-      case 'kanban':
-        return <WorkflowKanbanView {...viewData} />;
-      case 'timeline':
-        return <WorkflowTimelineView {...viewData} />;
-      case 'cards':
-        return <WorkflowCardView {...viewData} />;
-      case 'list':
-        return <WorkflowListView {...viewData} />;
-      default:
-        return <WorkflowMatrixView {...viewData} />;
-    }
   };
 
   if (loading) {
@@ -336,63 +239,22 @@ const WorkflowOverview = () => {
 
   return (
     <div className="workflow-overview">
-      {/* Header */}
-      <div className="workflow-overview-header">
-        <div className="header-content">
-          <h1>Workflow Overview</h1>
-          <p>Manage and track all your photography workflows</p>
-        </div>
-        
-        <button 
-          onClick={refreshWorkflows}
-          className="refresh-button"
-          title="Refresh workflows"
-        >
-          Refresh
-        </button>
-      </div>
+      {/* Header - REMOVED FOR SPACE */}
+      {/* Title removed to maximize grid visibility */}
 
       {/* Stats Bar */}
-      <WorkflowStats workflows={sortedWorkflows} />
+      <WorkflowStats workflows={filteredWorkflows} />
 
       {/* Controls Bar */}
       <div className="workflow-controls">
-        <WorkflowFilters 
+        <WorkflowFilters
           filters={filters}
           onFiltersChange={setFilters}
           sessionData={sessionData}
           workflows={workflows}
         />
-        
+
         <div className="controls-right">
-          <div className="sort-controls">
-            <label>Sort by:</label>
-            <select 
-              value={sortBy} 
-              onChange={(e) => setSortBy(e.target.value)}
-              className="sort-select"
-            >
-              <option value="date">Date</option>
-              <option value="school">School</option>
-              <option value="progress">Progress</option>
-              <option value="status">Status</option>
-            </select>
-            
-            <button
-              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-              className="sort-order-button"
-              title={`Sort ${sortOrder === 'asc' ? 'descending' : 'ascending'}`}
-            >
-              {sortOrder === 'asc' ? '↑' : '↓'}
-            </button>
-          </div>
-          
-          <WorkflowViewSwitcher
-            views={views}
-            currentView={currentView}
-            onViewChange={setCurrentView}
-          />
-          
           {userProfile?.role === 'admin' && (
             <button
               onClick={() => navigate('/workflows/settings')}
@@ -402,12 +264,20 @@ const WorkflowOverview = () => {
               <Settings size={18} />
             </button>
           )}
+
+          <button
+            onClick={refreshWorkflows}
+            className="refresh-button"
+            title="Refresh workflows"
+          >
+            Refresh
+          </button>
         </div>
       </div>
 
       {/* View Content */}
       <div className="workflow-view-container">
-        {sortedWorkflows.length === 0 ? (
+        {filteredWorkflows.length === 0 ? (
           <div className="no-workflows">
             <p>No workflows found matching your filters.</p>
             <button onClick={() => setFilters({
@@ -421,7 +291,7 @@ const WorkflowOverview = () => {
             </button>
           </div>
         ) : (
-          renderView()
+          <WorkflowMatrixView {...viewData} />
         )}
       </div>
     </div>

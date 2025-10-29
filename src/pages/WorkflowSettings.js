@@ -14,6 +14,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { useWorkflow } from '../contexts/WorkflowContext';
 import {
   getWorkflowTemplatesForOrganization,
   deleteWorkflowTemplate,
@@ -43,6 +44,7 @@ const WorkflowSettings = () => {
   const navigate = useNavigate();
   const { userProfile, organization } = useAuth();
   const { showToast } = useToast();
+  const { refreshWorkflows, reloadTemplates } = useWorkflow();
 
   // Load custom templates
   const loadCustomTemplates = async () => {
@@ -498,6 +500,8 @@ const WorkflowSettings = () => {
           organizationID={organization?.id}
           editTemplate={editingTemplate}
           onTemplateCreated={handleTemplateCreated}
+          refreshWorkflows={refreshWorkflows}
+          reloadTemplates={reloadTemplates}
         />
       )}
 

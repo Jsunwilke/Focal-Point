@@ -1,14 +1,18 @@
 // src/components/workflow/overview/views/WorkflowMatrixView.js
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { Check, Clock, EyeOff, Eye } from 'lucide-react';
 import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { List } from 'react-window';
+import DataGrid from 'react-data-grid';
+import 'react-data-grid/lib/styles.css';
 import { firestore } from '../../../../firebase/config';
 import { updateWorkflowStep, getSchools } from '../../../../firebase/firestore';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { readCounter } from '../../../../services/readCounter';
+import { getStepGroupColor } from '../../../../utils/workflowTemplates';
 import ShootDetailsModal from '../../ShootDetailsModal';
 import './WorkflowMatrixView.css';
+import './WorkflowMatrixView-rdg.css';
 
 // Helper functions
 function nowISO() {
@@ -66,153 +70,6 @@ function getTemplateColors(templateName) {
 // Row height for virtual scrolling
 const ROW_HEIGHT = 90;
 
-// Virtual scrolling row component
-const VirtualRow = React.memo(({
-  ariaAttributes,
-  index,
-  style,
-  filteredWorkflows,
-  activeTemplate,
-  columnWidths,
-  taskColumnWidths,
-  showDates,
-  getWorkflowInfo,
-  getLastCompletedIndex,
-  calculateProgress,
-  handleInitialsChange,
-  handleDateChange,
-  handleMicroToggle,
-  handleSchoolClick,
-  toggleWorkflowHidden,
-  optimisticUpdates,
-  optimisticallyHidden
-}) => {
-  const workflow = filteredWorkflows[index];
-  const info = getWorkflowInfo(workflow);
-  const lastCompletedIdx = getLastCompletedIndex(workflow);
-  const progress = calculateProgress(workflow);
-  const colors = getTemplateColors(activeTemplate.name);
-
-  const isHidden = optimisticallyHidden.hasOwnProperty(workflow.id)
-    ? optimisticallyHidden[workflow.id]
-    : workflow.hidden;
-
-  return (
-    <div style={style}>
-      <div className="workflow-matrix__row">
-        <div
-          className="workflow-matrix__cell workflow-matrix__cell--school"
-          style={{ width: `${columnWidths.school}px`, backgroundColor: colors.light }}
-        >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleWorkflowHidden(workflow.id, isHidden);
-            }}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '2px',
-              display: 'flex',
-              alignItems: 'center',
-              color: isHidden ? '#ef4444' : '#6b7280',
-              opacity: 0.7,
-              transition: 'opacity 0.2s'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-            onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
-            title={isHidden ? 'Unhide workflow' : 'Hide workflow'}
-          >
-            {isHidden ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
-          <span
-            className="workflow-matrix__cell--clickable"
-            onClick={() => handleSchoolClick(workflow)}
-            style={{ flex: 1, cursor: 'pointer' }}
-          >
-            {info.school}
-          </span>
-        </div>
-      </div>
-      <div
-        className="workflow-matrix__cell workflow-matrix__cell--date"
-        style={{ width: `${columnWidths.date}px`, left: `${columnWidths.school - 1}px`, backgroundColor: colors.light }}
-      >
-        {formatDateToMMDDYYYY(info.date)}
-      </div>
-      <div
-        className="workflow-matrix__cell workflow-matrix__cell--progress"
-        style={{ width: `${columnWidths.progress}px`, backgroundColor: colors.light }}
-      >
-        <ProgressBar pct={progress} />
-      </div>
-      {activeTemplate.steps.map((step, colIndex) => {
-        const columnKey = `task-${step.id}`;
-        const width = taskColumnWidths[columnKey] || columnWidths.taskDefault;
-        const stepProgress = workflow.stepProgress?.[step.id] || {};
-        const isCompleted = colIndex <= lastCompletedIdx;
-        const isCurrent = colIndex === lastCompletedIdx + 1 && stepProgress.status !== 'completed';
-        const isDone = stepProgress.status === 'completed';
-        const cellKey = `${workflow.id}-${step.id}`;
-
-        const normalizedMicros = normalizeMicros(step, stepProgress);
-
-        const optimistic = optimisticUpdates[cellKey];
-        const displayInitials = optimistic?.initials ?? stepProgress.initials ?? '';
-        const displayMicros = optimistic?.micro ?? normalizedMicros;
-
-        return (
-          <div
-            key={step.id}
-            className={`workflow-matrix__cell workflow-matrix__cell--task ${
-              isCompleted ? 'workflow-matrix__cell--completed' : ''
-            } ${isCurrent ? 'workflow-matrix__cell--current' : ''}`}
-            style={{
-              width: `${width}px`,
-              backgroundColor: isCompleted ? undefined : colors.light
-            }}
-          >
-            <div className="workflow-matrix__cell-content">
-              <div className="workflow-matrix__cell-row">
-                <input
-                  type="text"
-                  className="workflow-matrix__initials-input"
-                  placeholder="Init"
-                  maxLength={4}
-                  value={displayInitials}
-                  onChange={(e) => handleInitialsChange(workflow.id, step.id, e.target.value, normalizedMicros)}
-                  aria-label={`${step.title} — ${info.jobId}`}
-                />
-                <CellBadge done={isDone} />
-              </div>
-              {displayMicros && displayMicros.length > 0 && (
-                <MicroMeter
-                  label={step.title}
-                  templateMicros={step.micros}
-                  normalizedMicros={displayMicros}
-                  onToggle={(microKey) => handleMicroToggle(workflow.id, step.id, microKey, displayMicros, displayInitials)}
-                />
-              )}
-              {showDates && (
-                <input
-                  type="date"
-                  className="workflow-matrix__date-input"
-                  value={stepProgress.completedDate || ''}
-                  onChange={(e) => handleDateChange(workflow.id, step.id, displayInitials, e.target.value, normalizedMicros)}
-                  tabIndex={-1}
-                />
-              )}
-            </div>
-          </div>
-        );
-      })}
-      </div>
-    </div>
-  );
-});
-
 // Normalize micro-steps: merge template definition with workflow progress
 function normalizeMicros(templateStep, stepProgress) {
   // If template step doesn't define micros, return undefined
@@ -234,6 +91,17 @@ function normalizeMicros(templateStep, stepProgress) {
   });
 }
 
+// Check if all microsteps are completed (for validating initials input)
+function areAllMicrosCompleted(normalizedMicros) {
+  // If no microsteps exist, input should be enabled
+  if (!normalizedMicros || normalizedMicros.length === 0) {
+    return true;
+  }
+
+  // Check if ALL microsteps have done === true
+  return normalizedMicros.every(micro => micro.done === true);
+}
+
 // Cell status badge component
 function CellBadge({ done }) {
   return (
@@ -253,10 +121,13 @@ function ProgressBar({ pct }) {
   );
 }
 
-// Micro-step meter component with hover preview and inline checklist
+// Micro-step meter component with hover preview and portal checklist
 function MicroMeter({ label, templateMicros, normalizedMicros, onToggle }) {
   const [open, setOpen] = React.useState(false);
   const [hover, setHover] = React.useState(false);
+  const [checklistPosition, setChecklistPosition] = React.useState({ top: 0, left: 0 });
+  const buttonRef = React.useRef(null);
+  const lastMousePos = React.useRef({ x: 0, y: 0 });
 
   if (!normalizedMicros || normalizedMicros.length === 0) return null;
 
@@ -264,21 +135,154 @@ function MicroMeter({ label, templateMicros, normalizedMicros, onToggle }) {
   const done = normalizedMicros.filter(m => m.done).length;
   const pct = Math.round((done / Math.max(1, total)) * 100);
 
+  // Update checklist position based on button location
+  const updateChecklistPosition = () => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+
+      // Close if button is scrolled out of view
+      if (rect.bottom < 0 || rect.top > window.innerHeight) {
+        console.log('❌ Button out of view, closing checklist');
+        setOpen(false);
+        return;
+      }
+
+      const newPos = {
+        top: rect.bottom + 4,
+        left: rect.left + (rect.width / 2)
+      };
+      console.log('📍 Updating checklist position: top=' + newPos.top + 'px, left=' + newPos.left + 'px');
+      setChecklistPosition(newPos);
+    }
+  };
+
+  // Calculate checklist position when opening
+  const handleToggle = () => {
+    if (!open) {
+      console.log('🎯 Opening checklist');
+      updateChecklistPosition();
+    }
+    setOpen(v => !v);
+  };
+
+  // Calculate distance from point to rectangle
+  const getDistanceToRect = (mouseX, mouseY, rect) => {
+    const dx = Math.max(rect.left - mouseX, 0, mouseX - rect.right);
+    const dy = Math.max(rect.top - mouseY, 0, mouseY - rect.bottom);
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // Handle mouse movement, scroll, and click outside when checklist is open
+  React.useEffect(() => {
+    if (!open) return;
+
+    // Close checklist when clicking outside
+    const handleClickOutside = (e) => {
+      if (buttonRef.current && !buttonRef.current.contains(e.target)) {
+        const checklist = document.querySelector('.micro-meter-checklist-portal');
+        if (!checklist || !checklist.contains(e.target)) {
+          setOpen(false);
+        }
+      }
+    };
+
+    // Close checklist if cursor moves 50px+ away
+    const handleMouseMove = (e) => {
+      // Track mouse position for distance checks after scroll
+      lastMousePos.current = { x: e.clientX, y: e.clientY };
+
+      const checklist = document.querySelector('.micro-meter-checklist-portal');
+      if (checklist) {
+        const rect = checklist.getBoundingClientRect();
+        const distance = getDistanceToRect(e.clientX, e.clientY, rect);
+        if (distance > 50) {
+          setOpen(false);
+        }
+      }
+    };
+
+    // Update checklist position on scroll
+    const handleScroll = (e) => {
+      console.log('📜 Scroll event fired on:', e.target.className || e.target);
+      updateChecklistPosition();
+
+      // Check distance after scroll using last known mouse position
+      const checklist = document.querySelector('.micro-meter-checklist-portal');
+      if (checklist && lastMousePos.current) {
+        const rect = checklist.getBoundingClientRect();
+        const distance = getDistanceToRect(lastMousePos.current.x, lastMousePos.current.y, rect);
+        if (distance > 50) {
+          console.log('❌ Too far after scroll, closing');
+          setOpen(false);
+        }
+      }
+    };
+
+    // Try multiple strategies to find the scrollable element
+    const dataGrid = document.querySelector('.workflow-matrix__data-grid');
+    const rdg = dataGrid?.querySelector('.rdg');
+    const rdgViewport = dataGrid?.querySelector('[role="grid"]')?.parentElement;
+    const anyScrollable = dataGrid?.querySelector('[class*="viewport"], [class*="scroll"]');
+
+    console.log('🔍 Scrollable elements check:');
+    console.log('  - .workflow-matrix__data-grid:', dataGrid);
+    console.log('  - .rdg:', rdg);
+    console.log('  - [role="grid"] parent:', rdgViewport);
+    console.log('  - any scrollable:', anyScrollable);
+
+    // Build array of candidates - try all possibilities
+    const scrollableElements = [
+      rdgViewport,
+      rdg,
+      dataGrid,
+      anyScrollable,
+      window
+    ].filter(Boolean);
+
+    console.log('  - will attach listeners to', scrollableElements.length, 'elements:');
+    scrollableElements.forEach((el, i) => {
+      console.log('    ' + i + ':', el === window ? 'window' : el.className || el.tagName);
+    });
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousemove', handleMouseMove);
+
+    // Attach scroll listener to all scrollable elements
+    scrollableElements.forEach(element => {
+      if (element) {
+        element.addEventListener('scroll', handleScroll);
+      }
+    });
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('mousemove', handleMouseMove);
+
+      // Remove scroll listeners
+      scrollableElements.forEach(element => {
+        if (element) {
+          element.removeEventListener('scroll', handleScroll);
+        }
+      });
+    };
+  }, [open]);
+
   return (
     <div
       className="micro-meter-container"
-      onMouseLeave={() => { setHover(false); setOpen(false); }}
+      onMouseLeave={() => { setHover(false); }}
     >
       <div
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
       >
         <button
+          ref={buttonRef}
           type="button"
           tabIndex={-1}
           title={`${done}/${total} micro-steps complete`}
           className="micro-meter-button"
-          onClick={() => setOpen(v => !v)}
+          onClick={handleToggle}
         >
           <div className="micro-meter-bar">
             <div className="micro-meter-bar-fill" style={{ width: `${pct}%` }} />
@@ -306,9 +310,18 @@ function MicroMeter({ label, templateMicros, normalizedMicros, onToggle }) {
         )}
       </div>
 
-      {/* Inline checklist - editable */}
-      {open && (
-        <div className="micro-meter-checklist">
+      {/* Checklist rendered as portal at document.body */}
+      {open && ReactDOM.createPortal(
+        <div
+          className="micro-meter-checklist micro-meter-checklist-portal"
+          style={{
+            position: 'fixed',
+            top: `${checklistPosition.top}px`,
+            left: `${checklistPosition.left}px`,
+            transform: 'translateX(-50%)',
+            zIndex: 10000
+          }}
+        >
           {normalizedMicros.map(m => {
             const templateMicro = templateMicros.find(tm => tm.key === m.key);
             return (
@@ -323,13 +336,182 @@ function MicroMeter({ label, templateMicros, normalizedMicros, onToggle }) {
               </label>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
 }
 
-VirtualRow.displayName = 'VirtualRow';
+// ============================================================================
+// Cell Renderer Components for react-data-grid
+// ============================================================================
+
+// School cell with eye icon and click handler
+const SchoolCell = ({ row, colors, handleSchoolClick, toggleWorkflowHidden, optimisticallyHidden }) => {
+  const { workflow, school } = row;
+  const isHidden = optimisticallyHidden.hasOwnProperty(workflow.id)
+    ? optimisticallyHidden[workflow.id]
+    : workflow.hidden;
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      height: '100%',
+      backgroundColor: colors.light,
+      width: '100%',
+      padding: '8px'
+    }}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleWorkflowHidden(workflow.id, isHidden);
+        }}
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '2px',
+          display: 'flex',
+          alignItems: 'center',
+          color: isHidden ? '#ef4444' : '#6b7280',
+          opacity: 0.7,
+          transition: 'opacity 0.2s'
+        }}
+        onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+        onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
+        title={isHidden ? 'Unhide workflow' : 'Hide workflow'}
+      >
+        {isHidden ? <Eye size={16} /> : <EyeOff size={16} />}
+      </button>
+      <span
+        className="workflow-matrix__cell--clickable"
+        onClick={() => handleSchoolClick(workflow)}
+        style={{
+          flex: 1,
+          cursor: 'pointer',
+          whiteSpace: 'normal',
+          wordBreak: 'break-word',
+          overflow: 'visible',
+          fontSize: '12px',
+          lineHeight: '1.3',
+          textAlign: 'center'
+        }}
+      >
+        {school}
+      </span>
+    </div>
+  );
+};
+
+// Date cell - formatted date display
+const DateCell = ({ row, colors }) => {
+  const { date } = row;
+  return (
+    <div style={{
+      backgroundColor: colors.light,
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      padding: '8px'
+    }}>
+      <span>{formatDateToMMDDYYYY(date)}</span>
+    </div>
+  );
+};
+
+// Progress cell - progress bar
+const ProgressCell = ({ row, colors }) => {
+  const { progress } = row;
+  return (
+    <div style={{
+      backgroundColor: colors.light,
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      padding: '8px'
+    }}>
+      <ProgressBar pct={progress} />
+    </div>
+  );
+};
+
+// Task cell - initials input, badge, micro-meter, date input
+const TaskCell = ({
+  row,
+  step,
+  lastCompletedIdx,
+  colIndex,
+  showDates,
+  handleInitialsChange,
+  handleDateChange,
+  handleMicroToggle,
+  optimisticUpdates,
+  colors
+}) => {
+  const { workflow } = row;
+  const stepProgress = workflow.stepProgress?.[step.id] || {};
+  const isCompleted = colIndex <= lastCompletedIdx;
+  const isCurrent = colIndex === lastCompletedIdx + 1 && stepProgress.status !== 'completed';
+  const isDone = stepProgress.status === 'completed';
+  const cellKey = `${workflow.id}-${step.id}`;
+
+  const normalizedMicros = normalizeMicros(step, stepProgress);
+
+  const optimistic = optimisticUpdates[cellKey];
+  const displayInitials = optimistic?.initials ?? stepProgress.initials ?? '';
+  const displayMicros = optimistic?.micro ?? normalizedMicros;
+
+  // Check if all microsteps are completed (controls whether initials can be entered)
+  const canEnterInitials = areAllMicrosCompleted(displayMicros);
+
+  return (
+    <div
+      className="workflow-matrix__cell-content"
+      style={{
+        backgroundColor: isCompleted ? undefined : colors.light,
+        width: '100%',
+        height: '100%',
+        padding: '8px'
+      }}
+    >
+      <div className="workflow-matrix__cell-row">
+        <input
+          type="text"
+          className="workflow-matrix__initials-input"
+          placeholder="Init"
+          maxLength={4}
+          value={displayInitials}
+          onChange={(e) => handleInitialsChange(workflow.id, step.id, e.target.value, normalizedMicros)}
+          disabled={!canEnterInitials}
+          aria-label={`${step.title} — ${workflow.id}`}
+        />
+        <CellBadge done={isDone} />
+      </div>
+      {displayMicros && displayMicros.length > 0 && (
+        <MicroMeter
+          label={step.title}
+          templateMicros={step.micros}
+          normalizedMicros={displayMicros}
+          onToggle={(microKey) => handleMicroToggle(workflow.id, step.id, microKey, displayMicros, displayInitials)}
+        />
+      )}
+      {showDates && (
+        <input
+          type="date"
+          className="workflow-matrix__date-input"
+          value={stepProgress.completedDate || ''}
+          onChange={(e) => handleDateChange(workflow.id, step.id, displayInitials, e.target.value, normalizedMicros)}
+          tabIndex={-1}
+        />
+      )}
+    </div>
+  );
+};
 
 const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
   const { userProfile, organization } = useAuth();
@@ -348,6 +530,14 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
   const [selectedWorkflow, setSelectedWorkflow] = useState(null);
   const [schools, setSchools] = useState([]);
 
+  // Tab ordering state
+  const [savedTabOrder, setSavedTabOrder] = useState([]); // Array of template IDs in saved order
+  const savedTabOrderLoadedRef = useRef(false); // Track if saved order has been loaded from Firebase
+
+  // Use refs for drag state to avoid re-renders during drag
+  const draggedTabIndexRef = useRef(null);
+  const draggedOverIndexRef = useRef(null);
+
   // Debounce timers for Firebase writes (immediate UI, delayed save)
   const debounceTimersRef = useRef({});
   const listenerUnsubscribeRef = useRef(null);
@@ -364,9 +554,6 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
   });
   const [taskColumnWidths, setTaskColumnWidths] = useState({}); // Specific widths for each task column
 
-  // Resize tracking state
-  const [resizing, setResizing] = useState(null); // { columnKey, startX, startWidth }
-
   // Get unique templates from workflows and create tabs
   const tabs = useMemo(() => {
     const templateMap = new Map();
@@ -378,7 +565,8 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
         templateMap.set(workflow.templateId, {
           id: workflow.templateId,
           name: template.name,
-          steps: template.steps || []
+          steps: template.steps || [],
+          groups: template.groups || []
         });
       } else if (!template) {
         // Workflow has invalid/missing template
@@ -395,15 +583,92 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
       console.warn('⚠️ ORPHANED WORKFLOWS (missing templates):', orphanedWorkflows);
     }
 
-    return Array.from(templateMap.values());
-  }, [workflows, workflowTemplates]);
+    const tabsArray = Array.from(templateMap.values());
 
-  // Set initial active tab
+    // Sort tabs based on saved order
+    if (savedTabOrder.length > 0) {
+      tabsArray.sort((a, b) => {
+        const indexA = savedTabOrder.indexOf(a.id);
+        const indexB = savedTabOrder.indexOf(b.id);
+
+        // If both are in saved order, sort by their positions
+        if (indexA !== -1 && indexB !== -1) {
+          return indexA - indexB;
+        }
+        // If only A is in saved order, it comes first
+        if (indexA !== -1) return -1;
+        // If only B is in saved order, it comes first
+        if (indexB !== -1) return 1;
+        // If neither is in saved order, maintain original order
+        return 0;
+      });
+    }
+
+    return tabsArray;
+  }, [workflows, workflowTemplates, savedTabOrder]);
+
+  // Set initial active tab - respects saved tab order
   useEffect(() => {
-    if (!activeTab && tabs.length > 0) {
+    if (tabs.length === 0) return;
+
+    // Always set to first tab if no active tab
+    if (!activeTab) {
       setActiveTab(tabs[0].id);
+      return;
+    }
+
+    // If savedTabOrder just loaded for the first time, switch to the first tab in sorted order
+    if (savedTabOrderLoadedRef.current && activeTab !== tabs[0].id) {
+      setActiveTab(tabs[0].id);
+      savedTabOrderLoadedRef.current = false; // Only do this once
     }
   }, [tabs, activeTab]);
+
+  // Load saved tab order from organization document
+  useEffect(() => {
+    if (!organization?.id) return;
+
+    const loadTabOrder = async () => {
+      try {
+        const orgRef = doc(firestore, 'organizations', organization.id);
+        const unsubscribe = onSnapshot(
+          orgRef,
+          (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              const order = data.workflowTabOrder || [];
+              console.log('Loaded workflow tab order:', order);
+
+              // Set flag to trigger active tab update on first load
+              if (!savedTabOrderLoadedRef.current && order.length > 0) {
+                savedTabOrderLoadedRef.current = true;
+              }
+
+              setSavedTabOrder(order);
+            }
+          },
+          (error) => {
+            console.error('Error loading tab order:', error);
+          }
+        );
+
+        return unsubscribe;
+      } catch (error) {
+        console.error('Error setting up tab order listener:', error);
+      }
+    };
+
+    const unsubscribePromise = loadTabOrder();
+
+    // Cleanup
+    return () => {
+      if (unsubscribePromise) {
+        unsubscribePromise.then(unsub => {
+          if (unsub) unsub();
+        });
+      }
+    };
+  }, [organization?.id]);
 
   // Load schools for modal
   useEffect(() => {
@@ -524,21 +789,6 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
   const activeTemplate = useMemo(() => {
     return tabs.find(tab => tab.id === activeTab);
   }, [tabs, activeTab]);
-
-  // Calculate total grid width for horizontal scrolling
-  const totalGridWidth = useMemo(() => {
-    if (!activeTemplate) return 'auto';
-
-    let width = columnWidths.school + columnWidths.date + columnWidths.progress;
-
-    // Add widths for all task columns
-    activeTemplate.steps.forEach(step => {
-      const columnKey = `task-${step.id}`;
-      width += taskColumnWidths[columnKey] || columnWidths.taskDefault;
-    });
-
-    return `${width}px`;
-  }, [activeTemplate, columnWidths, taskColumnWidths]);
 
   // Load saved column widths from localStorage when template changes
   useEffect(() => {
@@ -721,11 +971,19 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
         const updateData = {};
 
         if (trimmed) {
-          // Mark as completed with initials
+          // Check if all microsteps are completed (if they exist)
+          const allMicrosComplete = areAllMicrosCompleted(normalizedMicros);
+
+          // Mark as completed ONLY if: initials present AND (no micros OR all micros done)
+          const shouldComplete = allMicrosComplete;
+
           updateData.initials = trimmed;
-          updateData.status = 'completed';
-          updateData.completedBy = userProfile.id;
-          updateData.completedDate = todayYMD();
+          updateData.status = shouldComplete ? 'completed' : 'pending';
+
+          if (shouldComplete) {
+            updateData.completedBy = userProfile.id;
+            updateData.completedDate = todayYMD();
+          }
         } else {
           // Clear completion
           updateData.initials = '';
@@ -815,22 +1073,20 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
       // Check if all micros are now done
       const allMicrosDone = updatedMicros.every(m => m.done);
 
-      // Task is done if: (initials present) OR (all micros checked)
-      const isDone = !!currentInitials || allMicrosDone;
+      // Task is done ONLY if: initials present AND (no micros OR all micros checked)
+      // This ensures both conditions must be met for steps with microsteps
+      const isDone = !!currentInitials && (updatedMicros.length === 0 || allMicrosDone);
 
       const updateData = {
         micro: updatedMicros,
         status: isDone ? 'completed' : 'pending'
       };
 
-      // If becoming done for the first time, set completion metadata
-      if (isDone && !currentInitials) {
+      // If becoming done, set completion metadata (only when initials already present)
+      if (isDone && currentInitials) {
         updateData.completedDate = todayYMD();
         updateData.completedBy = userProfile.id;
-        // Set placeholder initials if all micros done but no initials entered
-        if (allMicrosDone) {
-          updateData.initials = '—';
-        }
+        updateData.initials = currentInitials;
       }
 
       await updateWorkflowStep(workflowId, stepId, updateData);
@@ -872,6 +1128,100 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
   const handleSchoolClick = (workflow) => {
     setSelectedWorkflow(workflow);
   };
+
+  // Save tab order to organization document
+  const saveTabOrder = useCallback(async (newOrder) => {
+    if (!organization?.id) return;
+
+    try {
+      const orgRef = doc(firestore, 'organizations', organization.id);
+      await updateDoc(orgRef, {
+        workflowTabOrder: newOrder
+      });
+      console.log('Tab order saved to organization:', newOrder);
+      readCounter.recordRead('updateDoc', 'organizations', 'WorkflowMatrixView', 1);
+    } catch (error) {
+      console.error('Error saving tab order:', error);
+    }
+  }, [organization?.id]);
+
+  // Drag and drop handlers for tab reordering - using refs to avoid re-renders
+  const handleDragStart = useCallback((e, index) => {
+    draggedTabIndexRef.current = index;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+    // Add visual feedback to the dragged element
+    e.currentTarget.style.opacity = '0.5';
+  }, []);
+
+  const handleDragOver = useCallback((e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+
+    // Update drag over ref without triggering re-render
+    if (draggedTabIndexRef.current !== null) {
+      draggedOverIndexRef.current = index;
+
+      // Add visual feedback to drop target
+      const tabs = document.querySelectorAll('.workflow-matrix__tab');
+      tabs.forEach((tab, i) => {
+        if (i === index && i !== draggedTabIndexRef.current) {
+          tab.style.borderLeft = '3px solid #3b82f6';
+          tab.style.paddingLeft = '9px';
+        } else {
+          tab.style.borderLeft = '';
+          tab.style.paddingLeft = '';
+        }
+      });
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    // Remove visual feedback when leaving
+    e.currentTarget.style.borderLeft = '';
+    e.currentTarget.style.paddingLeft = '';
+  }, []);
+
+  const handleDragEnd = useCallback((e) => {
+    // Reset opacity
+    e.currentTarget.style.opacity = '1';
+
+    // Clear all visual feedback
+    const tabs = document.querySelectorAll('.workflow-matrix__tab');
+    tabs.forEach(tab => {
+      tab.style.borderLeft = '';
+      tab.style.paddingLeft = '';
+    });
+
+    // Clear refs
+    draggedTabIndexRef.current = null;
+    draggedOverIndexRef.current = null;
+  }, []);
+
+  const handleDrop = useCallback((e, dropIndex) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const draggedIndex = draggedTabIndexRef.current;
+
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      return;
+    }
+
+    // Reorder tabs
+    const reorderedTabs = [...tabs];
+    const [draggedTab] = reorderedTabs.splice(draggedIndex, 1);
+    reorderedTabs.splice(dropIndex, 0, draggedTab);
+
+    // Extract just the IDs for saving
+    const newOrder = reorderedTabs.map(tab => tab.id);
+
+    // Update local state for responsive UI
+    setSavedTabOrder(newOrder);
+
+    // Save to Firebase
+    saveTabOrder(newOrder);
+  }, [tabs, saveTabOrder]);
 
   // Toggle workflow hidden status with optimistic updates
   const toggleWorkflowHidden = useCallback(async (workflowId, currentlyHidden) => {
@@ -915,19 +1265,215 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
     }
   }, []);
 
-  // Column resize handlers
-  const handleResizeStart = (columnKey, startX, startWidth) => {
-    setResizing({ columnKey, startX, startWidth });
-  };
+  // ============================================================================
+  // Build columns array for react-data-grid
+  // ============================================================================
+  const columns = useMemo(() => {
+    if (!activeTemplate) return [];
 
-  const handleResizeMove = React.useCallback((e) => {
-    if (!resizing) return;
+    // Don't build columns until taskColumnWidths is populated (prevents thin columns in production)
+    if (activeTemplate.steps && activeTemplate.steps.length > 0 && Object.keys(taskColumnWidths).length === 0) {
+      return []; // Wait for widths to be calculated by useEffect
+    }
 
-    const delta = e.clientX - resizing.startX;
-    const newWidth = Math.max(60, resizing.startWidth + delta); // Minimum 60px
+    // Default color for non-task columns (School, Date, Progress)
+    const defaultColor = '#1e3a8a'; // Dark blue
+    const defaultColors = { main: defaultColor, light: '#eff6ff', hover: '#dbeafe' };
 
-    const { columnKey } = resizing;
+    const cols = [];
 
+    // School column (frozen)
+    cols.push({
+      key: 'school',
+      name: 'School',
+      frozen: true,
+      width: columnWidths.school,
+      resizable: true,
+      renderHeaderCell: () => (
+        <div style={{
+          backgroundColor: defaultColors.main,
+          color: 'white',
+          flex: 1,
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '8px',
+          fontSize: '11px',
+          fontWeight: 600
+        }}>
+          School
+        </div>
+      ),
+      renderCell: (props) => (
+        <SchoolCell
+          row={props.row}
+          colors={defaultColors}
+          handleSchoolClick={handleSchoolClick}
+          toggleWorkflowHidden={toggleWorkflowHidden}
+          optimisticallyHidden={optimisticallyHidden}
+        />
+      ),
+      cellClass: 'workflow-matrix__cell workflow-matrix__cell--school'
+    });
+
+    // Date column (frozen)
+    cols.push({
+      key: 'date',
+      name: 'Date',
+      frozen: true,
+      width: columnWidths.date,
+      resizable: true,
+      renderHeaderCell: () => (
+        <div style={{
+          backgroundColor: defaultColors.main,
+          color: 'white',
+          flex: 1,
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '8px',
+          fontSize: '11px',
+          fontWeight: 600
+        }}>
+          Date
+        </div>
+      ),
+      renderCell: (props) => <DateCell row={props.row} colors={defaultColors} />,
+      cellClass: 'workflow-matrix__cell workflow-matrix__cell--date'
+    });
+
+    // Progress column
+    cols.push({
+      key: 'progress',
+      name: 'Progress',
+      frozen: false,
+      width: columnWidths.progress,
+      resizable: true,
+      renderHeaderCell: () => (
+        <div style={{
+          backgroundColor: defaultColors.main,
+          color: 'white',
+          flex: 1,
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '8px',
+          fontSize: '11px',
+          fontWeight: 600
+        }}>
+          Progress
+        </div>
+      ),
+      renderCell: (props) => <ProgressCell row={props.row} colors={defaultColors} />,
+      cellClass: 'workflow-matrix__cell workflow-matrix__cell--progress'
+    });
+
+    // Task columns (one per template step)
+    activeTemplate.steps.forEach((step, colIndex) => {
+      const columnKey = `task-${step.id}`;
+      const width = taskColumnWidths[columnKey] || columnWidths.taskDefault || 155;
+
+      // Get group color for this step
+      const groupColor = getStepGroupColor(step, activeTemplate.groups);
+
+      // Create colors object for this step with light and hover variants
+      const stepColors = {
+        main: groupColor,
+        light: groupColor + '20', // 20% opacity
+        hover: groupColor + '30'  // 30% opacity
+      };
+
+      cols.push({
+        key: columnKey,
+        name: step.title,
+        frozen: false,
+        width: width,
+        resizable: true,
+        renderHeaderCell: () => (
+          <div style={{
+            backgroundColor: stepColors.main,
+            color: 'white',
+            flex: 1,
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '8px',
+            fontSize: '11px',
+            fontWeight: 600,
+            wordBreak: 'break-word',
+            lineHeight: '1.3'
+          }}>
+            {step.title}
+          </div>
+        ),
+        renderCell: (props) => {
+          const lastCompletedIdx = getLastCompletedIndex(props.row.workflow);
+          return (
+            <TaskCell
+              row={props.row}
+              step={step}
+              lastCompletedIdx={lastCompletedIdx}
+              colIndex={colIndex}
+              showDates={showDates}
+              handleInitialsChange={handleInitialsChange}
+              handleDateChange={handleDateChange}
+              handleMicroToggle={handleMicroToggle}
+              optimisticUpdates={optimisticUpdates}
+              colors={stepColors}
+            />
+          );
+        },
+        cellClass: (row) => {
+          const workflow = row.workflow;
+          const lastCompletedIdx = getLastCompletedIndex(workflow);
+          const stepProgress = workflow.stepProgress?.[step.id] || {};
+          const isCompleted = colIndex <= lastCompletedIdx;
+          const isCurrent = colIndex === lastCompletedIdx + 1 && stepProgress.status !== 'completed';
+
+          return `workflow-matrix__cell workflow-matrix__cell--task ${
+            isCompleted ? 'workflow-matrix__cell--completed' : ''
+          } ${isCurrent ? 'workflow-matrix__cell--current' : ''}`;
+        }
+      });
+    });
+
+    return cols;
+  }, [
+    activeTemplate,
+    columnWidths,
+    taskColumnWidths,
+    showDates,
+    handleInitialsChange,
+    handleDateChange,
+    handleMicroToggle,
+    handleSchoolClick,
+    toggleWorkflowHidden,
+    optimisticUpdates,
+    optimisticallyHidden
+  ]);
+
+  // ============================================================================
+  // Transform workflows to rows array for react-data-grid
+  // ============================================================================
+  const rows = useMemo(() => {
+    return filteredWorkflows.map(workflow => {
+      const info = getWorkflowInfo(workflow);
+      const progress = calculateProgress(workflow);
+
+      return {
+        id: workflow.id,
+        workflow: workflow, // Keep full workflow object for cell access
+        school: info.school,
+        date: info.date,
+        progress: progress
+      };
+    });
+  }, [filteredWorkflows, getWorkflowInfo, calculateProgress]);
+
+  // ============================================================================
+  // Handle column resize for react-data-grid
+  // ============================================================================
+  const handleColumnResize = useCallback((columnKey, newWidth) => {
     if (columnKey.startsWith('task-')) {
       // Task column
       setTaskColumnWidths(prev => ({
@@ -935,38 +1481,26 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
         [columnKey]: newWidth
       }));
     } else {
-      // Metadata column
+      // Metadata column (school, date, progress)
       setColumnWidths(prev => ({
         ...prev,
         [columnKey]: newWidth
       }));
     }
-  }, [resizing]);
 
-  const handleResizeEnd = React.useCallback(() => {
-    // Save column widths to localStorage
-    if (activeTemplate && resizing) {
-      const storageKey = `workflow-matrix-widths-${activeTemplate.id}`;
-      const widthsToSave = {
-        columnWidths,
-        taskColumnWidths
-      };
-      localStorage.setItem(storageKey, JSON.stringify(widthsToSave));
+    // Save to localStorage
+    if (activeTemplate) {
+      // Use setTimeout to batch rapid resize events
+      setTimeout(() => {
+        const storageKey = `workflow-matrix-widths-${activeTemplate.id}`;
+        const widthsToSave = {
+          columnWidths: columnKey.startsWith('task-') ? columnWidths : { ...columnWidths, [columnKey]: newWidth },
+          taskColumnWidths: columnKey.startsWith('task-') ? { ...taskColumnWidths, [columnKey]: newWidth } : taskColumnWidths
+        };
+        localStorage.setItem(storageKey, JSON.stringify(widthsToSave));
+      }, 100);
     }
-    setResizing(null);
-  }, [activeTemplate, resizing, columnWidths, taskColumnWidths]);
-
-  // Add/remove mouse event listeners for resize
-  React.useEffect(() => {
-    if (resizing) {
-      document.addEventListener('mousemove', handleResizeMove);
-      document.addEventListener('mouseup', handleResizeEnd);
-      return () => {
-        document.removeEventListener('mousemove', handleResizeMove);
-        document.removeEventListener('mouseup', handleResizeEnd);
-      };
-    }
-  }, [resizing, handleResizeMove, handleResizeEnd]);
+  }, [activeTemplate, columnWidths, taskColumnWidths]);
 
   // Enhanced wheel handler for macOS trackpad horizontal scrolling
   const handleWheel = useCallback((e) => {
@@ -1032,14 +1566,21 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
     <div className="workflow-matrix">
       {/* Tabs */}
       <div className="workflow-matrix__tabs">
-        {tabs.map(tab => {
+        {tabs.map((tab, index) => {
           const colors = getTemplateColors(tab.name);
           const isActive = activeTab === tab.id;
+
           return (
             <button
               key={tab.id}
+              draggable
               className={`workflow-matrix__tab ${isActive ? 'workflow-matrix__tab--active' : ''}`}
               onClick={() => setActiveTab(tab.id)}
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragLeave={handleDragLeave}
+              onDragEnd={handleDragEnd}
+              onDrop={(e) => handleDrop(e, index)}
               style={{
                 color: isActive ? colors.main : '#6b7280',
                 backgroundColor: isActive ? colors.hover : 'transparent',
@@ -1113,110 +1654,25 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
         </label>
       </div>
 
-      {/* Grid - Div-based for virtual scrolling */}
+      {/* Grid container with react-data-grid */}
       <div className="workflow-matrix__grid-container" ref={gridContainerRef}>
-        <div className="workflow-matrix__grid" style={{ width: totalGridWidth }}>
-          {/* Header */}
-          <div className="workflow-matrix__header-row">
-            {(() => {
-              const colors = getTemplateColors(activeTemplate.name);
-              return (
-                <>
-                  <div
-                    className="workflow-matrix__header-cell workflow-matrix__header-cell--school"
-                    style={{ width: `${columnWidths.school}px`, backgroundColor: colors.main, color: 'white' }}
-                  >
-                    <div className="workflow-matrix__header-content">
-                      School
-                      <div
-                        className="workflow-matrix__resize-handle"
-                        onMouseDown={(e) => handleResizeStart('school', e.clientX, columnWidths.school)}
-                      />
-                    </div>
-                  </div>
-                  <div
-                    className="workflow-matrix__header-cell workflow-matrix__header-cell--date"
-                    style={{ width: `${columnWidths.date}px`, left: `${columnWidths.school - 1}px`, backgroundColor: colors.main, color: 'white' }}
-                  >
-                    <div className="workflow-matrix__header-content">
-                      Date
-                      <div
-                        className="workflow-matrix__resize-handle"
-                        onMouseDown={(e) => handleResizeStart('date', e.clientX, columnWidths.date)}
-                      />
-                    </div>
-                  </div>
-                  <div
-                    className="workflow-matrix__header-cell workflow-matrix__header-cell--progress"
-                    style={{ width: `${columnWidths.progress}px`, backgroundColor: colors.main, color: 'white' }}
-                  >
-                    <div className="workflow-matrix__header-content">
-                      Progress
-                      <div
-                        className="workflow-matrix__resize-handle"
-                        onMouseDown={(e) => handleResizeStart('progress', e.clientX, columnWidths.progress)}
-                      />
-                    </div>
-                  </div>
-                  {activeTemplate.steps.map(step => {
-                    const columnKey = `task-${step.id}`;
-                    const width = taskColumnWidths[columnKey] || columnWidths.taskDefault;
-                    return (
-                      <div
-                        key={step.id}
-                        className="workflow-matrix__header-cell workflow-matrix__header-cell--task"
-                        title={step.title}
-                        style={{ width: `${width}px`, backgroundColor: colors.main, color: 'white' }}
-                      >
-                        <div className="workflow-matrix__header-content">
-                          {step.title}
-                          <div
-                            className="workflow-matrix__resize-handle"
-                            onMouseDown={(e) => handleResizeStart(columnKey, e.clientX, width)}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </>
-              );
-            })()}
-          </div>
-
-          {/* Virtualized Body */}
-          {filteredWorkflows.length > 0 && (
-            <List
-              rowComponent={VirtualRow}
-              rowCount={filteredWorkflows.length}
-              rowHeight={ROW_HEIGHT}
-              overscanCount={5}
-              style={{
-                height: `${Math.min(filteredWorkflows.length * ROW_HEIGHT, window.innerHeight - 300)}px`,
-                overflow: "hidden"
-              }}
-              rowProps={{
-                filteredWorkflows,
-                activeTemplate,
-                columnWidths,
-                taskColumnWidths,
-                showDates,
-                getWorkflowInfo,
-                getLastCompletedIndex,
-                calculateProgress,
-                handleInitialsChange,
-                handleDateChange,
-                handleMicroToggle,
-                handleSchoolClick,
-                toggleWorkflowHidden,
-                optimisticUpdates,
-                optimisticallyHidden
-              }}
-            />
-          )}
-        </div>
+        {/* react-data-grid with frozen columns */}
+        {rows.length > 0 && (
+          <DataGrid
+            columns={columns}
+            rows={rows}
+            rowKeyGetter={(row) => row.id}
+            rowHeight={showDates ? 140 : 90}
+            onColumnResize={(idx, width) => {
+              const column = columns[idx];
+              handleColumnResize(column.key, width);
+            }}
+            className="workflow-matrix__data-grid"
+          />
+        )}
       </div>
 
-      {filteredWorkflows.length === 0 && (
+      {rows.length === 0 && (
         <div className="workflow-matrix__empty-state">
           <p>No workflows found for {activeTemplate.name}</p>
         </div>

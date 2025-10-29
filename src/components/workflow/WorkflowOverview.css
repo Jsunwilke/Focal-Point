@@ -1,15 +1,18 @@
 /* src/components/workflow/WorkflowOverview.css */
 
-/* Main Container */
+/* Main Container - FLEXBOX FOR RESPONSIVE HEIGHT */
 .workflow-overview {
-  padding: 0.75rem;
+  padding: 0 0.75rem 0 0.75rem; /* No top/bottom padding to prevent page scroll */
+  margin: 0; /* No margin to prevent extra space */
   background-color: var(--bg-secondary);
-  min-height: 100vh;
   max-width: 100%;
-  overflow-x: auto;
   box-sizing: border-box;
   width: 100%;
   position: relative;
+  /* Flexbox setup for dynamic height */
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 115px); /* Account for app header and stats reduction */
 }
 
 .workflow-overview-loading {
@@ -73,23 +76,27 @@
 .workflow-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
+  gap: 0.35rem;
+  margin-top: 0;
+  margin-bottom: 0.25rem;
 }
 
 .stat-card {
   background-color: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
-  padding: 1.5rem;
+  padding: 0.1rem;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.2rem;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
 }
 
 .stat-icon {
-  width: 48px;
-  height: 48px;
+  width: 16px;
+  height: 16px;
   border-radius: 0.5rem;
   display: flex;
   align-items: center;
@@ -98,17 +105,23 @@
 
 .stat-content {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  justify-content: center;
 }
 
 .stat-value {
-  font-size: 1.875rem;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--text-primary);
+  line-height: 1;
 }
 
 .stat-label {
-  font-size: 0.875rem;
+  font-size: 0.65rem;
   color: var(--text-secondary);
+  line-height: 1;
 }
 
 /* Controls Bar */
@@ -117,7 +130,8 @@
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.25rem;
+  padding: 0.25rem 0;
   flex-wrap: wrap;
 }
 
@@ -299,12 +313,17 @@
   border-color: var(--primary-color);
 }
 
-/* View Container */
+/* View Container - FLEXBOX TEST */
 .workflow-view-container {
   background-color: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
   overflow: hidden;
+  /* Flex child that fills remaining space */
+  flex: 1;
+  min-height: 0; /* Critical for flex overflow */
+  display: flex;
+  flex-direction: column;
 }
 
 .no-workflows {

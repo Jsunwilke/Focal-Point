@@ -1,0 +1,104 @@
+/* react-data-grid Styling Overrides for WorkflowMatrixView */
+
+/* Override default react-data-grid styles to match existing design */
+.workflow-matrix__data-grid {
+  border: none !important;
+  border-radius: 8px;
+  font-family: inherit;
+  height: 100%;
+  width: 100%;
+  min-height: 400px;
+}
+
+/* Grid container - only set CSS variables, don't override rdg internals */
+.workflow-matrix__data-grid .rdg {
+  --rdg-background-color: white;
+  --rdg-header-background-color: #1e3a8a;
+  --rdg-row-hover-background-color: transparent;
+  --rdg-row-selected-background-color: transparent;
+  --rdg-border-color: #e5e7eb;
+  --rdg-frozen-cell-box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Z-index layering for frozen columns during vertical scroll
+   Ensures frozen header cells (School, Date) stay on top of body cells */
+.workflow-matrix__data-grid .rdg-header-row .rdg-cell[aria-colindex="1"],
+.workflow-matrix__data-grid .rdg-header-row .rdg-cell[aria-colindex="2"] {
+  z-index: 3;
+}
+
+/* Frozen body cells should be below headers but above regular cells */
+.workflow-matrix__data-grid .rdg-row .rdg-cell[aria-colindex="1"],
+.workflow-matrix__data-grid .rdg-row .rdg-cell[aria-colindex="2"] {
+  z-index: 1;
+}
+
+/* Custom header cell content styling (not rdg internals) */
+.workflow-matrix__header-cell {
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* School column (frozen) */
+.workflow-matrix__cell--school {
+  font-weight: 500;
+  padding-left: 8px;
+}
+
+/* Date column (frozen) */
+.workflow-matrix__cell--date {
+  font-size: 12px;
+}
+
+.workflow-matrix__cell--date::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 2px;
+  background-color: #cbd5e1;
+  pointer-events: none;
+}
+
+/* Progress column */
+.workflow-matrix__cell--progress {
+  padding-right: 16px;
+}
+
+/* Task cells */
+.workflow-matrix__cell--task {
+  vertical-align: top;
+}
+
+/* Completed task cells */
+.workflow-matrix__cell--completed {
+  background-color: #bfdbfe !important;
+  color: #1e3a8a !important;
+}
+
+/* Scrollbar styling for grid */
+.workflow-matrix__data-grid .rdg-viewport::-webkit-scrollbar {
+  height: 12px;
+  width: 12px;
+}
+
+.workflow-matrix__data-grid .rdg-viewport::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 6px;
+}
+
+.workflow-matrix__data-grid .rdg-viewport::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 6px;
+}
+
+.workflow-matrix__data-grid .rdg-viewport::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Template color backgrounds will be applied via inline styles in cell renderers */
