@@ -1,0 +1,747 @@
+/* CreateTaskModal.css - Modern Design 2024 - Standalone Modal */
+
+/* ============================================================================
+   STANDALONE MODAL OVERLAY & CONTAINER
+   ============================================================================ */
+
+/* Overlay - Full screen backdrop */
+.create-task-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  padding: 1rem;
+  animation: overlayFadeIn 0.2s ease-out;
+}
+
+@keyframes overlayFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Modal Container */
+.create-task-modal-container {
+  background-color: #ffffff;
+  border-radius: 16px;
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  margin: auto;
+  animation: modalSlideIn 0.2s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Modal Header */
+.create-task-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+  flex-shrink: 0;
+}
+
+.create-task-modal-header-content {
+  flex: 1;
+  margin-right: 1rem;
+}
+
+.create-task-modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #15142e;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.create-task-modal-close {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 8px;
+  transition: all 0.18s ease;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+}
+
+.create-task-modal-close:hover {
+  color: #15142e;
+  background-color: #e5e7eb;
+}
+
+.create-task-modal-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Modal Body */
+.create-task-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #f8f9fa;
+  padding: 1.5rem;
+}
+
+/* Modal Actions Footer */
+.create-task-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   FORM STRUCTURE
+   ============================================================================ */
+
+.create-task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Section cards with modern styling */
+.form-section {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.2s ease;
+}
+
+.form-section:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 2px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* ============================================================================
+   FORM FIELDS - Modern styling
+   ============================================================================ */
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+/* Ensure consistent height for inline form groups */
+.form-group .form-input,
+.form-group .form-select {
+  flex-shrink: 0;
+}
+
+.form-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #474747;
+  margin-bottom: 0;
+}
+
+.form-label .required {
+  color: #ef4444;
+  margin-left: 0.25rem;
+}
+
+.form-label--large {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #15142e;
+}
+
+/* Input fields with modern styling */
+.form-input,
+.form-select {
+  width: 100%;
+  padding: 0.6875rem 1rem;
+  border: 2px solid #dedede;
+  border-radius: 8px;
+  font-size: max(16px, 1em);
+  color: #15142e;
+  background-color: #ffffff;
+  transition: all 0.18s ease-in-out;
+  font-family: inherit;
+  height: 46px !important; /* Required to override browser defaults on select elements */
+  box-sizing: border-box;
+  line-height: 1.4;
+  display: block;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+.form-textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #dedede;
+  border-radius: 8px;
+  font-size: max(16px, 1em);
+  color: #15142e;
+  background-color: #ffffff;
+  transition: all 0.18s ease-in-out;
+  font-family: inherit;
+  box-sizing: border-box;
+  display: block;
+  min-height: 90px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+/* Normalize number input styling */
+.form-input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.form-input[type="number"]::-webkit-inner-spin-button,
+.form-input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: #9ca3af;
+}
+
+.form-input:hover,
+.form-select:hover,
+.form-textarea:hover {
+  border-color: #8b8a8b;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.form-input:disabled,
+.form-select:disabled,
+.form-textarea:disabled {
+  background-color: #f9fafb;
+  border-color: #e5e7eb;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 90px;
+  line-height: 1.6;
+}
+
+/* Error states */
+.form-input--error {
+  border-color: #f87171;
+  background-color: #fef2f2;
+}
+
+.form-error {
+  font-size: 0.8125rem;
+  color: #ef4444;
+  margin-top: -0.25rem;
+  line-height: 1.2;
+  min-height: 0;
+}
+
+/* ============================================================================
+   ERROR BANNER
+   ============================================================================ */
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background-color: #fef2f2;
+  border-left: 4px solid #ef4444;
+  border-radius: 8px;
+  color: #991b1b;
+  font-size: 0.875rem;
+  box-shadow: 0 1px 3px rgba(239, 68, 68, 0.1);
+}
+
+/* ============================================================================
+   TYPE SELECTOR - Modern pill buttons
+   ============================================================================ */
+
+.type-selector {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.type-option {
+  flex: 1;
+  min-width: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.type-option:hover:not(:disabled):not(.type-option--active) {
+  background: #fafafa;
+  border-color: #d1d5db;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.type-option--active {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+  transform: translateY(-1px);
+}
+
+.type-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.type-option svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ============================================================================
+   FORM ROWS - Side-by-side fields
+   ============================================================================ */
+
+.form-row {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 1rem;
+  width: 100%;
+}
+
+.form-row > .form-group {
+  min-width: 0;
+}
+
+.form-row--three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* ============================================================================
+   PRIORITY SELECT - With colored indicator
+   ============================================================================ */
+
+.priority-select-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.priority-select-wrapper .form-select {
+  flex: 1;
+}
+
+.priority-indicator {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.priority-indicator--low {
+  background-color: #10b981;
+}
+
+.priority-indicator--medium {
+  background-color: #f59e0b;
+}
+
+.priority-indicator--high {
+  background-color: #ef4444;
+}
+
+.priority-indicator--urgent {
+  background-color: #dc2626;
+}
+
+/* ============================================================================
+   ASSIGNEE MULTI-SELECT - Compact dropdown
+   ============================================================================ */
+
+.assignee-select-wrapper {
+  position: relative;
+}
+
+.assignee-select-trigger {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #dedede;
+  border-radius: 8px;
+  background-color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.18s ease;
+  min-height: 44px;
+}
+
+.assignee-select-trigger:hover {
+  border-color: #8b8a8b;
+}
+
+.assignee-select-trigger--open {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.assignee-select-value {
+  font-size: max(16px, 1em);
+  color: #15142e;
+  flex: 1;
+}
+
+.assignee-select-value--placeholder {
+  color: #9ca3af;
+}
+
+.assignee-select-icon {
+  color: #6b7280;
+  transition: transform 0.2s ease;
+}
+
+.assignee-select-icon--open {
+  transform: rotate(180deg);
+}
+
+.assignee-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 100;
+  padding: 0.5rem;
+}
+
+.assignee-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.assignee-option:hover {
+  background-color: #f9fafb;
+}
+
+.assignee-option--selected {
+  background-color: #eff6ff;
+}
+
+.assignee-option-checkbox {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #d1d5db;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.assignee-option--selected .assignee-option-checkbox {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.assignee-option-checkbox svg {
+  width: 12px;
+  height: 12px;
+  color: white;
+}
+
+.assignee-option-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: white;
+  background-color: #6b7280;
+  flex-shrink: 0;
+}
+
+.assignee-option-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.assignee-option-name {
+  font-size: 0.9375rem;
+  color: #15142e;
+  font-weight: 500;
+}
+
+/* ============================================================================
+   SUBTASKS - Modern list
+   ============================================================================ */
+
+.subtask-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin-top: 0.5rem;
+}
+
+.subtask-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.subtask-number {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.subtask-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #15142e;
+  background-color: #ffffff;
+  transition: all 0.18s ease;
+}
+
+.subtask-input:hover {
+  border-color: #d1d5db;
+}
+
+.subtask-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.subtask-remove {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.subtask-remove:hover {
+  color: #ef4444;
+  background-color: #fef2f2;
+}
+
+.subtask-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+  background: #ffffff;
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  color: #6b7280;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 0.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.subtask-add-btn:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background-color: #eff6ff;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.08);
+}
+
+/* ============================================================================
+   RESPONSIVE
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .create-task-modal-overlay {
+    padding: 0.5rem;
+  }
+
+  .create-task-modal-container {
+    max-width: 95vw;
+    max-height: 95vh;
+  }
+
+  .create-task-modal-header,
+  .create-task-modal-body,
+  .create-task-modal-actions {
+    padding: 1rem;
+  }
+
+  .create-task-modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .create-task-modal-actions button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .form-section {
+    padding: 1.25rem;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .assignee-grid {
+    grid-template-columns: repeat(auto-fill, minmax(75px, 1fr));
+  }
+
+  .type-selector {
+    flex-direction: column;
+  }
+
+  .type-option {
+    min-width: 100%;
+  }
+}
+
+/* ============================================================================
+   ACCESSIBILITY
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .create-task-modal-overlay,
+  .create-task-modal-container {
+    animation: none !important;
+  }
+
+  .create-task-modal-close,
+  .type-option,
+  .assignee-select-trigger,
+  .assignee-option,
+  .subtask-add-btn,
+  .form-input,
+  .form-select,
+  .form-textarea {
+    transition: none !important;
+  }
+}
+
+.type-option:focus-visible,
+.assignee-card:focus-visible,
+.subtask-add-btn:focus-visible,
+.form-input:focus-visible,
+.form-select:focus-visible,
+.form-textarea:focus-visible,
+.create-task-modal-close:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .create-task-modal-overlay {
+    background-color: rgba(0, 0, 0, 0.8);
+  }
+
+  .create-task-modal-container {
+    border: 2px solid #15142e;
+  }
+}

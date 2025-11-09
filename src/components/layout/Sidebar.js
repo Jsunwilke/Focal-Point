@@ -22,6 +22,7 @@ import {
   Image,
   ShoppingCart,
   Camera,
+  ListTodo,
 } from "lucide-react";
 import "./Sidebar.css";
 
@@ -55,6 +56,13 @@ const Sidebar = ({ isOpen, onClose, isMobile, isCollapsed, onToggleCollapse }) =
       label: "Workflows",
       icon: Workflow,
       path: "/workflows",
+      enabled: true,
+    },
+    {
+      id: "tasks",
+      label: "Tasks",
+      icon: ListTodo,
+      path: "/tasks",
       enabled: true,
     },
     {

@@ -2,8 +2,10 @@
 import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { ToastProvider } from "../../contexts/ToastContext";
+import { useTask } from "../../contexts/TaskContext";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
+import TaskPanel from "../tasks/TaskPanel";
 import "./Layout.css";
 
 const Layout = ({ children }) => {
@@ -11,6 +13,7 @@ const Layout = ({ children }) => {
   const [isMobile, setIsMobile] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const location = useLocation();
+  const { isPanelOpen } = useTask();
 
   useEffect(() => {
     const checkMobile = () => {
@@ -51,26 +54,27 @@ const Layout = ({ children }) => {
   return (
     <ToastProvider>
       <div className={`layout ${!isMobile && isSidebarCollapsed ? 'layout--sidebar-collapsed' : ''}`}>
-        <Sidebar 
-          isOpen={isMobileMenuOpen} 
+        <Sidebar
+          isOpen={isMobileMenuOpen}
           onClose={closeMobileMenu}
           isMobile={isMobile}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={toggleSidebar}
         />
         {isMobile && isMobileMenuOpen && (
-          <div 
-            className="layout__backdrop" 
+          <div
+            className="layout__backdrop"
             onClick={closeMobileMenu}
           />
         )}
         <div className="layout__main">
-          <Header 
+          <Header
             onMenuToggle={toggleMobileMenu}
             isMobile={isMobile}
           />
-          <main className={`layout__content ${location.pathname === '/schedule' ? 'layout__content--schedule' : ''} ${location.pathname === '/chat' ? 'layout__content--chat' : ''}`}>{children}</main>
+          <main className={`layout__content ${location.pathname === '/schedule' ? 'layout__content--schedule' : ''} ${location.pathname === '/chat' ? 'layout__content--chat' : ''} ${isPanelOpen ? 'layout__content--panel-open' : ''}`}>{children}</main>
         </div>
+        <TaskPanel />
       </div>
     </ToastProvider>
   );

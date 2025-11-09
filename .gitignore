@@ -76,3 +76,6 @@ firestore-debug.log
 *.temp
 
 /src/generated/prisma
+
+# Claude Code local settings
+.claude/settings.local.json

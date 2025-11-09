@@ -7,10 +7,14 @@ import DataGrid from 'react-data-grid';
 import 'react-data-grid/lib/styles.css';
 import { firestore } from '../../../../firebase/config';
 import { updateWorkflowStep, getSchools } from '../../../../firebase/firestore';
+import { getWorkflowStepTasksBatch } from '../../../../firebase/tasks';
 import { useAuth } from '../../../../contexts/AuthContext';
+import { useWorkflow } from '../../../../contexts/WorkflowContext';
+import { useTask } from '../../../../contexts/TaskContext';
 import { readCounter } from '../../../../services/readCounter';
 import { getStepGroupColor } from '../../../../utils/workflowTemplates';
 import ShootDetailsModal from '../../ShootDetailsModal';
+import TaskButton from '../../TaskButton';
 import './WorkflowMatrixView.css';
 import './WorkflowMatrixView-rdg.css';
 
@@ -440,7 +444,7 @@ const ProgressCell = ({ row, colors }) => {
   );
 };
 
-// Task cell - initials input, badge, micro-meter, date input
+// Task cell - initials input, badge, micro-meter, date input, task button
 const TaskCell = ({
   row,
   step,
@@ -451,7 +455,9 @@ const TaskCell = ({
   handleDateChange,
   handleMicroToggle,
   optimisticUpdates,
-  colors
+  colors,
+  tasks,
+  onTaskClick
 }) => {
   const { workflow } = row;
   const stepProgress = workflow.stepProgress?.[step.id] || {};
@@ -468,6 +474,9 @@ const TaskCell = ({
 
   // Check if all microsteps are completed (controls whether initials can be entered)
   const canEnterInitials = areAllMicrosCompleted(displayMicros);
+
+  // Get tasks for this workflow step
+  const stepTasks = tasks || [];
 
   return (
     <div
@@ -509,12 +518,24 @@ const TaskCell = ({
           tabIndex={-1}
         />
       )}
+      {/* Task Button */}
+      <div className="workflow-matrix__cell-task-button">
+        <TaskButton
+          workflowId={workflow.id}
+          stepId={step.id}
+          sessionID={workflow.sessionID}
+          tasks={stepTasks}
+          onTaskClick={onTaskClick}
+        />
+      </div>
     </div>
   );
 };
 
 const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
   const { userProfile, organization } = useAuth();
+  const { openTaskDetailModal } = useWorkflow();
+  const { myTasks, teamTasks } = useTask();
   const [activeTab, setActiveTab] = useState(null);
   const [showDates, setShowDates] = useState(false);
   const [optimisticUpdates, setOptimisticUpdates] = useState({}); // Local state for immediate UI feedback
@@ -525,6 +546,10 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
   const [showHiddenOnly, setShowHiddenOnly] = useState(false);
   const [dateRange, setDateRange] = useState('all'); // 'all', '7', '14', '30', '60'
   const [optimisticallyHidden, setOptimisticallyHidden] = useState({}); // { workflowId: true/false }
+
+  // Task state
+  const [workflowStepTasks, setWorkflowStepTasks] = useState({}); // { 'workflowId_stepId': [tasks] }
+  const [loadingTasks, setLoadingTasks] = useState(false);
 
   // Modal state
   const [selectedWorkflow, setSelectedWorkflow] = useState(null);
@@ -906,6 +931,44 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
       return dateA.localeCompare(dateB);
     });
   }, [workflows, activeTab, realtimeWorkflows, sessionData, dateRange, showHiddenOnly, hideCompleted, workflowTemplates, optimisticallyHidden]);
+
+  // Load tasks for visible workflow steps
+  useEffect(() => {
+    if (!activeTemplate || !filteredWorkflows.length || !organization?.id) {
+      return;
+    }
+
+    const loadTasks = async () => {
+      setLoadingTasks(true);
+      try {
+        // Build list of workflow/step pairs to query
+        const workflowStepPairs = [];
+        filteredWorkflows.forEach(workflow => {
+          activeTemplate.steps.forEach(step => {
+            workflowStepPairs.push({
+              workflowID: workflow.id,
+              workflowStepID: step.id
+            });
+          });
+        });
+
+        // Batch query all tasks
+        const tasksByStep = await getWorkflowStepTasksBatch(workflowStepPairs, organization.id);
+        setWorkflowStepTasks(tasksByStep);
+      } catch (error) {
+        console.error('Error loading workflow step tasks:', error);
+      } finally {
+        setLoadingTasks(false);
+      }
+    };
+
+    loadTasks();
+  }, [activeTemplate, filteredWorkflows, organization?.id, myTasks.length, teamTasks.length]);
+
+  // Handle task click to open detail modal
+  const handleTaskClick = useCallback((taskId) => {
+    openTaskDetailModal(taskId);
+  }, [openTaskDetailModal]);
 
   // Calculate progress for a workflow
   const calculateProgress = (workflow) => {
@@ -1408,6 +1471,9 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
         ),
         renderCell: (props) => {
           const lastCompletedIdx = getLastCompletedIndex(props.row.workflow);
+          const taskKey = `${props.row.workflow.id}_${step.id}`;
+          const stepTasks = workflowStepTasks[taskKey] || [];
+
           return (
             <TaskCell
               row={props.row}
@@ -1420,6 +1486,8 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
               handleMicroToggle={handleMicroToggle}
               optimisticUpdates={optimisticUpdates}
               colors={stepColors}
+              tasks={stepTasks}
+              onTaskClick={handleTaskClick}
             />
           );
         },
@@ -1449,7 +1517,9 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
     handleSchoolClick,
     toggleWorkflowHidden,
     optimisticUpdates,
-    optimisticallyHidden
+    optimisticallyHidden,
+    workflowStepTasks,
+    handleTaskClick
   ]);
 
   // ============================================================================

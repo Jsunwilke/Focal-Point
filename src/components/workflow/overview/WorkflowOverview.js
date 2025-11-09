@@ -7,6 +7,8 @@ import { useAuth } from '../../../contexts/AuthContext';
 import WorkflowFilters from './WorkflowFilters';
 import WorkflowStats from './WorkflowStats';
 import WorkflowMatrixView from './views/WorkflowMatrixView';
+import CreateTaskModal from '../../tasks/CreateTaskModal';
+import TaskDetailModal from '../../tasks/TaskDetailModal';
 import '../WorkflowOverview.css';
 
 const WorkflowOverview = () => {
@@ -29,7 +31,14 @@ const WorkflowOverview = () => {
     refreshWorkflows,
     refreshSingleWorkflow,
     clearTemplateCache,
-    clearAllCaches
+    clearAllCaches,
+    // Task modal state
+    isCreateTaskModalOpen,
+    createTaskPrefill,
+    selectedTaskId,
+    isTaskDetailModalOpen,
+    closeCreateTaskModal,
+    closeTaskDetailModal
   } = useWorkflow();
 
   const { userProfile, organization } = useAuth();
@@ -294,6 +303,19 @@ const WorkflowOverview = () => {
           <WorkflowMatrixView {...viewData} />
         )}
       </div>
+
+      {/* Task Modals */}
+      <CreateTaskModal
+        isOpen={isCreateTaskModalOpen}
+        onClose={closeCreateTaskModal}
+        prefilledData={createTaskPrefill}
+      />
+
+      <TaskDetailModal
+        isOpen={isTaskDetailModalOpen}
+        onClose={closeTaskDetailModal}
+        taskId={selectedTaskId}
+      />
     </div>
   );
 };

@@ -31,6 +31,14 @@
   overflow-x: hidden;
   box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
+  transition: margin-right var(--transition-normal), max-width var(--transition-normal);
+}
+
+/* When task panel is open, shift only content left */
+.layout__content--panel-open {
+  margin-right: 360px;
+  max-width: calc(100% - 360px);
 }
 
 /* Workflow pages need tighter width constraints */

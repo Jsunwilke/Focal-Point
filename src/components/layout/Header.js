@@ -6,6 +6,7 @@ import Button from "../shared/Button";
 import ProfileSettingsModal from "../settings/ProfileSettingsModal";
 import StudioSettingsModal from "../settings/StudioSettingsModal";
 import HeaderReadCounter from "./HeaderReadCounter";
+import TaskPanelTrigger from "../tasks/TaskPanelTrigger";
 import "./Header.css";
 
 const Header = ({ onMenuToggle, isMobile }) => {
@@ -103,6 +104,8 @@ const Header = ({ onMenuToggle, isMobile }) => {
             )}
 
             <HeaderReadCounter />
+
+            <TaskPanelTrigger />
 
             <div className="header__user">
               <button

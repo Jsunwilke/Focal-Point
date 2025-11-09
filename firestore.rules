@@ -1665,12 +1665,12 @@ service cloud.firestore {
     // User presence tracking for online status
     match /presence/{userId} {
       // Users can read their own presence or presence of users in same org
-      allow read: if request.auth != null && 
-                     (request.auth.uid == userId || 
+      allow read: if request.auth != null &&
+                     (request.auth.uid == userId ||
                       usersInSameOrg(request.auth.uid, userId));
-      
+
       // Users can only create/update their own presence data
-      allow create, update: if request.auth != null && 
+      allow create, update: if request.auth != null &&
                                request.auth.uid == userId &&
                                // Validate required fields
                                request.resource.data.keys().hasAll(['online', 'lastSeen']) &&
@@ -1678,20 +1678,106 @@ service cloud.firestore {
                                request.resource.data.online is bool &&
                                request.resource.data.lastSeen is timestamp &&
                                // Optional fields validation
-                               (!request.resource.data.keys().hasAny(['customStatus']) || 
+                               (!request.resource.data.keys().hasAny(['customStatus']) ||
                                 request.resource.data.customStatus is string) &&
-                               (!request.resource.data.keys().hasAny(['statusEmoji']) || 
+                               (!request.resource.data.keys().hasAny(['statusEmoji']) ||
                                 request.resource.data.statusEmoji is string) &&
-                               (!request.resource.data.keys().hasAny(['status']) || 
+                               (!request.resource.data.keys().hasAny(['status']) ||
                                 request.resource.data.status is string) &&
-                               (!request.resource.data.keys().hasAny(['statusUpdatedAt']) || 
+                               (!request.resource.data.keys().hasAny(['statusUpdatedAt']) ||
                                 request.resource.data.statusUpdatedAt is timestamp);
-      
+
       // Users can delete their own presence
-      allow delete: if request.auth != null && 
+      allow delete: if request.auth != null &&
                        request.auth.uid == userId;
     }
-    
+
+    // Tasks - Task management system
+    match /tasks/{taskId} {
+      // Helper function to check if user can access task
+      function canAccessTask(userId, taskData) {
+        return taskData.organizationID is string &&
+               belongsToSameOrg(userId, taskData.organizationID) &&
+               (
+                 // User created the task
+                 taskData.createdBy == userId ||
+                 // User is assigned to the task
+                 (taskData.keys().hasAny(['assignedTo']) &&
+                  taskData.assignedTo is list &&
+                  userId in taskData.assignedTo) ||
+                 // User is admin or manager
+                 isAdminOrManager(userId)
+               );
+      }
+
+      // Users can read tasks they created, are assigned to, or if they're admin/manager
+      allow read: if request.auth != null &&
+                     canAccessTask(request.auth.uid, resource.data);
+
+      // Authenticated users can create tasks in their organization
+      allow create: if request.auth != null &&
+                       belongsToSameOrg(request.auth.uid, request.resource.data.organizationID) &&
+                       // Validate required fields
+                       request.resource.data.keys().hasAll(['title', 'type', 'status', 'priority', 'createdBy', 'organizationID']) &&
+                       // Validate data types
+                       request.resource.data.title is string &&
+                       request.resource.data.type in ['general', 'session', 'workflow'] &&
+                       request.resource.data.status in ['todo', 'in_progress', 'blocked', 'completed', 'cancelled'] &&
+                       request.resource.data.priority in ['low', 'medium', 'high', 'urgent'] &&
+                       request.resource.data.createdBy is string &&
+                       request.resource.data.organizationID is string &&
+                       // Validate optional fields
+                       (!request.resource.data.keys().hasAny(['description']) || request.resource.data.description is string) &&
+                       (!request.resource.data.keys().hasAny(['assignedTo']) || request.resource.data.assignedTo is list) &&
+                       (!request.resource.data.keys().hasAny(['subtasks']) || request.resource.data.subtasks is list) &&
+                       (!request.resource.data.keys().hasAny(['sessionId']) || request.resource.data.sessionId is string) &&
+                       (!request.resource.data.keys().hasAny(['workflowId']) || request.resource.data.workflowId is string) &&
+                       (!request.resource.data.keys().hasAny(['workflowStepId']) || request.resource.data.workflowStepId is string) &&
+                       (!request.resource.data.keys().hasAny(['estimatedHours']) || request.resource.data.estimatedHours is number) &&
+                       (!request.resource.data.keys().hasAny(['commentCount']) || request.resource.data.commentCount is number);
+
+      // Users can update tasks they have access to
+      allow update: if request.auth != null &&
+                       canAccessTask(request.auth.uid, resource.data) &&
+                       // Ensure organization and creator cannot be changed
+                       request.resource.data.organizationID == resource.data.organizationID &&
+                       request.resource.data.createdBy == resource.data.createdBy;
+
+      // Users can delete tasks they created or if they're admin/manager
+      allow delete: if request.auth != null &&
+                       belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
+                       (resource.data.createdBy == request.auth.uid ||
+                        isAdminOrManager(request.auth.uid));
+
+      // Task Comments subcollection
+      match /comments/{commentId} {
+        // Users can read comments if they can access the parent task
+        allow read: if request.auth != null &&
+                       canAccessTask(request.auth.uid, get(/databases/$(database)/documents/tasks/$(taskId)).data);
+
+        // Users can create comments if they can access the parent task
+        allow create: if request.auth != null &&
+                         canAccessTask(request.auth.uid, get(/databases/$(database)/documents/tasks/$(taskId)).data) &&
+                         // Validate required fields
+                         request.resource.data.keys().hasAll(['text', 'userId', 'userName']) &&
+                         // Validate data types
+                         request.resource.data.text is string &&
+                         request.resource.data.userId is string &&
+                         request.resource.data.userName is string &&
+                         // User must be commenting as themselves
+                         request.resource.data.userId == request.auth.uid;
+
+        // Users can update their own comments
+        allow update: if request.auth != null &&
+                         resource.data.userId == request.auth.uid;
+
+        // Users can delete their own comments or if they're admin/manager
+        allow delete: if request.auth != null &&
+                         (resource.data.userId == request.auth.uid ||
+                          isAdminOrManager(request.auth.uid));
+      }
+    }
+
     // Captura Order Sync Status - Track sync operations
     match /capturaOrderSyncStatus/{statusDoc} {
       // Admins can read sync status

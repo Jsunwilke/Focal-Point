@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import { loadEmailJS } from "./services/emailService";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { WorkflowProvider } from "./contexts/WorkflowContext";
+import { TaskProvider } from "./contexts/TaskContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { DataCacheProvider } from "./contexts/DataCacheContext";
 import { StreamChatProvider } from "./contexts/StreamChatContext";
@@ -42,6 +43,7 @@ import TestCaptura from "./pages/TestCaptura";
 import CapturaStats from "./pages/CapturaStats";
 import TestCapturaBackfill from "./pages/TestCapturaBackfill";
 import PhotoCritique from "./pages/PhotoCritique";
+import TasksPage from "./pages/TasksPage";
 import "./App.css";
 
 const AppContent = () => {
@@ -133,6 +135,7 @@ const AppContent = () => {
                       <Route path="/mileage" element={<MileageTracking />} />
                       <Route path="/workflows" element={<WorkflowDashboard />} />
                       <Route path="/workflows/settings" element={<WorkflowSettings />} />
+                      <Route path="/tasks" element={<TasksPage />} />
                       <Route path="/team" element={<TeamManagement />} />
                       <Route path="/schools" element={<SchoolManagement />} />
                       <Route path="/sports" element={<Sports />} />
@@ -180,14 +183,16 @@ const App = () => {
               <YearbookProvider>
                 <OrdersProvider>
                   <WorkflowProvider>
+                    <TaskProvider>
                       <div className="app">
                         <AppContent />
                       </div>
-                    </WorkflowProvider>
-                  </OrdersProvider>
-                </YearbookProvider>
-              </DistrictProvider>
-            </StreamChatProvider>
+                    </TaskProvider>
+                  </WorkflowProvider>
+                </OrdersProvider>
+              </YearbookProvider>
+            </DistrictProvider>
+          </StreamChatProvider>
         </DataCacheProvider>
       </ToastProvider>
     </AuthProvider>

@@ -512,6 +512,13 @@
   color: #1e40af;
 }
 
+/* Task Button in Cell */
+.workflow-matrix__cell-task-button {
+  margin-top: 6px;
+  display: flex;
+  justify-content: flex-start;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .workflow-matrix__tabs {

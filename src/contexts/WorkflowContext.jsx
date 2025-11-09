@@ -40,7 +40,13 @@ export const WorkflowProvider = ({ children }) => {
   const [sessionData, setSessionData] = useState({});
   const [loading, setLoading] = useState(false);
   const [lastCheck, setLastCheck] = useState(null);
-  
+
+  // Task modal state
+  const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
+  const [createTaskPrefill, setCreateTaskPrefill] = useState(null);
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [isTaskDetailModalOpen, setIsTaskDetailModalOpen] = useState(false);
+
   const { showToast } = useToast();
   const { userProfile, organization } = useAuth();
   const { teamMembers } = useDataCache();
@@ -720,6 +726,54 @@ export const WorkflowProvider = ({ children }) => {
     console.log('✅ Cleared in-memory template state, will reload on next workflow load');
   }, []);
 
+  // Task modal management functions
+  const openCreateTaskModal = useCallback((prefillData = null) => {
+    setCreateTaskPrefill(prefillData);
+    setIsCreateTaskModalOpen(true);
+  }, []);
+
+  const closeCreateTaskModal = useCallback(() => {
+    setIsCreateTaskModalOpen(false);
+    setCreateTaskPrefill(null);
+  }, []);
+
+  const openTaskDetailModal = useCallback((taskId) => {
+    setSelectedTaskId(taskId);
+    setIsTaskDetailModalOpen(true);
+  }, []);
+
+  const closeTaskDetailModal = useCallback(() => {
+    setIsTaskDetailModalOpen(false);
+    setSelectedTaskId(null);
+  }, []);
+
+  // Helper to create task for workflow step
+  const createTaskForWorkflowStep = useCallback((workflowId, stepId, sessionID = null) => {
+    const workflow = userWorkflows.find(w => w.id === workflowId);
+    const template = workflow ? workflowTemplates[workflow.templateId] : null;
+    const step = template?.steps.find(s => s.id === stepId);
+
+    if (!workflow || !template || !step) {
+      console.error('Invalid workflow, template, or step');
+      return;
+    }
+
+    // Prepare prefill data for task creation
+    const prefillData = {
+      type: 'workflow',
+      workflowId: workflowId,
+      workflowStepId: stepId,
+      sessionId: sessionID || workflow.sessionID,
+      title: `${step.name} - ${workflow.sessionName || 'Workflow Task'}`,
+      description: step.description || '',
+      assignedTo: workflow.stepProgress[stepId]?.assignedTo ? [workflow.stepProgress[stepId].assignedTo] : [],
+      dueDate: workflow.stepProgress[stepId]?.dueDate || null,
+      priority: step.priority || 'medium'
+    };
+
+    openCreateTaskModal(prefillData);
+  }, [userWorkflows, workflowTemplates, openCreateTaskModal]);
+
   const value = {
     // Data
     userWorkflows,
@@ -729,6 +783,12 @@ export const WorkflowProvider = ({ children }) => {
     sessionData,
     loading,
 
+    // Task modal state
+    isCreateTaskModalOpen,
+    createTaskPrefill,
+    selectedTaskId,
+    isTaskDetailModalOpen,
+
     // Functions
     refreshWorkflows,
     refreshSingleWorkflow,
@@ -737,6 +797,13 @@ export const WorkflowProvider = ({ children }) => {
     getWorkflowWithTemplate,
     getUserPendingTasks,
     getWorkflowStats,
+
+    // Task modal functions
+    openCreateTaskModal,
+    closeCreateTaskModal,
+    openTaskDetailModal,
+    closeTaskDetailModal,
+    createTaskForWorkflowStep,
 
     // Helper functions
     loadUserWorkflows,
