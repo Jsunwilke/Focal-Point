@@ -1,0 +1,151 @@
+/* src/components/tasks/ActivityLog.css */
+
+.activity-log {
+  padding: 0.5rem 0;
+}
+
+.activity-log__timeline {
+  position: relative;
+}
+
+.activity-log__item {
+  position: relative;
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+}
+
+.activity-log__item-avatar {
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.activity-log__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--background);
+}
+
+.activity-log__avatar--initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  color: white;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.activity-log__avatar--placeholder {
+  background-color: var(--background-muted);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.activity-log__item-content {
+  flex: 1;
+  min-width: 0;
+  padding-top: 0.125rem;
+}
+
+.activity-log__item-description {
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin-bottom: 0.25rem;
+}
+
+.activity-log__item-timestamp {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.activity-log__timeline-line {
+  position: absolute;
+  left: 13px;
+  top: 38px;
+  bottom: -0.75rem;
+  width: 2px;
+  background-color: var(--border-light);
+}
+
+.activity-log__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.activity-log__loading-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.activity-log__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.activity-log__empty p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.activity-log__empty svg {
+  opacity: 0.5;
+}
+
+/* Mobile responsive */
+@media (max-width: 767px) {
+  .activity-log__item {
+    gap: 0.625rem;
+    padding: 0.625rem 0;
+  }
+
+  .activity-log__avatar {
+    width: 24px;
+    height: 24px;
+  }
+
+  .activity-log__avatar--initials {
+    font-size: 0.625rem;
+  }
+
+  .activity-log__timeline-line {
+    left: 11px;
+    top: 34px;
+  }
+
+  .activity-log__item-description {
+    font-size: 0.75rem;
+  }
+
+  .activity-log__item-timestamp {
+    font-size: 0.6875rem;
+  }
+}

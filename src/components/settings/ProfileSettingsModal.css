@@ -878,3 +878,14 @@
     align-self: flex-end;
   }
 }
+
+/* Task email notification preferences - sub-item styling */
+.preference-item--sub {
+  margin-left: var(--spacing-lg);
+  background-color: var(--background-secondary);
+  border-left: 3px solid var(--primary-light);
+}
+
+.preference-item--sub:hover {
+  background-color: var(--background-muted);
+}

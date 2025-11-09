@@ -5,6 +5,7 @@ import { loadEmailJS } from "./services/emailService";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { WorkflowProvider } from "./contexts/WorkflowContext";
 import { TaskProvider } from "./contexts/TaskContext";
+import { NotificationProvider } from "./contexts/NotificationContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { DataCacheProvider } from "./contexts/DataCacheContext";
 import { StreamChatProvider } from "./contexts/StreamChatContext";
@@ -178,21 +179,23 @@ const App = () => {
     <AuthProvider>
       <ToastProvider>
         <DataCacheProvider>
-          <StreamChatProvider>
-            <DistrictProvider>
-              <YearbookProvider>
-                <OrdersProvider>
-                  <WorkflowProvider>
-                    <TaskProvider>
-                      <div className="app">
-                        <AppContent />
-                      </div>
-                    </TaskProvider>
-                  </WorkflowProvider>
-                </OrdersProvider>
-              </YearbookProvider>
-            </DistrictProvider>
-          </StreamChatProvider>
+          <NotificationProvider>
+            <StreamChatProvider>
+              <DistrictProvider>
+                <YearbookProvider>
+                  <OrdersProvider>
+                    <WorkflowProvider>
+                      <TaskProvider>
+                        <div className="app">
+                          <AppContent />
+                        </div>
+                      </TaskProvider>
+                    </WorkflowProvider>
+                  </OrdersProvider>
+                </YearbookProvider>
+              </DistrictProvider>
+            </StreamChatProvider>
+          </NotificationProvider>
         </DataCacheProvider>
       </ToastProvider>
     </AuthProvider>

@@ -12,6 +12,7 @@
   "main": "src/index.js",
   "homepage": "/",
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
     "@prisma/client": "^6.13.0",
@@ -30,6 +31,7 @@
     "leaflet-geosearch": "^4.2.0",
     "lucide-react": "^0.400.0",
     "prisma": "^6.13.0",
+    "quill": "^2.0.3",
     "react": "^18.2.0",
     "react-beautiful-dnd": "^13.1.1",
     "react-bootstrap": "^2.9.0",
@@ -37,6 +39,7 @@
     "react-data-grid": "^7.0.0-beta.46",
     "react-dom": "^18.2.0",
     "react-leaflet": "^4.2.1",
+    "react-quill": "^2.0.0",
     "react-router-dom": "^6.23.0",
     "react-scripts": "5.0.1",
     "react-sketch-canvas": "^6.2.0",

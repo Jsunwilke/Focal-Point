@@ -3,7 +3,7 @@ import { Timestamp } from 'firebase/firestore';
 class TaskCacheService {
   constructor() {
     this.CACHE_PREFIX = 'focal_task_';
-    this.CACHE_VERSION = '1.0';
+    this.CACHE_VERSION = '1.1'; // Bumped to invalidate old cache with ghost tasks
     this.TASK_CACHE_AGE = 24 * 60 * 60 * 1000; // 24 hours
   }
 

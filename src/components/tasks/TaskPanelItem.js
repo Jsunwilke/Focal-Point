@@ -1,6 +1,6 @@
 // src/components/tasks/TaskPanelItem.js
 import React, { useState, useRef, useEffect } from 'react';
-import { CheckSquare, Square, AlertCircle, Clock, MessageSquare, MoreVertical, CalendarIcon, ListPlus, Trash2 } from 'lucide-react';
+import { CheckSquare, Square, AlertCircle, Clock, MessageSquare, MoreVertical, CalendarIcon, ListPlus, Trash2, Copy } from 'lucide-react';
 import './TaskPanelItem.css';
 
 const TaskPanelItem = ({ task, onClick, onToggleComplete, onQuickAction }) => {
@@ -52,12 +52,28 @@ const TaskPanelItem = ({ task, onClick, onToggleComplete, onQuickAction }) => {
       case 'urgent':
         return '#ef4444'; // red
       case 'high':
-        return '#f59e0b'; // orange
+        return '#f97316'; // orange
       case 'medium':
         return '#3b82f6'; // blue
       case 'low':
       default:
         return '#6b7280'; // gray
+    }
+  };
+
+  // Get priority label
+  const getPriorityLabel = (priority) => {
+    switch (priority) {
+      case 'urgent':
+        return 'Urgent';
+      case 'high':
+        return 'High';
+      case 'medium':
+        return 'Medium';
+      case 'low':
+        return 'Low';
+      default:
+        return 'Medium';
     }
   };
 
@@ -190,6 +206,13 @@ const TaskPanelItem = ({ task, onClick, onToggleComplete, onQuickAction }) => {
             >
               <ListPlus size={14} />
               Add a subtask
+            </button>
+            <button
+              className="task-panel-item__menu-item"
+              onClick={(e) => handleMenuAction(e, 'duplicate')}
+            >
+              <Copy size={14} />
+              Duplicate
             </button>
             <button
               className="task-panel-item__menu-item task-panel-item__menu-item--danger"

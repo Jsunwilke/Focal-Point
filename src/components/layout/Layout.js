@@ -3,17 +3,20 @@ import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { ToastProvider } from "../../contexts/ToastContext";
 import { useTask } from "../../contexts/TaskContext";
+import useKeyboardShortcuts from "../../hooks/useKeyboardShortcuts";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import TaskPanel from "../tasks/TaskPanel";
+import CreateTaskModal from "../tasks/CreateTaskModal";
 import "./Layout.css";
 
 const Layout = ({ children }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const location = useLocation();
-  const { isPanelOpen } = useTask();
+  const { isPanelOpen, openPanel, closePanel } = useTask();
 
   useEffect(() => {
     const checkMobile = () => {
@@ -51,6 +54,22 @@ const Layout = ({ children }) => {
     setIsSidebarCollapsed(!isSidebarCollapsed);
   };
 
+  // Global keyboard shortcuts
+  useKeyboardShortcuts({
+    // Ctrl+K: Open new task modal
+    'ctrl+k': () => {
+      setIsCreateTaskModalOpen(true);
+    },
+    // Ctrl+/: Toggle task panel
+    'ctrl+/': () => {
+      if (isPanelOpen) {
+        closePanel();
+      } else {
+        openPanel();
+      }
+    }
+  });
+
   return (
     <ToastProvider>
       <div className={`layout ${!isMobile && isSidebarCollapsed ? 'layout--sidebar-collapsed' : ''}`}>
@@ -75,6 +94,10 @@ const Layout = ({ children }) => {
           <main className={`layout__content ${location.pathname === '/schedule' ? 'layout__content--schedule' : ''} ${location.pathname === '/chat' ? 'layout__content--chat' : ''} ${isPanelOpen ? 'layout__content--panel-open' : ''}`}>{children}</main>
         </div>
         <TaskPanel />
+        <CreateTaskModal
+          isOpen={isCreateTaskModalOpen}
+          onClose={() => setIsCreateTaskModalOpen(false)}
+        />
       </div>
     </ToastProvider>
   );

@@ -13,6 +13,9 @@ import {
   getTaskComments,
   subscribeToTaskComments
 } from '../firebase/tasks';
+import { logActivity, ACTIVITY_TYPES } from '../firebase/activity';
+import { watchTask as watchTaskFirebase, unwatchTask as unwatchTaskFirebase, autoWatchTask } from '../firebase/taskWatchers';
+import { createMentionNotifications } from '../firebase/taskNotifications';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
 import taskCacheService from '../services/taskCacheService';
@@ -252,24 +255,23 @@ export const TaskProvider = ({ children }) => {
         createdBy: userProfile.id
       });
 
+      // Log activity
+      try {
+        await logActivity(
+          newTask.id,
+          ACTIVITY_TYPES.TASK_CREATED,
+          { title: newTask.title },
+          userProfile.id,
+          organization.id
+        );
+      } catch (activityError) {
+        console.error('Failed to log task creation activity:', activityError);
+      }
+
       showToast('Task created successfully', 'success');
 
-      // Optimistically add the new task to local state
-      // The real-time listener will ensure it stays in sync
-      setMyTasks(prevTasks => {
-        const updatedTasks = [newTask, ...prevTasks];
-        // Update cache with the new task
-        taskCacheService.setCachedTasks(userProfile.id, organization.id, 'all', updatedTasks);
-        return updatedTasks;
-      });
-
-      if (canViewTeamTasks) {
-        setTeamTasks(prevTasks => {
-          const updatedTasks = [newTask, ...prevTasks];
-          taskCacheService.setCachedTeamTasks(organization.id, updatedTasks);
-          return updatedTasks;
-        });
-      }
+      // Real-time listener will add the task to state automatically
+      // No need for optimistic update since listener is fast enough
 
       return newTask;
     } catch (error) {
@@ -279,10 +281,158 @@ export const TaskProvider = ({ children }) => {
     }
   }, [organization?.id, userProfile?.id, canViewTeamTasks]);
 
+  // Duplicate a task
+  const duplicateTask = useCallback(async (taskId) => {
+    try {
+      // Find the original task
+      const originalTask = [...myTasks, ...teamTasks].find(t => t.id === taskId);
+      if (!originalTask) {
+        throw new Error('Task not found');
+      }
+
+      // Create duplicate with specific fields reset
+      const duplicateData = {
+        title: `${originalTask.title} (Copy)`,
+        description: originalTask.description || '',
+        type: originalTask.type || 'general',
+        priority: originalTask.priority || 'medium',
+        assignedTo: originalTask.assignedTo || [],
+        dueDate: originalTask.dueDate,
+        estimatedHours: originalTask.estimatedHours || 0,
+        sessionId: originalTask.sessionId,
+        sessionName: originalTask.sessionName,
+        sessionDate: originalTask.sessionDate,
+        workflowId: originalTask.workflowId,
+        workflowStepId: originalTask.workflowStepId,
+        workflowName: originalTask.workflowName,
+        workflowStepName: originalTask.workflowStepName,
+        // Duplicate subtasks but reset their completion status
+        subtasks: originalTask.subtasks?.map(st => ({
+          ...st,
+          completed: false,
+          completedAt: null,
+          completedBy: null
+        })) || [],
+        // Reset status and completion fields
+        status: 'todo',
+        completedAt: null,
+        completedBy: null,
+        commentCount: 0
+      };
+
+      const newTask = await createTask(duplicateData);
+      showToast('Task duplicated successfully', 'success');
+      return newTask;
+    } catch (error) {
+      console.error('Error duplicating task:', error);
+      showToast('Failed to duplicate task', 'error');
+      throw error;
+    }
+  }, [myTasks, teamTasks, createTask]);
+
   // Update a task
   const updateTask = useCallback(async (taskId, updates) => {
     try {
+      // Get the current task to track changes
+      const currentTask = [...myTasks, ...teamTasks].find(t => t.id === taskId);
+
       await updateTaskFirebase(taskId, updates);
+
+      // Log activities for specific field changes
+      if (currentTask && userProfile?.id && organization?.id) {
+        try {
+          // Status change
+          if (updates.status && updates.status !== currentTask.status) {
+            await logActivity(
+              taskId,
+              ACTIVITY_TYPES.STATUS_CHANGED,
+              { oldStatus: currentTask.status, newStatus: updates.status },
+              userProfile.id,
+              organization.id
+            );
+          }
+
+          // Priority change
+          if (updates.priority && updates.priority !== currentTask.priority) {
+            await logActivity(
+              taskId,
+              ACTIVITY_TYPES.PRIORITY_CHANGED,
+              { oldPriority: currentTask.priority, newPriority: updates.priority },
+              userProfile.id,
+              organization.id
+            );
+          }
+
+          // Due date change
+          if (updates.dueDate !== undefined) {
+            const oldDate = currentTask.dueDate?.toMillis?.() || null;
+            const newDate = updates.dueDate?.toMillis?.() || null;
+            if (oldDate !== newDate) {
+              await logActivity(
+                taskId,
+                ACTIVITY_TYPES.DUE_DATE_CHANGED,
+                { oldDueDate: oldDate, newDueDate: newDate },
+                userProfile.id,
+                organization.id
+              );
+            }
+          }
+
+          // Title change
+          if (updates.title && updates.title !== currentTask.title) {
+            await logActivity(
+              taskId,
+              ACTIVITY_TYPES.TITLE_UPDATED,
+              { oldTitle: currentTask.title, newTitle: updates.title },
+              userProfile.id,
+              organization.id
+            );
+          }
+
+          // Description change
+          if (updates.description !== undefined && updates.description !== currentTask.description) {
+            await logActivity(
+              taskId,
+              ACTIVITY_TYPES.DESCRIPTION_UPDATED,
+              {},
+              userProfile.id,
+              organization.id
+            );
+          }
+
+          // Assignee changes
+          if (updates.assignedTo) {
+            const oldAssignees = currentTask.assignedTo || [];
+            const newAssignees = updates.assignedTo || [];
+
+            // Find added assignees
+            const added = newAssignees.filter(id => !oldAssignees.includes(id));
+            for (const assigneeId of added) {
+              await logActivity(
+                taskId,
+                ACTIVITY_TYPES.ASSIGNEE_ADDED,
+                { assigneeId },
+                userProfile.id,
+                organization.id
+              );
+            }
+
+            // Find removed assignees
+            const removed = oldAssignees.filter(id => !newAssignees.includes(id));
+            for (const assigneeId of removed) {
+              await logActivity(
+                taskId,
+                ACTIVITY_TYPES.ASSIGNEE_REMOVED,
+                { assigneeId },
+                userProfile.id,
+                organization.id
+              );
+            }
+          }
+        } catch (activityError) {
+          console.error('Failed to log task update activity:', activityError);
+        }
+      }
 
       showToast('Task updated successfully', 'success');
 
@@ -307,11 +457,15 @@ export const TaskProvider = ({ children }) => {
       showToast('Failed to update task', 'error');
       throw error;
     }
-  }, [canViewTeamTasks]);
+  }, [canViewTeamTasks, myTasks, teamTasks, userProfile?.id, organization?.id]);
 
   // Delete a task
   const deleteTask = useCallback(async (taskId) => {
     try {
+      if (!organization?.id) {
+        throw new Error('Organization ID is missing');
+      }
+
       await deleteTaskFirebase(taskId, organization.id);
 
       showToast('Task deleted successfully', 'success');
@@ -326,19 +480,42 @@ export const TaskProvider = ({ children }) => {
       return true;
     } catch (error) {
       console.error('Error deleting task:', error);
-      showToast('Failed to delete task', 'error');
+      console.error('Organization ID:', organization?.id);
+      console.error('User ID:', userProfile?.id);
+      showToast(`Failed to delete task: ${error.message}`, 'error');
       throw error;
     }
-  }, [organization?.id, canViewTeamTasks]);
+  }, [organization?.id, canViewTeamTasks, userProfile?.id]);
 
   // Mark task as complete
   const markTaskComplete = useCallback(async (taskId) => {
     try {
+      const currentTask = [...myTasks, ...teamTasks].find(t => t.id === taskId);
+
       await updateTaskFirebase(taskId, {
         status: 'completed',
         completedAt: Timestamp.now(),
         completedBy: userProfile.id
       });
+
+      // Log activity
+      if (userProfile?.id && organization?.id) {
+        try {
+          const activityType = currentTask?.status === 'completed'
+            ? ACTIVITY_TYPES.TASK_REOPENED
+            : ACTIVITY_TYPES.TASK_COMPLETED;
+
+          await logActivity(
+            taskId,
+            activityType,
+            {},
+            userProfile.id,
+            organization.id
+          );
+        } catch (activityError) {
+          console.error('Failed to log task completion activity:', activityError);
+        }
+      }
 
       showToast('Task marked as complete', 'success');
 
@@ -348,12 +525,34 @@ export const TaskProvider = ({ children }) => {
       showToast('Failed to mark task complete', 'error');
       throw error;
     }
-  }, [userProfile?.id]);
+  }, [userProfile?.id, organization?.id, myTasks, teamTasks]);
 
   // Update subtask status
   const updateSubtaskStatus = useCallback(async (taskId, subtaskId, completed) => {
     try {
+      const currentTask = [...myTasks, ...teamTasks].find(t => t.id === taskId);
+      const subtask = currentTask?.subtasks?.find(st => st.id === subtaskId);
+
       await updateSubtaskStatusFirebase(taskId, subtaskId, completed, userProfile.id);
+
+      // Log activity
+      if (subtask && userProfile?.id && organization?.id) {
+        try {
+          const activityType = completed
+            ? ACTIVITY_TYPES.SUBTASK_COMPLETED
+            : ACTIVITY_TYPES.SUBTASK_UNCOMPLETED;
+
+          await logActivity(
+            taskId,
+            activityType,
+            { subtaskTitle: subtask.title },
+            userProfile.id,
+            organization.id
+          );
+        } catch (activityError) {
+          console.error('Failed to log subtask update activity:', activityError);
+        }
+      }
 
       return true;
     } catch (error) {
@@ -361,7 +560,7 @@ export const TaskProvider = ({ children }) => {
       showToast('Failed to update subtask', 'error');
       throw error;
     }
-  }, [userProfile?.id]);
+  }, [userProfile?.id, organization?.id, myTasks, teamTasks]);
 
   // Add comment to task
   const addComment = useCallback(async (taskId, comment) => {
@@ -374,6 +573,52 @@ export const TaskProvider = ({ children }) => {
         mentions: comment.mentions || []
       });
 
+      // Find the task to get its title
+      const task = [...myTasks, ...teamTasks].find(t => t.id === taskId);
+
+      // Log activity
+      if (userProfile?.id && organization?.id) {
+        try {
+          await logActivity(
+            taskId,
+            ACTIVITY_TYPES.COMMENT_ADDED,
+            { commentPreview: comment.text.substring(0, 100) },
+            userProfile.id,
+            organization.id
+          );
+        } catch (activityError) {
+          console.error('Failed to log comment activity:', activityError);
+        }
+      }
+
+      // Create mention notifications
+      if (comment.mentions && comment.mentions.length > 0 && task) {
+        try {
+          await createMentionNotifications({
+            mentions: comment.mentions,
+            taskId,
+            taskTitle: task.title,
+            commentText: comment.text,
+            triggeredBy: userProfile.id,
+            triggeredByName: `${userProfile.firstName} ${userProfile.lastName}`,
+            organizationID: organization.id
+          });
+        } catch (notificationError) {
+          console.error('Failed to create mention notifications:', notificationError);
+        }
+      }
+
+      // Auto-watch task for mentioned users
+      if (comment.mentions && comment.mentions.length > 0) {
+        comment.mentions.forEach(async (mention) => {
+          try {
+            await autoWatchTask(taskId, mention.userId, organization.id, 'mention');
+          } catch (watchError) {
+            console.error('Failed to auto-watch task for mentioned user:', watchError);
+          }
+        });
+      }
+
       showToast('Comment added', 'success');
 
       return newComment;
@@ -382,7 +627,7 @@ export const TaskProvider = ({ children }) => {
       showToast('Failed to add comment', 'error');
       throw error;
     }
-  }, [userProfile?.id, userProfile?.firstName, userProfile?.lastName]);
+  }, [userProfile?.id, userProfile?.firstName, userProfile?.lastName, organization?.id, myTasks, teamTasks]);
 
   // Panel controls
   const togglePanel = useCallback(() => {
@@ -515,6 +760,82 @@ export const TaskProvider = ({ children }) => {
     return false;
   }, []);
 
+  // Watch task
+  const watchTask = useCallback(async (taskId) => {
+    try {
+      if (!userProfile?.id || !organization?.id) {
+        throw new Error('User or organization not found');
+      }
+
+      await watchTaskFirebase(taskId, userProfile.id, organization.id);
+      showToast('You are now watching this task', 'success');
+
+      // Update task in cache with new watcher
+      const updateTaskInCache = (tasks) => {
+        return tasks.map(task => {
+          if (task.id === taskId) {
+            const watchers = task.watchers || [];
+            if (!watchers.includes(userProfile.id)) {
+              return { ...task, watchers: [...watchers, userProfile.id] };
+            }
+          }
+          return task;
+        });
+      };
+
+      setMyTasks(prev => updateTaskInCache(prev));
+      if (canViewTeamTasks) {
+        setTeamTasks(prev => updateTaskInCache(prev));
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error watching task:', error);
+      showToast(`Failed to watch task: ${error.message}`, 'error');
+      throw error;
+    }
+  }, [userProfile?.id, organization?.id, canViewTeamTasks]);
+
+  // Unwatch task
+  const unwatchTask = useCallback(async (taskId) => {
+    try {
+      if (!userProfile?.id || !organization?.id) {
+        throw new Error('User or organization not found');
+      }
+
+      await unwatchTaskFirebase(taskId, userProfile.id, organization.id);
+      showToast('You are no longer watching this task', 'success');
+
+      // Update task in cache removing watcher
+      const updateTaskInCache = (tasks) => {
+        return tasks.map(task => {
+          if (task.id === taskId) {
+            const watchers = task.watchers || [];
+            return { ...task, watchers: watchers.filter(w => w !== userProfile.id) };
+          }
+          return task;
+        });
+      };
+
+      setMyTasks(prev => updateTaskInCache(prev));
+      if (canViewTeamTasks) {
+        setTeamTasks(prev => updateTaskInCache(prev));
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error unwatching task:', error);
+      showToast(`Failed to unwatch task: ${error.message}`, 'error');
+      throw error;
+    }
+  }, [userProfile?.id, organization?.id, canViewTeamTasks]);
+
+  // Check if user is watching a task
+  const isWatchingTask = useCallback((task) => {
+    if (!userProfile?.id || !task) return false;
+    return task.watchers?.includes(userProfile.id) || false;
+  }, [userProfile?.id]);
+
   const value = {
     // State
     myTasks,
@@ -525,11 +846,15 @@ export const TaskProvider = ({ children }) => {
 
     // Actions
     createTask,
+    duplicateTask,
     updateTask,
     deleteTask,
     markTaskComplete,
     updateSubtaskStatus,
     addComment,
+    watchTask,
+    unwatchTask,
+    isWatchingTask,
 
     // Panel controls
     togglePanel,

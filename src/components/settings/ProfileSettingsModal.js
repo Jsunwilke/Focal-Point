@@ -52,6 +52,11 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
       weeklyDigest: true,
       scheduleReminders: true,
     },
+    emailNotifications: {
+      enabled: true,
+      assignments: true,
+      dueDateReminders: true,
+    },
   });
 
   const [loading, setLoading] = useState(false);
@@ -83,6 +88,11 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
           pushNotifications: userProfile.preferences?.pushNotifications ?? true,
           weeklyDigest: userProfile.preferences?.weeklyDigest ?? true,
           scheduleReminders: userProfile.preferences?.scheduleReminders ?? true,
+        },
+        emailNotifications: {
+          enabled: userProfile.emailNotifications?.enabled ?? true,
+          assignments: userProfile.emailNotifications?.assignments ?? true,
+          dueDateReminders: userProfile.emailNotifications?.dueDateReminders ?? true,
         },
       });
       
@@ -293,7 +303,7 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
 
-    if (name.includes(".") && name.startsWith("preferences.")) {
+    if (name.includes(".")) {
       const [parent, child] = name.split(".");
       setFormData((prev) => ({
         ...prev,
@@ -867,6 +877,82 @@ const ProfileSettingsModal = ({ isOpen, onClose }) => {
                         <span className="toggle-slider"></span>
                       </label>
                     </div>
+                  </div>
+                </div>
+
+                <div className="form-section">
+                  <h3 className="form-section__title">
+                    <Mail size={16} />
+                    Task Email Notifications
+                  </h3>
+                  <p className="form-section__description">
+                    Choose which task events should send you email notifications
+                  </p>
+
+                  <div className="preference-group">
+                    <div className="preference-item">
+                      <div className="preference-item__info">
+                        <h4 className="preference-item__title">
+                          Enable Task Emails
+                        </h4>
+                        <p className="preference-item__description">
+                          Master switch for all task-related email notifications
+                        </p>
+                      </div>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          name="emailNotifications.enabled"
+                          checked={formData.emailNotifications.enabled}
+                          onChange={handleInputChange}
+                        />
+                        <span className="toggle-slider"></span>
+                      </label>
+                    </div>
+
+                    {formData.emailNotifications.enabled && (
+                      <>
+                        <div className="preference-item preference-item--sub">
+                          <div className="preference-item__info">
+                            <h4 className="preference-item__title">
+                              Task Assignments
+                            </h4>
+                            <p className="preference-item__description">
+                              Get notified when a task is assigned to you
+                            </p>
+                          </div>
+                          <label className="toggle-switch">
+                            <input
+                              type="checkbox"
+                              name="emailNotifications.assignments"
+                              checked={formData.emailNotifications.assignments}
+                              onChange={handleInputChange}
+                            />
+                            <span className="toggle-slider"></span>
+                          </label>
+                        </div>
+
+                        <div className="preference-item preference-item--sub">
+                          <div className="preference-item__info">
+                            <h4 className="preference-item__title">
+                              Due Date Reminders
+                            </h4>
+                            <p className="preference-item__description">
+                              Get reminded when tasks are due soon or overdue
+                            </p>
+                          </div>
+                          <label className="toggle-switch">
+                            <input
+                              type="checkbox"
+                              name="emailNotifications.dueDateReminders"
+                              checked={formData.emailNotifications.dueDateReminders}
+                              onChange={handleInputChange}
+                            />
+                            <span className="toggle-slider"></span>
+                          </label>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

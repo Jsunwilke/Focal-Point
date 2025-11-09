@@ -15,12 +15,22 @@ import {
   Link as LinkIcon,
   Workflow,
   Check,
-  ChevronDown
+  ChevronDown,
+  Paperclip
 } from 'lucide-react';
 import { useTask } from '../../contexts/TaskContext';
+import DatePickerWithPresets from '../shared/DatePickerWithPresets';
+import RichTextEditor from '../shared/RichTextEditor';
+import FileUploadButton from '../shared/FileUploadButton';
+import AttachmentList from './AttachmentList';
+import TaskTemplateSelector from './TaskTemplateSelector';
+import RecurringTaskForm from './RecurringTaskForm';
 import { useDataCache } from '../../contexts/DataCacheContext';
 import { useWorkflow } from '../../contexts/WorkflowContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { Timestamp } from 'firebase/firestore';
+import attachmentsService from '../../firebase/attachments';
+import { createRecurringTask } from '../../firebase/recurringTasks';
 import './CreateTaskModal.css';
 
 const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
@@ -32,6 +42,9 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringConfig, setRecurringConfig] = useState(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -73,6 +86,9 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
     subtasks: []
   });
 
+  // Attachment management - files to upload after task creation
+  const [pendingAttachments, setPendingAttachments] = useState([]);
+
   // Initialize form with prefilled data (only on modal open)
   useEffect(() => {
     if (isOpen && prefilledData && Object.keys(prefilledData).length > 0) {
@@ -108,7 +124,10 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
         estimatedHours: '',
         subtasks: []
       });
+      setPendingAttachments([]);
       setErrors({});
+      setIsRecurring(false);
+      setRecurringConfig(null);
     }
   }, [isOpen]);
 
@@ -160,6 +179,13 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
         [name]: ''
       }));
     }
+  };
+
+  const handleDescriptionChange = (content) => {
+    setFormData(prev => ({
+      ...prev,
+      description: content
+    }));
   };
 
   const handleTypeChange = (type) => {
@@ -214,6 +240,63 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
       ...prev,
       subtasks: prev.subtasks.filter(subtask => subtask.id !== subtaskId)
     }));
+  };
+
+  // Attachment handlers
+  const handleFileSelect = (file) => {
+    return new Promise((resolve, reject) => {
+      try {
+        // Validate file
+        const validation = attachmentsService.validateFile(file);
+
+        // Check attachment limit
+        if (attachmentsService.isAttachmentLimitReached(pendingAttachments)) {
+          reject(new Error(`Maximum ${attachmentsService.maxAttachmentsPerTask} attachments allowed per task`));
+          return;
+        }
+
+        // Add to pending attachments with temporary preview
+        const tempAttachment = {
+          id: Date.now().toString(),
+          file,
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          category: validation.category,
+          canPreview: validation.canPreview,
+          isPending: true,
+          uploadedAt: new Date()
+        };
+
+        setPendingAttachments(prev => [...prev, tempAttachment]);
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  };
+
+  const handleRemovePendingAttachment = (attachmentId) => {
+    setPendingAttachments(prev => prev.filter(att => att.id !== attachmentId));
+  };
+
+  const handleTemplateSelect = (template) => {
+    // Apply template data to form
+    setFormData(prev => ({
+      ...prev,
+      title: template.title || prev.title,
+      description: template.description || prev.description,
+      type: template.type || prev.type,
+      priority: template.priority || prev.priority,
+      assignedTo: template.defaultAssignees || prev.assignedTo,
+      estimatedHours: template.estimatedHours || prev.estimatedHours,
+      subtasks: template.subtasks ? template.subtasks.map((st, idx) => ({
+        id: Date.now().toString() + idx,
+        title: st,
+        completed: false
+      })) : prev.subtasks
+    }));
+    setShowTemplateSelector(false);
   };
 
   const getInitials = (firstName, lastName) => {
@@ -281,7 +364,7 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
       };
 
       if (formData.dueDate) {
-        taskData.dueDate = new Date(formData.dueDate);
+        taskData.dueDate = Timestamp.fromDate(new Date(formData.dueDate));
       }
 
       if (formData.estimatedHours) {
@@ -310,7 +393,45 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
         }
       }
 
-      await createTask(taskData);
+      const newTask = await createTask(taskData);
+
+      // Create recurring task configuration if enabled
+      if (isRecurring && recurringConfig) {
+        try {
+          await createRecurringTask({
+            ...recurringConfig,
+            taskTemplate: taskData,
+            organizationID: organization?.id,
+            createdBy: userProfile?.id || userProfile?.uid
+          });
+        } catch (recurringError) {
+          console.error('Error creating recurring task:', recurringError);
+          // Don't block task creation if recurring setup fails
+        }
+      }
+
+      // Upload pending attachments if any
+      if (pendingAttachments.length > 0 && newTask && newTask.id) {
+        try {
+          // Upload attachments in parallel
+          const uploadPromises = pendingAttachments.map(attachment =>
+            attachmentsService.uploadAttachment(
+              attachment.file,
+              newTask.id,
+              organization.id,
+              userProfile?.id || userProfile?.uid,
+              () => {} // No progress tracking needed for post-creation uploads
+            )
+          );
+
+          await Promise.all(uploadPromises);
+        } catch (uploadError) {
+          console.error('Error uploading attachments:', uploadError);
+          // Task was created successfully, just warn about attachments
+          // Don't block modal close or show error since task is created
+        }
+      }
+
       onClose();
     } catch (error) {
       console.error('Error creating task:', error);
@@ -344,6 +465,16 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
               <ListTodo size={20} />
               Create New Task
             </h2>
+            <button
+              type="button"
+              className="btn btn--outline btn--sm"
+              onClick={() => setShowTemplateSelector(true)}
+              disabled={loading}
+              style={{ marginLeft: 'auto', marginRight: '0.5rem' }}
+            >
+              <FileText size={16} />
+              Use Template
+            </button>
           </div>
           <button
             className="create-task-modal-close"
@@ -389,15 +520,12 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
                 <label htmlFor="description" className="form-label">
                   Description
                 </label>
-                <textarea
-                  id="description"
-                  name="description"
+                <RichTextEditor
                   value={formData.description}
-                  onChange={handleChange}
-                  className="form-textarea"
-                  rows="3"
+                  onChange={handleDescriptionChange}
                   placeholder="Describe what needs to be done..."
                   disabled={loading}
+                  minHeight="150px"
                 />
               </div>
             </div>
@@ -546,14 +674,11 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
                   <label htmlFor="dueDate" className="form-label">
                     Due Date
                   </label>
-                  <input
-                    type="date"
-                    id="dueDate"
-                    name="dueDate"
+                  <DatePickerWithPresets
                     value={formData.dueDate}
-                    onChange={handleChange}
-                    className="form-input"
+                    onChange={(e) => handleChange({ target: { name: 'dueDate', value: e.target.value }})}
                     disabled={loading}
+                    placeholder="Select due date"
                   />
                 </div>
 
@@ -698,6 +823,69 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
                 </button>
               </div>
             </div>
+
+            {/* Recurring Task Section */}
+            <div className="form-section">
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={isRecurring}
+                    onChange={(e) => setIsRecurring(e.target.checked)}
+                    disabled={loading}
+                    style={{ width: 'auto', margin: 0 }}
+                  />
+                  Make this a recurring task
+                </label>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.25rem', marginLeft: '1.5rem' }}>
+                  Automatically create this task on a schedule
+                </p>
+              </div>
+
+              {isRecurring && (
+                <RecurringTaskForm
+                  config={recurringConfig}
+                  onChange={setRecurringConfig}
+                  disabled={loading}
+                />
+              )}
+            </div>
+
+            {/* Attachments Section */}
+            <div className="form-section">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <Paperclip size={18} />
+                <label className="form-label" style={{ margin: 0 }}>
+                  Attachments
+                </label>
+                <span className="attachments-count">
+                  {pendingAttachments.length}/{attachmentsService.maxAttachmentsPerTask}
+                </span>
+              </div>
+
+              {pendingAttachments.length > 0 && (
+                <div style={{ marginBottom: '12px' }}>
+                  <AttachmentList
+                    attachments={pendingAttachments}
+                    onDelete={(attachmentId) => {
+                      handleRemovePendingAttachment(attachmentId);
+                      return Promise.resolve();
+                    }}
+                    canDelete={true}
+                    compact={true}
+                  />
+                </div>
+              )}
+
+              <FileUploadButton
+                onUpload={handleFileSelect}
+                disabled={loading || attachmentsService.isAttachmentLimitReached(pendingAttachments)}
+                maxFileSize={50}
+                acceptedTypes="*"
+                buttonText="Add File"
+                buttonVariant="outline"
+              />
+            </div>
           </form>
         </div>
 
@@ -721,6 +909,15 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
           </button>
         </div>
       </div>
+
+      {/* Template Selector Modal */}
+      {showTemplateSelector && (
+        <TaskTemplateSelector
+          isOpen={showTemplateSelector}
+          onClose={() => setShowTemplateSelector(false)}
+          onSelectTemplate={handleTemplateSelect}
+        />
+      )}
     </div>
   );
 

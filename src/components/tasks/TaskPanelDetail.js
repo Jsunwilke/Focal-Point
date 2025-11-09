@@ -2,19 +2,32 @@
 import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft, FileText, Users, CalendarIcon, Clock, Flag, CheckSquare, MessageSquare,
-  Edit2, Trash2, Check, Plus, Send, LinkIcon, Workflow
+  Edit2, Trash2, Check, Plus, Send, LinkIcon, Workflow, Paperclip, Eye, EyeOff
 } from 'lucide-react';
 import { useTask } from '../../contexts/TaskContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWorkflow } from '../../contexts/WorkflowContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
 import { Timestamp } from 'firebase/firestore';
+import DatePickerWithPresets from '../shared/DatePickerWithPresets';
+import RichTextEditor from '../shared/RichTextEditor';
+import ActivityLog from './ActivityLog';
+import FileUploadButton from '../shared/FileUploadButton';
+import AttachmentList from './AttachmentList';
+import TaskTimeTracking from './TaskTimeTracking';
+import MentionTextarea from './MentionTextarea';
+import MentionRenderer from './MentionRenderer';
+import TaskDependencyManager from './TaskDependencyManager';
+import attachmentsService from '../../firebase/attachments';
+import { attachmentCacheService } from '../../services/attachmentCacheService';
+import { readCounter } from '../../services/readCounter';
+import { logActivity, ACTIVITY_TYPES } from '../../firebase/activity';
 import './TaskPanelDetail.css';
 
 const TaskPanelDetail = ({ taskId, onBack }) => {
-  const { myTasks, teamTasks, updateTask, deleteTask, markTaskComplete, updateSubtaskStatus, addComment, canEditTask, canDeleteTask } = useTask();
+  const { myTasks, teamTasks, updateTask, deleteTask, markTaskComplete, updateSubtaskStatus, addComment, watchTask, unwatchTask, isWatchingTask, canEditTask, canDeleteTask } = useTask();
   const { userProfile, organization } = useAuth();
-  const { teamMembers } = useDataCache();
+  const { teamMembers, users } = useDataCache();
   const { sessions, workflows } = useWorkflow();
 
   const [activeTab, setActiveTab] = useState('details');
@@ -23,6 +36,8 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [newSubtask, setNewSubtask] = useState('');
+  const [attachments, setAttachments] = useState([]);
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
 
   // Find the task from either myTasks or teamTasks
   const task = [...myTasks, ...teamTasks].find(t => t.id === taskId);
@@ -61,6 +76,40 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
       });
     }
   }, [task]);
+
+  // Load attachments with cache-first pattern
+  useEffect(() => {
+    if (!taskId) return;
+
+    const loadAttachments = async () => {
+      setLoadingAttachments(true);
+
+      try {
+        // Check cache first
+        const cachedAttachments = attachmentCacheService.getCachedAttachments(taskId);
+
+        if (cachedAttachments) {
+          setAttachments(cachedAttachments);
+          readCounter.recordCacheHit('taskAttachments', 'TaskPanelDetail', cachedAttachments.length);
+        } else {
+          readCounter.recordCacheMiss('taskAttachments', 'TaskPanelDetail');
+        }
+
+        // Fetch from Firestore
+        const fetchedAttachments = await attachmentsService.getTaskAttachments(taskId);
+        setAttachments(fetchedAttachments);
+
+        // Update cache
+        attachmentCacheService.setCachedAttachments(taskId, fetchedAttachments);
+      } catch (error) {
+        console.error('Error loading attachments:', error);
+      } finally {
+        setLoadingAttachments(false);
+      }
+    };
+
+    loadAttachments();
+  }, [taskId]);
 
   // Format Firestore timestamp for date input
   const formatDateForInput = (timestamp) => {
@@ -107,6 +156,27 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
     return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
   };
 
+  // Get priority badge class
+  const getPriorityBadgeClass = (priority) => {
+    return `task-panel-detail__badge--priority-${priority || 'medium'}`;
+  };
+
+  // Get priority label
+  const getPriorityLabel = (priority) => {
+    switch (priority) {
+      case 'urgent':
+        return 'Urgent';
+      case 'high':
+        return 'High';
+      case 'medium':
+        return 'Medium';
+      case 'low':
+        return 'Low';
+      default:
+        return 'Medium';
+    }
+  };
+
   // Get active team members (exclude inactive)
   const activeTeamMembers = (teamMembers && Array.isArray(teamMembers))
     ? teamMembers.filter(member => member.status !== 'inactive')
@@ -118,6 +188,14 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
     setFormData(prev => ({
       ...prev,
       [name]: type === 'number' ? parseFloat(value) || 0 : value
+    }));
+  };
+
+  // Handle description change from rich text editor
+  const handleDescriptionChange = (content) => {
+    setFormData(prev => ({
+      ...prev,
+      description: content
     }));
   };
 
@@ -208,21 +286,127 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
     }
   };
 
+  // Extract mentions from comment text
+  const extractMentions = (text) => {
+    const mentionPattern = /@([A-Z][a-z]+(?: [A-Z][a-z]+)+)/g;
+    const mentions = [];
+    let match;
+
+    while ((match = mentionPattern.exec(text)) !== null) {
+      const mentionName = match[1];
+      // Find user by full name
+      const user = users?.find(u => `${u.firstName} ${u.lastName}` === mentionName);
+
+      if (user && !mentions.find(m => m.userId === user.id)) {
+        mentions.push({
+          userId: user.id,
+          userName: mentionName
+        });
+      }
+    }
+
+    return mentions;
+  };
+
   // Handle comment submission
   const handleSubmitComment = async () => {
     if (!newComment.trim()) return;
 
     setLoading(true);
     try {
+      const mentions = extractMentions(newComment.trim());
+
       await addComment(task.id, {
         text: newComment.trim(),
         attachments: [],
-        mentions: []
+        mentions: mentions
       });
 
       setNewComment('');
     } catch (error) {
       console.error('Error adding comment:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (files) => {
+    if (!files || files.length === 0) return;
+
+    setLoading(true);
+    try {
+      const uploadedAttachments = await attachmentsService.uploadAttachments(
+        taskId,
+        files,
+        userProfile.id,
+        organization.id
+      );
+
+      // Update state with new attachments
+      setAttachments(prev => [...prev, ...uploadedAttachments]);
+
+      // Update cache
+      const updatedAttachments = [...attachments, ...uploadedAttachments];
+      attachmentCacheService.setCachedAttachments(taskId, updatedAttachments);
+
+      // Log activity for each uploaded attachment
+      for (const attachment of uploadedAttachments) {
+        await logActivity(
+          taskId,
+          ACTIVITY_TYPES.ATTACHMENT_UPLOADED,
+          {
+            fileName: attachment.originalFileName,
+            fileSize: attachment.fileSize,
+            fileType: attachment.fileType,
+            attachmentId: attachment.id
+          },
+          userProfile.id,
+          organization.id
+        );
+      }
+    } catch (error) {
+      console.error('Error uploading attachments:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle attachment deletion
+  const handleDeleteAttachment = async (attachmentId) => {
+    if (!window.confirm('Are you sure you want to delete this attachment?')) return;
+
+    setLoading(true);
+    try {
+      // Get attachment details before deleting for activity log
+      const attachment = attachments.find(att => att.id === attachmentId);
+
+      await attachmentsService.deleteAttachment(attachmentId, taskId, organization.id);
+
+      // Update state
+      setAttachments(prev => prev.filter(att => att.id !== attachmentId));
+
+      // Update cache
+      const updatedAttachments = attachments.filter(att => att.id !== attachmentId);
+      attachmentCacheService.setCachedAttachments(taskId, updatedAttachments);
+
+      // Log activity for attachment deletion
+      if (attachment) {
+        await logActivity(
+          taskId,
+          ACTIVITY_TYPES.ATTACHMENT_DELETED,
+          {
+            fileName: attachment.originalFileName,
+            fileSize: attachment.fileSize,
+            fileType: attachment.fileType,
+            attachmentId: attachment.id
+          },
+          userProfile.id,
+          organization.id
+        );
+      }
+    } catch (error) {
+      console.error('Error deleting attachment:', error);
     } finally {
       setLoading(false);
     }
@@ -249,11 +433,29 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
     setIsEditing(false);
   };
 
+  // Handle watch/unwatch toggle
+  const handleWatchToggle = async () => {
+    setLoading(true);
+    try {
+      const watching = isWatchingTask(task);
+      if (watching) {
+        await unwatchTask(task.id);
+      } else {
+        await watchTask(task.id);
+      }
+    } catch (error) {
+      console.error('Error toggling watch:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!task) return null;
 
   const canEdit = canEditTask(userProfile, task);
   const canDelete = canDeleteTask(userProfile, task);
   const isCompleted = task.status === 'completed';
+  const isWatching = isWatchingTask(task);
 
   return (
     <div className="task-panel-detail">
@@ -269,13 +471,32 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
         <div className="task-panel-detail__header-content">
           <FileText size={18} />
           <h2 className="task-panel-detail__title">{isEditing ? 'Edit Task' : task.title}</h2>
-          {isCompleted && (
-            <span className="task-panel-detail__badge task-panel-detail__badge--completed">
-              <Check size={12} />
-              Done
-            </span>
+          {!isEditing && (
+            <>
+              <span className={`task-panel-detail__badge ${getPriorityBadgeClass(task.priority)}`}>
+                <Flag size={12} />
+                {getPriorityLabel(task.priority)}
+              </span>
+              {isCompleted && (
+                <span className="task-panel-detail__badge task-panel-detail__badge--completed">
+                  <Check size={12} />
+                  Done
+                </span>
+              )}
+            </>
           )}
         </div>
+        {!isEditing && (
+          <button
+            onClick={handleWatchToggle}
+            className={`task-panel-detail__watch-btn ${isWatching ? 'task-panel-detail__watch-btn--watching' : ''}`}
+            disabled={loading}
+            title={isWatching ? 'Stop watching this task' : 'Watch this task'}
+          >
+            {isWatching ? <Eye size={18} /> : <EyeOff size={18} />}
+            {isWatching ? 'Watching' : 'Watch'}
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -307,6 +528,37 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
             <span className="task-panel-detail__tab-count">{task.commentCount}</span>
           )}
         </button>
+        <button
+          className={`task-panel-detail__tab ${activeTab === 'activity' ? 'task-panel-detail__tab--active' : ''}`}
+          onClick={() => setActiveTab('activity')}
+        >
+          <Clock size={14} />
+          Activity
+        </button>
+        <button
+          className={`task-panel-detail__tab ${activeTab === 'attachments' ? 'task-panel-detail__tab--active' : ''}`}
+          onClick={() => setActiveTab('attachments')}
+        >
+          <Paperclip size={14} />
+          Attachments
+          {attachments.length > 0 && (
+            <span className="task-panel-detail__tab-count">{attachments.length}</span>
+          )}
+        </button>
+        <button
+          className={`task-panel-detail__tab ${activeTab === 'time' ? 'task-panel-detail__tab--active' : ''}`}
+          onClick={() => setActiveTab('time')}
+        >
+          <Clock size={14} />
+          Time
+        </button>
+        <button
+          className={`task-panel-detail__tab ${activeTab === 'dependencies' ? 'task-panel-detail__tab--active' : ''}`}
+          onClick={() => setActiveTab('dependencies')}
+        >
+          <LinkIcon size={14} />
+          Dependencies
+        </button>
       </div>
 
       {/* Body */}
@@ -337,14 +589,12 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
                 {/* Description */}
                 <div className="form-group">
                   <label htmlFor="description" className="form-label">Description</label>
-                  <textarea
-                    id="description"
-                    name="description"
+                  <RichTextEditor
                     value={formData.description}
-                    onChange={handleChange}
-                    className="form-textarea"
-                    rows={4}
+                    onChange={handleDescriptionChange}
+                    placeholder="Describe what needs to be done..."
                     disabled={loading}
+                    minHeight="150px"
                   />
                 </div>
 
@@ -392,14 +642,11 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
                 <div className="form-row form-row--two">
                   <div className="form-group">
                     <label htmlFor="dueDate" className="form-label">Due Date</label>
-                    <input
-                      type="date"
-                      id="dueDate"
-                      name="dueDate"
+                    <DatePickerWithPresets
                       value={formData.dueDate}
-                      onChange={handleChange}
-                      className="form-input"
+                      onChange={(e) => handleChange({ target: { name: 'dueDate', value: e.target.value }})}
                       disabled={loading}
+                      placeholder="Select due date"
                     />
                   </div>
 
@@ -468,7 +715,13 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
                       <FileText size={14} />
                       <h3>Description</h3>
                     </div>
-                    <p className="task-panel-detail__description">{task.description}</p>
+                    <div className="task-panel-detail__description">
+                      <RichTextEditor
+                        value={task.description}
+                        onChange={() => {}}
+                        readOnly={true}
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -606,11 +859,10 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
 
               {/* Comment Input */}
               <div className="task-panel-detail__comment-input">
-                <textarea
+                <MentionTextarea
                   value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="Add a comment..."
-                  className="form-textarea"
+                  onChange={setNewComment}
+                  placeholder="Add a comment... (use @ to mention someone)"
                   rows={3}
                   disabled={loading}
                 />
@@ -633,13 +885,94 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
                         <strong>{comment.userName}</strong>
                         <span>{formatDateForDisplay(comment.createdAt)}</span>
                       </div>
-                      <p className="task-panel-detail__comment-text">{comment.text}</p>
+                      <p className="task-panel-detail__comment-text">
+                        <MentionRenderer text={comment.text} mentions={comment.mentions} />
+                      </p>
                     </div>
                   ))}
                 </div>
               ) : (
                 <p className="task-panel-detail__empty">No comments yet</p>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Activity Tab */}
+        {activeTab === 'activity' && (
+          <div className="task-panel-detail__content">
+            <div className="task-panel-detail__section">
+              <div className="task-panel-detail__section-header">
+                <Clock size={14} />
+                <h3>Activity</h3>
+              </div>
+              <ActivityLog taskId={taskId} />
+            </div>
+          </div>
+        )}
+
+        {/* Attachments Tab */}
+        {activeTab === 'attachments' && (
+          <div className="task-panel-detail__content">
+            <div className="task-panel-detail__section">
+              <div className="task-panel-detail__section-header">
+                <Paperclip size={14} />
+                <h3>Attachments</h3>
+              </div>
+
+              {/* Upload Button */}
+              {canEdit && (
+                <div className="task-panel-detail__attachment-upload">
+                  <FileUploadButton
+                    onUpload={handleFileUpload}
+                    disabled={loading}
+                    acceptedTypes={['image/*', 'application/pdf', '.doc', '.docx', '.xls', '.xlsx', '.zip']}
+                    maxSizeMB={10}
+                  />
+                </div>
+              )}
+
+              {/* Attachments List */}
+              {loadingAttachments ? (
+                <p className="task-panel-detail__empty">Loading attachments...</p>
+              ) : attachments.length > 0 ? (
+                <AttachmentList
+                  attachments={attachments}
+                  onDelete={canEdit ? handleDeleteAttachment : null}
+                  readOnly={!canEdit}
+                />
+              ) : (
+                <p className="task-panel-detail__empty">No attachments yet</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Time Tab */}
+        {activeTab === 'time' && (
+          <div className="task-panel-detail__content">
+            <div className="task-panel-detail__section">
+              <div className="task-panel-detail__section-header">
+                <Clock size={14} />
+                <h3>Time Tracking</h3>
+              </div>
+              <TaskTimeTracking taskId={taskId} />
+            </div>
+          </div>
+        )}
+
+        {/* Dependencies Tab */}
+        {activeTab === 'dependencies' && (
+          <div className="task-panel-detail__content">
+            <div className="task-panel-detail__section">
+              <div className="task-panel-detail__section-header">
+                <LinkIcon size={14} />
+                <h3>Task Dependencies</h3>
+              </div>
+              <TaskDependencyManager
+                taskId={taskId}
+                organizationID={organization?.id}
+              />
             </div>
           </div>
         )}

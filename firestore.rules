@@ -87,19 +87,10 @@ service cloud.firestore {
 
     // Users collection
     match /users/{userId} {
-      // Users can read their own profile
-      allow read: if request.auth != null && request.auth.uid == userId;
-      
-      // Users in same organization can read each other (for team management)
-      allow read: if request.auth != null && 
-                     belongsToSameOrg(request.auth.uid, resource.data.organizationID);
-      
-      // **INVITATION FLOW: Allow reading inactive users for invitation lookup**
-      allow read: if resource.data.isActive == false;
-      
-      // **INVITATION FLOW: Allow reading temporary invite documents**
-      allow read: if resource.data.keys().hasAny(['isTemporaryInvite']) && 
-                     resource.data.isTemporaryInvite == true;
+      // Allow authenticated users to read user documents
+      // This is needed for security rule helper functions (belongsToSameOrg, isAdminOrManager)
+      // to work without circular dependencies
+      allow read: if request.auth != null;
       
       // Users can create their own profile (during signup)
       allow create: if request.auth != null && request.auth.uid == userId;
@@ -1722,7 +1713,7 @@ service cloud.firestore {
                        // Validate data types
                        request.resource.data.title is string &&
                        request.resource.data.type in ['general', 'session', 'workflow'] &&
-                       request.resource.data.status in ['todo', 'in_progress', 'blocked', 'completed', 'cancelled'] &&
+                       request.resource.data.status in ['todo', 'in_progress', 'on_hold', 'completed', 'cancelled'] &&
                        request.resource.data.priority in ['low', 'medium', 'high', 'urgent'] &&
                        request.resource.data.createdBy is string &&
                        request.resource.data.organizationID is string &&
@@ -1734,7 +1725,9 @@ service cloud.firestore {
                        (!request.resource.data.keys().hasAny(['workflowId']) || request.resource.data.workflowId is string) &&
                        (!request.resource.data.keys().hasAny(['workflowStepId']) || request.resource.data.workflowStepId is string) &&
                        (!request.resource.data.keys().hasAny(['estimatedHours']) || request.resource.data.estimatedHours is number) &&
-                       (!request.resource.data.keys().hasAny(['commentCount']) || request.resource.data.commentCount is number);
+                       (!request.resource.data.keys().hasAny(['commentCount']) || request.resource.data.commentCount is number) &&
+                       (!request.resource.data.keys().hasAny(['order']) || request.resource.data.order is number) &&
+                       (!request.resource.data.keys().hasAny(['panelOrder']) || request.resource.data.panelOrder is number);
 
       // Users can update tasks they have access to
       allow update: if request.auth != null &&
@@ -1745,7 +1738,6 @@ service cloud.firestore {
 
       // Users can delete tasks they created or if they're admin/manager
       allow delete: if request.auth != null &&
-                       belongsToSameOrg(request.auth.uid, resource.data.organizationID) &&
                        (resource.data.createdBy == request.auth.uid ||
                         isAdminOrManager(request.auth.uid));
 
@@ -1778,24 +1770,209 @@ service cloud.firestore {
       }
     }
 
+    // Task Activities - Activity log for tasks
+    match /taskActivities/{activityId} {
+      // Helper function to check if user can access the parent task
+      function canAccessParentTask(userId, activityData) {
+        let parentTask = get(/databases/$(database)/documents/tasks/$(activityData.taskId)).data;
+        return parentTask.organizationID is string &&
+               belongsToSameOrg(userId, parentTask.organizationID) &&
+               (
+                 // User created the task
+                 parentTask.createdBy == userId ||
+                 // User is assigned to the task
+                 (parentTask.keys().hasAny(['assignedTo']) &&
+                  parentTask.assignedTo is list &&
+                  userId in parentTask.assignedTo) ||
+                 // User is admin or manager
+                 isAdminOrManager(userId)
+               );
+      }
+
+      // Users can read activities if they can access the parent task
+      allow read: if request.auth != null &&
+                     exists(/databases/$(database)/documents/tasks/$(resource.data.taskId)) &&
+                     canAccessParentTask(request.auth.uid, resource.data);
+
+      // Authenticated users can create activities for tasks in their organization
+      allow create: if request.auth != null &&
+                       belongsToSameOrg(request.auth.uid, request.resource.data.organizationID) &&
+                       // Validate required fields
+                       request.resource.data.keys().hasAll(['taskId', 'type', 'userId', 'organizationID', 'timestamp']) &&
+                       // Validate data types
+                       request.resource.data.taskId is string &&
+                       request.resource.data.type is string &&
+                       request.resource.data.userId is string &&
+                       request.resource.data.organizationID is string &&
+                       request.resource.data.timestamp is timestamp &&
+                       // Validate optional data field
+                       (!request.resource.data.keys().hasAny(['data']) || request.resource.data.data is map) &&
+                       // User must be creating activity as themselves
+                       request.resource.data.userId == request.auth.uid &&
+                       // Verify the parent task exists
+                       exists(/databases/$(database)/documents/tasks/$(request.resource.data.taskId));
+
+      // No updates or deletes allowed (activity log is append-only)
+      allow update, delete: if false;
+    }
+
+    // Task Attachments - File attachments for tasks
+    match /taskAttachments/{attachmentId} {
+      // Helper function to check if user can access the parent task
+      function canAccessParentTask(userId, attachmentData) {
+        let parentTask = get(/databases/$(database)/documents/tasks/$(attachmentData.taskId)).data;
+        return parentTask.organizationID is string &&
+               belongsToSameOrg(userId, parentTask.organizationID) &&
+               (
+                 // User created the task
+                 parentTask.createdBy == userId ||
+                 // User is assigned to the task
+                 (parentTask.keys().hasAny(['assignedTo']) &&
+                  parentTask.assignedTo is list &&
+                  userId in parentTask.assignedTo) ||
+                 // User is admin or manager
+                 isAdminOrManager(userId)
+               );
+      }
+
+      // Users can read attachments if they can access the parent task
+      allow read: if request.auth != null &&
+                     exists(/databases/$(database)/documents/tasks/$(resource.data.taskId)) &&
+                     canAccessParentTask(request.auth.uid, resource.data);
+
+      // Authenticated users can create attachments for tasks they can access
+      allow create: if request.auth != null &&
+                       belongsToSameOrg(request.auth.uid, request.resource.data.organizationID) &&
+                       // Validate required fields
+                       request.resource.data.keys().hasAll(['taskId', 'organizationID', 'uploadedBy', 'fileName', 'fileSize', 'fileType', 'storagePath', 'downloadURL', 'uploadedAt']) &&
+                       // Validate data types
+                       request.resource.data.taskId is string &&
+                       request.resource.data.organizationID is string &&
+                       request.resource.data.uploadedBy is string &&
+                       request.resource.data.fileName is string &&
+                       request.resource.data.fileSize is number &&
+                       request.resource.data.fileType is string &&
+                       request.resource.data.storagePath is string &&
+                       request.resource.data.downloadURL is string &&
+                       request.resource.data.uploadedAt is timestamp &&
+                       // Validate optional fields
+                       (!request.resource.data.keys().hasAny(['category']) || request.resource.data.category is string) &&
+                       (!request.resource.data.keys().hasAny(['canPreview']) || request.resource.data.canPreview is bool) &&
+                       // User must be uploading as themselves
+                       request.resource.data.uploadedBy == request.auth.uid &&
+                       // Verify the parent task exists
+                       exists(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)) &&
+                       // Verify user can access the parent task
+                       canAccessParentTask(request.auth.uid, request.resource.data);
+
+      // No updates allowed (attachments are immutable)
+      allow update: if false;
+
+      // Users can delete attachments if they uploaded them or if they're task creator/assignee/manager
+      allow delete: if request.auth != null &&
+                       exists(/databases/$(database)/documents/tasks/$(resource.data.taskId)) &&
+                       (
+                         // User uploaded the attachment
+                         resource.data.uploadedBy == request.auth.uid ||
+                         // User can access the parent task (creator, assignee, or manager)
+                         canAccessParentTask(request.auth.uid, resource.data)
+                       );
+    }
+
     // Captura Order Sync Status - Track sync operations
     match /capturaOrderSyncStatus/{statusDoc} {
       // Admins can read sync status
-      allow read: if request.auth != null && 
+      allow read: if request.auth != null &&
                      isAdmin(request.auth.uid);
-      
+
       // Only Cloud Functions can write sync status
       allow write: if false;
-      
+
       // Sync history logs
       match /logs/{logId} {
         // Admins can read sync logs
-        allow read: if request.auth != null && 
+        allow read: if request.auth != null &&
                        isAdmin(request.auth.uid);
-        
+
         // Only Cloud Functions can write logs
         allow write: if false;
       }
+    }
+
+    // Task Notifications - User notifications for task events
+    match /taskNotifications/{notificationId} {
+      // Users can read their own notifications (userId can be either auth.uid or match request.auth.uid)
+      allow read: if request.auth != null &&
+                     (resource.data.userId == request.auth.uid || resource.data.userId in [request.auth.uid]);
+
+      // Any authenticated user can create notifications
+      allow create: if request.auth != null;
+
+      // Users can update (mark as read) their own notifications
+      allow update: if request.auth != null &&
+                       (resource.data.userId == request.auth.uid || resource.data.userId in [request.auth.uid]) &&
+                       request.resource.data.userId == resource.data.userId;
+
+      // Users can delete their own notifications
+      allow delete: if request.auth != null &&
+                       (resource.data.userId == request.auth.uid || resource.data.userId in [request.auth.uid]);
+    }
+
+    // Task Templates - Reusable task configurations
+    match /taskTemplates/{templateId} {
+      // Users can read templates in their organization
+      allow read: if request.auth != null &&
+                     resource.data.organizationID in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationIDs;
+
+      // Authenticated users can create templates
+      allow create: if request.auth != null &&
+                       request.resource.data.organizationID in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationIDs;
+
+      // Users can update their own templates or admins can update any
+      allow update: if request.auth != null &&
+                       resource.data.organizationID in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationIDs &&
+                       (resource.data.createdBy == request.auth.uid || isAdmin(request.auth.uid));
+
+      // Users can delete their own templates or admins can delete any
+      allow delete: if request.auth != null &&
+                       resource.data.organizationID in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationIDs &&
+                       (resource.data.createdBy == request.auth.uid || isAdmin(request.auth.uid));
+    }
+
+    // Task Dependencies - Task blocking relationships
+    match /taskDependencies/{dependencyId} {
+      // Users can read dependencies in their organization
+      allow read: if request.auth != null &&
+                     resource.data.organizationID in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationIDs;
+
+      // Authenticated users can create dependencies
+      allow create: if request.auth != null &&
+                       request.resource.data.organizationID in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationIDs;
+
+      // Any user in the organization can delete dependencies
+      allow delete: if request.auth != null &&
+                       resource.data.organizationID in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationIDs;
+    }
+
+    // Recurring Tasks - Auto-generating task configurations
+    match /recurringTasks/{recurringId} {
+      // Users can read recurring tasks in their organization
+      allow read: if request.auth != null &&
+                     resource.data.organizationID in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationIDs;
+
+      // Authenticated users can create recurring tasks
+      allow create: if request.auth != null &&
+                       request.resource.data.organizationID in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationIDs;
+
+      // Users can update their own recurring tasks or admins can update any
+      allow update: if request.auth != null &&
+                       resource.data.organizationID in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationIDs &&
+                       (resource.data.createdBy == request.auth.uid || isAdmin(request.auth.uid));
+
+      // Users can delete their own recurring tasks or admins can delete any
+      allow delete: if request.auth != null &&
+                       resource.data.organizationID in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationIDs &&
+                       (resource.data.createdBy == request.auth.uid || isAdmin(request.auth.uid));
     }
 
     // Deny all other documents

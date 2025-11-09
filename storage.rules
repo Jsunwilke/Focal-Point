@@ -330,6 +330,43 @@ service firebase.storage {
                        isAdmin();
     }
 
+    // Task attachments - organization-scoped with task access validation
+    match /task-attachments/{orgId}/{taskId}/{fileName} {
+      // Read: Users can read attachments if they belong to the org and can access the parent task
+      allow read: if isAuthenticated() &&
+                     getOrganizationId() == orgId &&
+                     userExists() &&
+                     // Verify the task exists
+                     firestore.exists(/databases/(default)/documents/tasks/$(taskId)) &&
+                     // Verify task belongs to same organization
+                     firestore.get(/databases/(default)/documents/tasks/$(taskId)).data.organizationID == orgId;
+
+      // Write: Users can upload attachments if they belong to the org and can access the task
+      allow write: if isAuthenticated() &&
+                      getOrganizationId() == orgId &&
+                      userExists() &&
+                      // Verify the task exists
+                      firestore.exists(/databases/(default)/documents/tasks/$(taskId)) &&
+                      // Verify task belongs to same organization
+                      firestore.get(/databases/(default)/documents/tasks/$(taskId)).data.organizationID == orgId &&
+                      // 50MB file size limit
+                      isValidFileSize(50);
+
+      // Delete: Task creator, assignees, or managers can delete attachments
+      allow delete: if isAuthenticated() &&
+                       getOrganizationId() == orgId &&
+                       userExists() &&
+                       (
+                         // Task creator can delete
+                         firestore.get(/databases/(default)/documents/tasks/$(taskId)).data.createdBy == getUserId() ||
+                         // Assigned users can delete
+                         (firestore.get(/databases/(default)/documents/tasks/$(taskId)).data.keys().hasAny(['assignedTo']) &&
+                          getUserId() in firestore.get(/databases/(default)/documents/tasks/$(taskId)).data.assignedTo) ||
+                         // Managers and admins can delete
+                         isManager()
+                       );
+    }
+
     // Default deny rule for all other paths
     match /{allPaths=**} {
       allow read, write: if false;

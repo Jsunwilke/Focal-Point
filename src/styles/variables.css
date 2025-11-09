@@ -14,6 +14,16 @@
   --error-color: #ef4444;
   --error-hover: #dc2626;
 
+  /* Priority Colors */
+  --priority-urgent: #ef4444;
+  --priority-urgent-bg: #fee2e2;
+  --priority-high: #f97316;
+  --priority-high-bg: #ffedd5;
+  --priority-medium: #3b82f6;
+  --priority-medium-bg: #dbeafe;
+  --priority-low: #6b7280;
+  --priority-low-bg: #f3f4f6;
+
   --text-primary: #111827;
   --text-secondary: #6b7280;
   --text-muted: #9ca3af;

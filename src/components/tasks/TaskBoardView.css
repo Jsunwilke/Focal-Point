@@ -1,0 +1,53 @@
+/* src/components/tasks/TaskBoardView.css */
+
+.task-board-view {
+  display: flex;
+  gap: 1rem;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 1rem 0;
+}
+
+/* Scrollbar styling */
+.task-board-view::-webkit-scrollbar {
+  height: 8px;
+}
+
+.task-board-view::-webkit-scrollbar-track {
+  background-color: var(--background-muted);
+  border-radius: 4px;
+}
+
+.task-board-view::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  border-radius: 4px;
+}
+
+.task-board-view::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 1024px) {
+  .task-board-view {
+    gap: 0.75rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .task-board-view {
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .task-board-column {
+    max-width: none;
+    width: 100%;
+  }
+
+  .task-board-column__content {
+    max-height: 400px;
+  }
+}

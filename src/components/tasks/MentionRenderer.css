@@ -1,0 +1,27 @@
+/* src/components/tasks/MentionRenderer.css */
+
+.mention-renderer {
+  display: inline;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.mention-renderer__text {
+  display: inline;
+}
+
+.mention-renderer__mention {
+  display: inline;
+  padding: 0.125rem 0.375rem;
+  background-color: var(--primary-bg);
+  color: var(--primary-color);
+  border-radius: 3px;
+  font-weight: 500;
+  cursor: default;
+  transition: all var(--transition-fast);
+}
+
+.mention-renderer__mention:hover {
+  background-color: var(--primary-color);
+  color: white;
+}

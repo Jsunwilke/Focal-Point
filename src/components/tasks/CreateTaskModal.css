@@ -745,3 +745,17 @@
     border: 2px solid #15142e;
   }
 }
+
+/* Attachments count badge */
+.attachments-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}

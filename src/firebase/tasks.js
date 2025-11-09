@@ -29,20 +29,43 @@ import taskCommentsCacheService from '../services/taskCommentsCacheService';
 export const createTask = async (taskData) => {
   try {
     const tasksRef = collection(firestore, 'tasks');
+    const status = taskData.status || 'todo';
+
+    // Get max order for this status in the organization to calculate new order
+    let maxOrder = -1;
+    try {
+      const statusQuery = query(
+        tasksRef,
+        where('organizationID', '==', taskData.organizationID),
+        where('status', '==', status),
+        orderBy('order', 'desc')
+      );
+      const snapshot = await getDocs(statusQuery);
+      readCounter.recordRead('query', 'tasks', 'createTask_getMaxOrder', snapshot.size);
+
+      if (!snapshot.empty) {
+        const firstDoc = snapshot.docs[0];
+        maxOrder = firstDoc.data().order ?? -1;
+      }
+    } catch (queryError) {
+      // If order field doesn't exist yet or query fails, start from 0
+      secureLogger.debug('Could not query max order, starting from 0', { error: queryError.message });
+    }
 
     const newTask = {
       ...taskData,
-      status: taskData.status || 'todo',
+      status,
       priority: taskData.priority || 'medium',
       subtasks: taskData.subtasks || [],
       commentCount: 0,
       timeEntryIds: [],
+      order: maxOrder + 1, // Add order field
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
 
     const docRef = await addDoc(tasksRef, newTask);
-    secureLogger.debug('Task created successfully', { taskId: docRef.id });
+    secureLogger.debug('Task created successfully', { taskId: docRef.id, order: newTask.order });
 
     // Clear cache to force refresh
     taskCacheService.clearOrganizationCache(taskData.organizationID);
@@ -363,8 +386,13 @@ export const subscribeToUserTasks = (userId, organizationID, callback, lastTimes
     const unsubscribeAssigned = onSnapshot(assignedQuery, (snapshot) => {
       readCounter.recordListenerUpdate(assignedListenerId, 'tasks', 'subscribeToUserTasks-assigned', snapshot.size);
 
-      snapshot.docs.forEach(doc => {
-        taskMap.set(doc.id, { id: doc.id, ...doc.data() });
+      // Handle document changes (added, modified, removed)
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'added' || change.type === 'modified') {
+          taskMap.set(change.doc.id, { id: change.doc.id, ...change.doc.data() });
+        } else if (change.type === 'removed') {
+          taskMap.delete(change.doc.id);
+        }
       });
 
       mergeAndCallback();
@@ -377,8 +405,13 @@ export const subscribeToUserTasks = (userId, organizationID, callback, lastTimes
     const unsubscribeCreated = onSnapshot(createdQuery, (snapshot) => {
       readCounter.recordListenerUpdate(createdListenerId, 'tasks', 'subscribeToUserTasks-created', snapshot.size);
 
-      snapshot.docs.forEach(doc => {
-        taskMap.set(doc.id, { id: doc.id, ...doc.data() });
+      // Handle document changes (added, modified, removed)
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'added' || change.type === 'modified') {
+          taskMap.set(change.doc.id, { id: change.doc.id, ...change.doc.data() });
+        } else if (change.type === 'removed') {
+          taskMap.delete(change.doc.id);
+        }
       });
 
       mergeAndCallback();
@@ -418,16 +451,26 @@ export const subscribeToOrganizationTasks = (organizationID, callback, lastTimes
 
     const listenerId = readCounter.recordListener('tasks', 'subscribeToOrganizationTasks', 0);
 
+    // Task map to track all organization tasks
+    const taskMap = new Map();
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const isIncremental = !!lastTimestamp;
 
       // Track the actual read count
       readCounter.recordListenerUpdate(listenerId, 'tasks', 'subscribeToOrganizationTasks', snapshot.size);
 
-      const tasks = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      // Handle document changes (added, modified, removed)
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'added' || change.type === 'modified') {
+          taskMap.set(change.doc.id, { id: change.doc.id, ...change.doc.data() });
+        } else if (change.type === 'removed') {
+          taskMap.delete(change.doc.id);
+        }
+      });
+
+      // Convert map to array
+      const tasks = Array.from(taskMap.values());
 
       callback(tasks, isIncremental);
     }, (error) => {

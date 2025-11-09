@@ -1,0 +1,164 @@
+.file-upload-button-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-upload-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  background-color: var(--background-color, white);
+  color: var(--text-color, #334155);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.file-upload-button:hover:not(:disabled) {
+  background-color: var(--hover-bg, #f1f5f9);
+  border-color: var(--hover-border, #cbd5e1);
+}
+
+.file-upload-button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.file-upload-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Button variants */
+.file-upload-button.primary {
+  background-color: var(--primary-color, #3b82f6);
+  color: white;
+  border-color: var(--primary-color, #3b82f6);
+}
+
+.file-upload-button.primary:hover:not(:disabled) {
+  background-color: var(--primary-hover, #2563eb);
+  border-color: var(--primary-hover, #2563eb);
+}
+
+.file-upload-button.secondary {
+  background-color: var(--secondary-color, #64748b);
+  color: white;
+  border-color: var(--secondary-color, #64748b);
+}
+
+.file-upload-button.secondary:hover:not(:disabled) {
+  background-color: var(--secondary-hover, #475569);
+  border-color: var(--secondary-hover, #475569);
+}
+
+.file-upload-button.outline {
+  background-color: transparent;
+  border: 1.5px solid var(--border-color, #e2e8f0);
+}
+
+.file-upload-button.outline:hover:not(:disabled) {
+  background-color: var(--hover-bg, #f8fafc);
+  border-color: var(--primary-color, #3b82f6);
+  color: var(--primary-color, #3b82f6);
+}
+
+/* Dragging state */
+.file-upload-button.dragging {
+  background-color: var(--primary-light, #dbeafe);
+  border-color: var(--primary-color, #3b82f6);
+  border-style: dashed;
+  border-width: 2px;
+}
+
+/* Uploading state */
+.file-upload-button.uploading {
+  cursor: wait;
+  padding: 4px 12px;
+}
+
+/* Upload progress */
+.upload-progress-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 150px;
+}
+
+.upload-progress-bar {
+  flex: 1;
+  height: 6px;
+  background-color: var(--progress-bg, #e2e8f0);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.upload-progress-fill {
+  height: 100%;
+  background-color: var(--primary-color, #3b82f6);
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+
+.upload-progress-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+  min-width: 40px;
+  text-align: right;
+}
+
+/* Error message */
+.file-upload-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: var(--error-bg, #fef2f2);
+  border: 1px solid var(--error-border, #fecaca);
+  border-radius: 6px;
+  color: var(--error-color, #dc2626);
+  font-size: 13px;
+}
+
+.file-upload-error svg {
+  flex-shrink: 0;
+}
+
+.file-upload-error span {
+  flex: 1;
+}
+
+.error-close-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--error-color, #dc2626);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.error-close-btn:hover {
+  background-color: var(--error-hover, #fee2e2);
+}
+
+/* Compact size variant */
+.file-upload-button.compact {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.file-upload-button.compact svg {
+  width: 16px;
+  height: 16px;
+}

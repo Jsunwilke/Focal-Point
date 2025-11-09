@@ -1,7 +1,7 @@
 // src/components/tasks/TaskPanel.js
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
-import { X, Plus, ListTodo, ChevronDown } from 'lucide-react';
+import { X, Plus, ListTodo, ChevronDown, Search } from 'lucide-react';
 import { useTask } from '../../contexts/TaskContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
@@ -9,6 +9,8 @@ import { useNavigate } from 'react-router-dom';
 import TaskPanelItem from './TaskPanelItem';
 import TaskPanelDetail from './TaskPanelDetail';
 import CreateTaskModal from './CreateTaskModal';
+import useKeyboardShortcuts from '../../hooks/useKeyboardShortcuts';
+import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import './TaskPanel.css';
 
 const TaskPanel = () => {
@@ -19,6 +21,9 @@ const TaskPanel = () => {
     setPanelFilter,
     getPanelTasks,
     markTaskComplete,
+    duplicateTask,
+    deleteTask,
+    updateTask,
     myTasks,
     teamTasks,
     canViewTeamTasks
@@ -31,10 +36,23 @@ const TaskPanel = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState('me'); // 'me' | 'all' | specific userId
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [optimisticOrder, setOptimisticOrder] = useState(null); // Store optimistic order during drag
   const userDropdownRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   // Check if user is manager or admin
   const isManagerOrAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager';
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Close user dropdown on click outside
   useEffect(() => {
@@ -119,6 +137,56 @@ const TaskPanel = () => {
     return user ? `${user.firstName} ${user.lastName}` : 'Unknown User';
   };
 
+  // Get assignee names for search
+  const getTaskAssigneeNames = (task) => {
+    if (!task?.assignedTo || task.assignedTo.length === 0) return '';
+    if (!teamMembers || teamMembers.length === 0) return '';
+    return task.assignedTo
+      .map(id => {
+        const member = teamMembers.find(m => m.id === id);
+        return member ? `${member.firstName} ${member.lastName}` : '';
+      })
+      .join(' ');
+  };
+
+  // Apply search filtering
+  const filteredTasks = useMemo(() => {
+    if (!debouncedSearchQuery.trim()) return panelTasks;
+
+    const query = debouncedSearchQuery.toLowerCase().trim();
+
+    return panelTasks.filter(task => {
+      const titleMatch = task.title?.toLowerCase().includes(query);
+      const descMatch = task.description?.toLowerCase().includes(query);
+      const assigneeMatch = getTaskAssigneeNames(task).toLowerCase().includes(query);
+
+      return titleMatch || descMatch || assigneeMatch;
+    });
+  }, [panelTasks, debouncedSearchQuery, teamMembers]);
+
+  // Sort tasks by panelOrder (for drag & drop) or default sorting
+  const sortedTasks = useMemo(() => {
+    // If we have optimistic order (during drag), use it
+    if (optimisticOrder) {
+      return optimisticOrder;
+    }
+
+    return [...filteredTasks].sort((a, b) => {
+      // Use panelOrder if available, otherwise use fallback of 999999 to put at end
+      const orderA = a.panelOrder ?? 999999;
+      const orderB = b.panelOrder ?? 999999;
+
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+
+      // If both don't have panelOrder, sort by createdAt
+      const timeA = a.createdAt?.toMillis?.() ?? 0;
+      const timeB = b.createdAt?.toMillis?.() ?? 0;
+      return timeB - timeA; // Newest first
+    });
+  }, [filteredTasks, optimisticOrder]);
+
   const handleTaskClick = (taskId) => {
     setSelectedTaskId(taskId);
   };
@@ -135,12 +203,28 @@ const TaskPanel = () => {
     }
   };
 
-  const handleQuickAction = (taskId, action) => {
-    // Open task detail view for all actions
-    setSelectedTaskId(taskId);
-
-    // TODO: Could set a flag to auto-open specific tab or action
-    // For now, just opening the detail view where user can perform the action
+  const handleQuickAction = async (taskId, action) => {
+    if (action === 'duplicate') {
+      try {
+        const newTask = await duplicateTask(taskId);
+        // Open the duplicated task in detail view
+        setSelectedTaskId(newTask.id);
+      } catch (error) {
+        console.error('Failed to duplicate task:', error);
+      }
+    } else if (action === 'delete') {
+      // Confirm before deleting
+      if (window.confirm('Are you sure you want to delete this task?')) {
+        try {
+          await deleteTask(taskId);
+        } catch (error) {
+          console.error('Failed to delete task:', error);
+        }
+      }
+    } else {
+      // For other actions (add-deadline, add-subtask), open task detail view
+      setSelectedTaskId(taskId);
+    }
   };
 
   const handleNewTaskClick = () => {
@@ -155,6 +239,67 @@ const TaskPanel = () => {
     navigate('/tasks');
     closePanel();
   };
+
+  // Handle drag and drop reordering
+  const handleDragEnd = async (result) => {
+    if (!result.destination) return;
+    if (result.destination.index === result.source.index) return;
+
+    const items = Array.from(sortedTasks);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+
+    // Set optimistic order immediately for smooth UX
+    setOptimisticOrder(items);
+
+    try {
+      // Update panelOrder for all tasks in the current view
+      const updatePromises = items.map((task, index) => {
+        // Only update if panelOrder has changed
+        if (task.panelOrder !== index) {
+          return updateTask(task.id, { panelOrder: index });
+        }
+        return Promise.resolve();
+      });
+
+      await Promise.all(updatePromises.filter(p => p));
+
+      // Clear optimistic order after a delay to allow Firebase to sync
+      setTimeout(() => {
+        setOptimisticOrder(null);
+      }, 500);
+    } catch (error) {
+      console.error('Failed to reorder tasks:', error);
+      // Clear optimistic order on error to revert to real data
+      setOptimisticOrder(null);
+    }
+  };
+
+  // Keyboard shortcuts for task panel
+  useKeyboardShortcuts({
+    // Escape: Close panel or go back to list
+    'escape': () => {
+      if (selectedTaskId) {
+        handleBackToList();
+      } else if (isPanelOpen) {
+        closePanel();
+      }
+    },
+    // /: Focus search
+    '/': () => {
+      if (!selectedTaskId && searchInputRef.current) {
+        searchInputRef.current.focus();
+      }
+    },
+    // Numbers 1-4: Switch filter tabs
+    '1': () => !selectedTaskId && setPanelFilter('all'),
+    '2': () => !selectedTaskId && setPanelFilter('today'),
+    '3': () => !selectedTaskId && setPanelFilter('urgent'),
+    '4': () => !selectedTaskId && setPanelFilter('completed')
+  }, {
+    enabled: isPanelOpen,
+    allowInInputs: ['escape']
+  });
 
   if (!isPanelOpen) return null;
 
@@ -180,7 +325,7 @@ const TaskPanel = () => {
                       className="task-panel__user-selector-btn"
                       onClick={() => setUserDropdownOpen(!userDropdownOpen)}
                     >
-                      <span>{getSelectedUserName()} ({panelTasks.length})</span>
+                      <span>{getSelectedUserName()} ({filteredTasks.length})</span>
                       <ChevronDown size={16} />
                     </button>
                     {userDropdownOpen && (
@@ -220,7 +365,7 @@ const TaskPanel = () => {
                     )}
                   </div>
                 ) : (
-                  <span>Tasks ({panelTasks.length})</span>
+                  <span>Tasks ({filteredTasks.length})</span>
                 )}
               </div>
               <div className="task-panel__header-actions">
@@ -240,6 +385,36 @@ const TaskPanel = () => {
                   <X size={20} />
                 </button>
               </div>
+            </div>
+
+            {/* Search */}
+            <div className="task-panel__search">
+              <div className="task-panel__search-wrapper">
+                <Search size={16} className="task-panel__search-icon" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search tasks..."
+                  className="task-panel__search-input"
+                  aria-label="Search tasks"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="task-panel__search-clear"
+                    aria-label="Clear search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              {debouncedSearchQuery && (
+                <div className="task-panel__search-results" role="status" aria-live="polite">
+                  {filteredTasks.length} {filteredTasks.length === 1 ? 'task' : 'tasks'} found
+                </div>
+              )}
             </div>
 
             {/* Filter tabs */}
@@ -272,39 +447,67 @@ const TaskPanel = () => {
           </div>
 
           {/* Task list */}
-          <div className="task-panel__list">
-            {panelTasks.length === 0 ? (
-              <div className="task-panel__empty">
-                <ListTodo size={48} className="task-panel__empty-icon" />
-                <p className="task-panel__empty-text">
-                  {panelFilter === 'all' ? 'No tasks yet' :
-                   panelFilter === 'completed' ? 'No completed tasks' :
-                   `No ${panelFilter} tasks`}
-                </p>
-                {panelFilter !== 'completed' && (
-                  <button
-                    className="task-panel__empty-btn"
-                    onClick={handleNewTaskClick}
-                  >
-                    Create your first task
-                  </button>
-                )}
-              </div>
-            ) : (
-              panelTasks.map(task => (
-                <TaskPanelItem
-                  key={task.id}
-                  task={task}
-                  onClick={() => handleTaskClick(task.id)}
-                  onToggleComplete={handleToggleComplete}
-                  onQuickAction={handleQuickAction}
-                />
-              ))
-            )}
-          </div>
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="task-list">
+              {(provided, snapshot) => (
+                <div
+                  className={`task-panel__list ${snapshot.isDraggingOver ? 'task-panel__list--dragging' : ''}`}
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                >
+                  {sortedTasks.length === 0 ? (
+                    <div className="task-panel__empty">
+                      <ListTodo size={48} className="task-panel__empty-icon" />
+                      <p className="task-panel__empty-text">
+                        {debouncedSearchQuery ?
+                          `No tasks found for "${debouncedSearchQuery}"` :
+                          panelFilter === 'all' ? 'No tasks yet' :
+                          panelFilter === 'completed' ? 'No completed tasks' :
+                          `No ${panelFilter} tasks`
+                        }
+                      </p>
+                      {!debouncedSearchQuery && panelFilter !== 'completed' && (
+                        <button
+                          className="task-panel__empty-btn"
+                          onClick={handleNewTaskClick}
+                        >
+                          Create your first task
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    sortedTasks.map((task, index) => (
+                      <Draggable key={task.id} draggableId={task.id} index={index}>
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            style={{
+                              ...provided.draggableProps.style,
+                              opacity: snapshot.isDragging ? 0.8 : 1
+                            }}
+                          >
+                            <TaskPanelItem
+                              task={task}
+                              onClick={() => handleTaskClick(task.id)}
+                              onToggleComplete={handleToggleComplete}
+                              onQuickAction={handleQuickAction}
+                              isDragging={snapshot.isDragging}
+                            />
+                          </div>
+                        )}
+                      </Draggable>
+                    ))
+                  )}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
 
           {/* Footer */}
-          {panelTasks.length > 0 && (
+          {filteredTasks.length > 0 && (
             <div className="task-panel__footer">
               <button
                 className="task-panel__view-all-btn"

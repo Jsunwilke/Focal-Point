@@ -3,26 +3,43 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTask } from '../contexts/TaskContext';
 import { useAuth } from '../contexts/AuthContext';
-import { ListTodo, Plus, Search, Filter, X, CheckSquare, Clock, AlertCircle } from 'lucide-react';
+import { useToast } from '../contexts/ToastContext';
+import { ListTodo, Plus, Search, Filter, X, CheckSquare, Clock, AlertCircle, LayoutGrid, List } from 'lucide-react';
 import CreateTaskModal from '../components/tasks/CreateTaskModal';
+import TaskBoardView from '../components/tasks/TaskBoardView';
+import BulkActionsBar from '../components/tasks/BulkActionsBar';
+import BulkEditModal from '../components/tasks/BulkEditModal';
+import TaskExportButton from '../components/tasks/TaskExportButton';
 import './TasksPage.css';
 
 const TasksPage = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { myTasks, teamTasks, canViewTeamTasks, loading, openPanel } = useTask();
+  const { myTasks, teamTasks, canViewTeamTasks, loading, openPanel, updateTask, deleteTask } = useTask();
   const { userProfile } = useAuth();
+  const { showToast } = useToast();
 
   // State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState([]);
+  const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState(() => {
+    // Load view preference from localStorage
+    return localStorage.getItem('tasks_view_mode') || 'list';
+  });
   const [filters, setFilters] = useState({
     status: ['todo', 'in_progress'],
     assignee: 'me', // 'me' | 'all' | specific userId
     priority: [],
     type: []
   });
+
+  // Save view mode preference to localStorage
+  useEffect(() => {
+    localStorage.setItem('tasks_view_mode', viewMode);
+  }, [viewMode]);
 
   // Check for quickAdd param from task panel
   useEffect(() => {
@@ -171,6 +188,67 @@ const TasksPage = () => {
     setSearchQuery('');
   };
 
+  // Bulk selection handlers
+  const handleToggleTaskSelection = (taskId) => {
+    setSelectedTaskIds(prev =>
+      prev.includes(taskId)
+        ? prev.filter(id => id !== taskId)
+        : [...prev, taskId]
+    );
+  };
+
+  const handleClearSelection = () => {
+    setSelectedTaskIds([]);
+  };
+
+  const handleBulkStatusChange = async (newStatus) => {
+    try {
+      await Promise.all(
+        selectedTaskIds.map(taskId => updateTask(taskId, { status: newStatus }))
+      );
+      showToast(`Updated ${selectedTaskIds.length} task${selectedTaskIds.length !== 1 ? 's' : ''}`, 'success');
+      setSelectedTaskIds([]);
+    } catch (error) {
+      console.error('Error updating tasks:', error);
+      showToast('Failed to update tasks', 'error');
+    }
+  };
+
+  const handleBulkEdit = () => {
+    setIsBulkEditModalOpen(true);
+  };
+
+  const handleBulkUpdate = async (updates) => {
+    try {
+      await Promise.all(
+        selectedTaskIds.map(taskId => updateTask(taskId, updates))
+      );
+      showToast(`Updated ${selectedTaskIds.length} task${selectedTaskIds.length !== 1 ? 's' : ''}`, 'success');
+      setSelectedTaskIds([]);
+      setIsBulkEditModalOpen(false);
+    } catch (error) {
+      console.error('Error updating tasks:', error);
+      showToast('Failed to update tasks', 'error');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete ${selectedTaskIds.length} task${selectedTaskIds.length !== 1 ? 's' : ''}?`)) {
+      return;
+    }
+
+    try {
+      await Promise.all(
+        selectedTaskIds.map(taskId => deleteTask(taskId))
+      );
+      showToast(`Deleted ${selectedTaskIds.length} task${selectedTaskIds.length !== 1 ? 's' : ''}`, 'success');
+      setSelectedTaskIds([]);
+    } catch (error) {
+      console.error('Error deleting tasks:', error);
+      showToast('Failed to delete tasks', 'error');
+    }
+  };
+
   // Handle task click
   const handleTaskClick = (taskId) => {
     setSelectedTaskId(taskId);
@@ -246,6 +324,23 @@ const TasksPage = () => {
           </div>
         </div>
         <div className="tasks-page__header-right">
+          <TaskExportButton tasks={filteredTasks} filename="tasks-export" />
+          <div className="tasks-page__view-toggle">
+            <button
+              className={`tasks-page__view-btn ${viewMode === 'list' ? 'tasks-page__view-btn--active' : ''}`}
+              onClick={() => setViewMode('list')}
+              title="List view"
+            >
+              <List size={18} />
+            </button>
+            <button
+              className={`tasks-page__view-btn ${viewMode === 'board' ? 'tasks-page__view-btn--active' : ''}`}
+              onClick={() => setViewMode('board')}
+              title="Board view"
+            >
+              <LayoutGrid size={18} />
+            </button>
+          </div>
           <button
             className="tasks-page__new-btn"
             onClick={() => setIsCreateModalOpen(true)}
@@ -388,10 +483,10 @@ const TasksPage = () => {
               <label className="tasks-page__filter-checkbox">
                 <input
                   type="checkbox"
-                  checked={filters.status.includes('blocked')}
-                  onChange={() => toggleStatusFilter('blocked')}
+                  checked={filters.status.includes('on_hold')}
+                  onChange={() => toggleStatusFilter('on_hold')}
                 />
-                <span>Blocked</span>
+                <span>On Hold</span>
               </label>
               <label className="tasks-page__filter-checkbox">
                 <input
@@ -471,8 +566,8 @@ const TasksPage = () => {
           </div>
         </div>
 
-        {/* Task List */}
-        <div className="tasks-page__main">
+        {/* Task List or Board */}
+        <div className={`tasks-page__main ${viewMode === 'board' ? 'tasks-page__main--board' : ''}`}>
           {filteredTasks.length === 0 ? (
             <div className="tasks-page__empty">
               <ListTodo size={64} className="tasks-page__empty-icon" />
@@ -496,21 +591,36 @@ const TasksPage = () => {
                 </button>
               )}
             </div>
+          ) : viewMode === 'board' ? (
+            <TaskBoardView
+              tasks={filteredTasks}
+              onTaskClick={(task) => handleTaskClick(task.id)}
+              filterSettings={filters}
+            />
           ) : (
             <div className="tasks-page__list">
               {filteredTasks.map(task => (
                 <div
                   key={task.id}
-                  className={`tasks-page__task ${isOverdue(task) ? 'tasks-page__task--overdue' : ''} ${task.status === 'completed' ? 'tasks-page__task--completed' : ''}`}
-                  onClick={() => handleTaskClick(task.id)}
+                  className={`tasks-page__task ${isOverdue(task) ? 'tasks-page__task--overdue' : ''} ${task.status === 'completed' ? 'tasks-page__task--completed' : ''} ${selectedTaskIds.includes(task.id) ? 'tasks-page__task--selected' : ''}`}
                 >
                   <div className="tasks-page__task-left">
+                    <input
+                      type="checkbox"
+                      className="tasks-page__task-checkbox"
+                      checked={selectedTaskIds.includes(task.id)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleToggleTaskSelection(task.id);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
                     <div
                       className="tasks-page__task-priority"
                       style={{ backgroundColor: getPriorityColor(task.priority) }}
                       title={`${task.priority} priority`}
                     />
-                    <div className="tasks-page__task-content">
+                    <div className="tasks-page__task-content" onClick={() => handleTaskClick(task.id)}>
                       <h3 className="tasks-page__task-title">{task.title}</h3>
                       <div className="tasks-page__task-meta">
                         {task.type && (
@@ -535,7 +645,7 @@ const TasksPage = () => {
                     <span className={`tasks-page__task-status tasks-page__task-status--${task.status}`}>
                       {task.status === 'todo' && 'To Do'}
                       {task.status === 'in_progress' && 'In Progress'}
-                      {task.status === 'blocked' && 'Blocked'}
+                      {task.status === 'on_hold' && 'On Hold'}
                       {task.status === 'completed' && 'Completed'}
                       {task.status === 'cancelled' && 'Cancelled'}
                     </span>
@@ -552,6 +662,25 @@ const TasksPage = () => {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
       />
+
+      {/* Bulk Edit Modal */}
+      <BulkEditModal
+        isOpen={isBulkEditModalOpen}
+        onClose={() => setIsBulkEditModalOpen(false)}
+        selectedTasks={filteredTasks.filter(t => selectedTaskIds.includes(t.id))}
+        onBulkUpdate={handleBulkUpdate}
+      />
+
+      {/* Bulk Actions Bar */}
+      {selectedTaskIds.length > 0 && (
+        <BulkActionsBar
+          selectedCount={selectedTaskIds.length}
+          onClearSelection={handleClearSelection}
+          onBulkEdit={handleBulkEdit}
+          onBulkDelete={handleBulkDelete}
+          onBulkStatusChange={handleBulkStatusChange}
+        />
+      )}
     </div>
   );
 };

@@ -2053,12 +2053,12 @@ export const setDefaultTemplate = async (organizationID, shootType, templateId) 
 // Time Tracking Functions
 
 // Clock in - creates a new time entry
-export const clockIn = async (userId, organizationID, sessionId = null, notes = null) => {
+export const clockIn = async (userId, organizationID, sessionId = null, notes = null, taskId = null) => {
   try {
     const now = new Date();
     // Use local timezone to get today's date consistently
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    
+
     // Check if user is already clocked in
     const existingEntry = await getCurrentTimeEntry(userId, organizationID);
     if (existingEntry) {
@@ -2079,11 +2079,17 @@ export const clockIn = async (userId, organizationID, sessionId = null, notes = 
       timeEntryData.sessionId = sessionId;
     }
 
+    if (taskId) {
+      timeEntryData.taskId = taskId;
+    }
+
     if (notes) {
       timeEntryData.notes = notes;
     }
 
     const docRef = await addDoc(collection(firestore, "timeEntries"), timeEntryData);
+    readCounter.recordWrite('timeEntries', 'clockIn');
+
     return docRef.id;
   } catch (error) {
     throw error;
@@ -2264,11 +2270,52 @@ export const getWeekTimeEntries = async (userId, organizationID, startDate, endD
     const formatDate = (date) => {
       return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     };
-    
+
     const startString = formatDate(startDate);
     const endString = formatDate(endDate);
-    
+
     return await getTimeEntries(userId, organizationID, startString, endString);
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Get time entries for a specific task
+export const getTaskTimeEntries = async (taskId, organizationID) => {
+  try {
+    const q = query(
+      collection(firestore, "timeEntries"),
+      where("taskId", "==", taskId),
+      where("organizationID", "==", organizationID),
+      orderBy("clockInTime", "desc")
+    );
+
+    const querySnapshot = await getDocs(q);
+    const entries = [];
+
+    querySnapshot.forEach((doc) => {
+      entries.push({
+        id: doc.id,
+        ...doc.data(),
+      });
+    });
+
+    readCounter.recordRead('query', 'timeEntries', 'getTaskTimeEntries', entries.length);
+    return entries;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Update an existing time entry to add/change taskId
+export const updateTimeEntryTask = async (timeEntryId, taskId) => {
+  try {
+    const timeEntryRef = doc(firestore, "timeEntries", timeEntryId);
+    await updateDoc(timeEntryRef, {
+      taskId: taskId,
+      updatedAt: serverTimestamp()
+    });
+    readCounter.recordWrite('timeEntries', 'updateTimeEntryTask');
   } catch (error) {
     throw error;
   }
