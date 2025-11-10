@@ -60,6 +60,11 @@ export const createTask = async (taskData) => {
       commentCount: 0,
       timeEntryIds: [],
       order: maxOrder + 1, // Add order field
+      // Workflow linkage fields
+      workflowId: taskData.workflowId || null,
+      workflowStepId: taskData.workflowStepId || null,
+      autoCreated: taskData.autoCreated || false,
+      syncWithWorkflow: taskData.syncWithWorkflow || false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
@@ -97,6 +102,19 @@ export const updateTask = async (taskId, updates) => {
     if (taskDoc.exists()) {
       const taskData = { id: taskDoc.id, ...taskDoc.data() };
       taskCacheService.setCachedTask(taskId, taskData);
+
+      // Sync to workflow step if task is completed and has workflow linkage
+      if (updates.status === 'completed' && taskData.syncWithWorkflow && taskData.workflowId && taskData.workflowStepId) {
+        try {
+          const { syncTaskToWorkflowStep } = await import('../services/workflowTaskService');
+          // Get the user who completed the task - use current auth user or updatedBy field
+          const userId = updates.completedBy || updates.updatedBy || taskData.createdBy;
+          await syncTaskToWorkflowStep(taskId, taskData, userId);
+        } catch (syncError) {
+          // Don't fail the task update if sync fails
+          secureLogger.error('Error syncing task to workflow', { taskId, error: syncError.message });
+        }
+      }
     }
 
     return true;

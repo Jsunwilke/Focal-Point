@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTask } from '../contexts/TaskContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { ListTodo, Plus, Search, Filter, X, CheckSquare, Clock, AlertCircle, LayoutGrid, List } from 'lucide-react';
+import { ListTodo, Plus, Search, Filter, X, CheckSquare, Clock, AlertCircle, LayoutGrid, List, GitBranch } from 'lucide-react';
 import CreateTaskModal from '../components/tasks/CreateTaskModal';
 import TaskBoardView from '../components/tasks/TaskBoardView';
 import BulkActionsBar from '../components/tasks/BulkActionsBar';
@@ -625,6 +625,12 @@ const TasksPage = () => {
                       <div className="tasks-page__task-meta">
                         {task.type && (
                           <span className="tasks-page__task-type">{task.type}</span>
+                        )}
+                        {task.workflowId && (
+                          <span className="tasks-page__task-workflow" title="Linked to workflow">
+                            <GitBranch size={12} />
+                            Workflow
+                          </span>
                         )}
                         {task.dueDate && (
                           <span className={`tasks-page__task-due ${isOverdue(task) ? 'tasks-page__task-due--overdue' : ''}`}>

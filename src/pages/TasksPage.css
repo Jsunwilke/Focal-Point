@@ -403,6 +403,17 @@
   text-transform: capitalize;
 }
 
+.tasks-page__task-workflow {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  background-color: #eff6ff;
+  color: #1e40af;
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-medium);
+}
+
 .tasks-page__task-due {
   display: flex;
   align-items: center;

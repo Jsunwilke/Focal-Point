@@ -1724,6 +1724,8 @@ service cloud.firestore {
                        (!request.resource.data.keys().hasAny(['sessionId']) || request.resource.data.sessionId is string) &&
                        (!request.resource.data.keys().hasAny(['workflowId']) || request.resource.data.workflowId is string) &&
                        (!request.resource.data.keys().hasAny(['workflowStepId']) || request.resource.data.workflowStepId is string) &&
+                       (!request.resource.data.keys().hasAny(['autoCreated']) || request.resource.data.autoCreated is bool) &&
+                       (!request.resource.data.keys().hasAny(['syncWithWorkflow']) || request.resource.data.syncWithWorkflow is bool) &&
                        (!request.resource.data.keys().hasAny(['estimatedHours']) || request.resource.data.estimatedHours is number) &&
                        (!request.resource.data.keys().hasAny(['commentCount']) || request.resource.data.commentCount is number) &&
                        (!request.resource.data.keys().hasAny(['order']) || request.resource.data.order is number) &&

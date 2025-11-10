@@ -1,7 +1,7 @@
 // src/components/workflow/overview/views/WorkflowMatrixView.js
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { Check, Clock, EyeOff, Eye } from 'lucide-react';
+import { Check, Clock, EyeOff, Eye, PlayCircle } from 'lucide-react';
 import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import DataGrid from 'react-data-grid';
 import 'react-data-grid/lib/styles.css';
@@ -15,6 +15,7 @@ import { readCounter } from '../../../../services/readCounter';
 import { getStepGroupColor } from '../../../../utils/workflowTemplates';
 import ShootDetailsModal from '../../ShootDetailsModal';
 import TaskButton from '../../TaskButton';
+import VideoPlayerModal from '../../VideoPlayerModal';
 import './WorkflowMatrixView.css';
 import './WorkflowMatrixView-rdg.css';
 
@@ -526,6 +527,12 @@ const TaskCell = ({
           sessionID={workflow.sessionID}
           tasks={stepTasks}
           onTaskClick={onTaskClick}
+          linkedTaskId={stepProgress.linkedTaskId || null}
+          linkedTaskStatus={
+            stepProgress.linkedTaskId
+              ? stepTasks.find(t => t.id === stepProgress.linkedTaskId)?.status || null
+              : null
+          }
         />
       </div>
     </div>
@@ -554,6 +561,10 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
   // Modal state
   const [selectedWorkflow, setSelectedWorkflow] = useState(null);
   const [schools, setSchools] = useState([]);
+
+  // Video modal state
+  const [videoModalOpen, setVideoModalOpen] = useState(false);
+  const [currentVideoData, setCurrentVideoData] = useState(null);
 
   // Tab ordering state
   const [savedTabOrder, setSavedTabOrder] = useState([]); // Array of template IDs in saved order
@@ -1452,23 +1463,51 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
         frozen: false,
         width: width,
         resizable: true,
-        renderHeaderCell: () => (
-          <div style={{
-            backgroundColor: stepColors.main,
-            color: 'white',
-            flex: 1,
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            padding: '8px',
-            fontSize: '11px',
-            fontWeight: 600,
-            wordBreak: 'break-word',
-            lineHeight: '1.3'
-          }}>
-            {step.title}
-          </div>
-        ),
+        renderHeaderCell: () => {
+          const hasVideo = step.tutorialVideoURL || step.tutorialVideoFile;
+          const videoUrl = step.tutorialVideoFile || step.tutorialVideoURL;
+
+          return (
+            <div style={{
+              backgroundColor: stepColors.main,
+              color: 'white',
+              flex: 1,
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '8px',
+              fontSize: '11px',
+              fontWeight: 600,
+              wordBreak: 'break-word',
+              lineHeight: '1.3',
+              gap: '4px'
+            }}>
+              <span style={{ flex: 1 }}>{step.title}</span>
+              {hasVideo && (
+                <PlayCircle
+                  size={16}
+                  style={{
+                    flexShrink: 0,
+                    cursor: 'pointer',
+                    opacity: 0.8,
+                    transition: 'opacity 0.15s ease'
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCurrentVideoData({
+                      url: videoUrl,
+                      title: step.title
+                    });
+                    setVideoModalOpen(true);
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = '0.8'}
+                />
+              )}
+            </div>
+          );
+        },
         renderCell: (props) => {
           const lastCompletedIdx = getLastCompletedIndex(props.row.workflow);
           const taskKey = `${props.row.workflow.id}_${step.id}`;
@@ -1758,6 +1797,17 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
           onClose={() => setSelectedWorkflow(null)}
         />
       )}
+
+      {/* Video Player Modal */}
+      <VideoPlayerModal
+        isOpen={videoModalOpen}
+        onClose={() => {
+          setVideoModalOpen(false);
+          setCurrentVideoData(null);
+        }}
+        videoUrl={currentVideoData?.url}
+        title={currentVideoData?.title}
+      />
     </div>
   );
 };

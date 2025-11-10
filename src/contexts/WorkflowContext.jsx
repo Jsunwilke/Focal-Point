@@ -705,6 +705,50 @@ export const WorkflowProvider = ({ children }) => {
     */
   }, [organization?.id, userProfile?.id]);
 
+  // Daily timeline task check
+  // Runs checkTimelineTasks once per day to create tasks for timeline-triggered workflow steps
+  useEffect(() => {
+    if (!organization?.id) return;
+
+    // Function to run the timeline check
+    const runTimelineCheck = async () => {
+      try {
+        const { checkTimelineTasks } = await import('../services/workflowTaskService');
+        const stats = await checkTimelineTasks();
+
+        if (stats.tasksCreated > 0) {
+          console.log(`[WorkflowContext] Timeline check created ${stats.tasksCreated} tasks`);
+          // Refresh workflows to show newly created tasks
+          await refreshWorkflows();
+        }
+      } catch (error) {
+        console.error('[WorkflowContext] Error in timeline check:', error);
+      }
+    };
+
+    // Run immediately on mount (but only if it's been >12 hours since last check)
+    const lastCheckTime = localStorage.getItem('workflow_timeline_last_check');
+    const now = Date.now();
+    const twelveHours = 12 * 60 * 60 * 1000;
+
+    if (!lastCheckTime || (now - parseInt(lastCheckTime)) > twelveHours) {
+      console.log('[WorkflowContext] Running initial timeline check');
+      runTimelineCheck();
+      localStorage.setItem('workflow_timeline_last_check', now.toString());
+    }
+
+    // Set up daily interval (24 hours)
+    const dailyInterval = setInterval(() => {
+      console.log('[WorkflowContext] Running scheduled timeline check');
+      runTimelineCheck();
+      localStorage.setItem('workflow_timeline_last_check', Date.now().toString());
+    }, 24 * 60 * 60 * 1000); // 24 hours
+
+    // Cleanup interval on unmount
+    return () => {
+      clearInterval(dailyInterval);
+    };
+  }, [organization?.id, refreshWorkflows]);
 
   // Clear template from cache (for debugging)
   const clearTemplateCache = useCallback((templateId) => {

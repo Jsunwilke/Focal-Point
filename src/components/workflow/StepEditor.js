@@ -1,30 +1,40 @@
 // src/components/workflow/StepEditor.js
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { 
-  X, 
-  Save, 
-  Clock, 
-  Users, 
-  FileText, 
+import {
+  X,
+  Save,
+  Clock,
+  Users,
+  FileText,
   Bell,
   AlertCircle,
   Plus,
-  Trash2
+  Trash2,
+  Video,
+  Upload,
+  Link
 } from 'lucide-react';
-import { 
-  getStepTypes, 
+import {
+  getStepTypes,
   getAssigneeRules,
   getWorkflowGroups
 } from '../../utils/workflowTemplates';
 import { useDataCache } from '../../contexts/DataCacheContext';
+import {
+  uploadStepVideo,
+  deleteStepVideo,
+  validateVideoFile,
+  formatFileSize
+} from '../../services/videoUploadService';
 
 const StepEditor = ({
   isOpen,
   onClose,
   step,
   onSave,
-  organizationID
+  organizationID,
+  allSteps = []
 }) => {
   const [formData, setFormData] = useState({
     id: step?.id || '',
@@ -46,11 +56,22 @@ const StepEditor = ({
     files: {
       required: step?.files?.required || [],
       outputs: step?.files?.outputs || []
-    }
+    },
+    taskCreationTrigger: step?.taskCreationTrigger || 'manual',
+    taskCreationDaysBefore: step?.taskCreationDaysBefore || 7,
+    tutorialVideoURL: step?.tutorialVideoURL || '',
+    tutorialVideoFile: step?.tutorialVideoFile || null
   });
 
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  // Video upload state
+  const [videoInputMethod, setVideoInputMethod] = useState('url');
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
   
   // Get team members from cache
   const { users } = useDataCache();
@@ -168,6 +189,64 @@ const StepEditor = ({
       ...prev,
       micros: prev.micros.filter((_, i) => i !== index)
     }));
+  };
+
+  // Video upload handlers
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const validation = validateVideoFile(file);
+    if (!validation.valid) {
+      setUploadError(validation.error);
+      setSelectedFile(null);
+      return;
+    }
+
+    setSelectedFile(file);
+    setUploadError('');
+  };
+
+  const handleVideoUpload = async () => {
+    if (!selectedFile) return;
+    if (!organizationID || !formData.id) {
+      setUploadError('Missing required information for upload');
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+    setUploadError('');
+
+    try {
+      const templateID = 'template_' + Date.now(); // Placeholder - in real use would be actual template ID
+      const downloadURL = await uploadStepVideo(
+        organizationID,
+        templateID,
+        formData.id,
+        selectedFile,
+        (progress) => setUploadProgress(progress)
+      );
+
+      // Update form data with video URL
+      handleInputChange('tutorialVideoFile', downloadURL);
+
+      // Clear selected file
+      setSelectedFile(null);
+      setUploading(false);
+      setUploadProgress(0);
+    } catch (error) {
+      setUploadError(error.message || 'Upload failed');
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleDeleteUploadedVideo = async () => {
+    if (formData.tutorialVideoFile) {
+      await deleteStepVideo(formData.tutorialVideoFile);
+      handleInputChange('tutorialVideoFile', null);
+    }
   };
 
   const handleSave = () => {
@@ -688,6 +767,145 @@ const StepEditor = ({
                 </div>
               </div>
 
+              {/* Task Auto-Creation */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: '600' }}>
+                  Task Auto-Creation
+                </h3>
+
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem' }}>
+                    Task Creation Trigger
+                  </label>
+                  <select
+                    value={formData.taskCreationTrigger}
+                    onChange={(e) => handleInputChange('taskCreationTrigger', e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.375rem',
+                      fontSize: '0.875rem',
+                      backgroundColor: 'white'
+                    }}
+                  >
+                    <option value="manual">Manual - No auto-creation</option>
+                    <option value="immediate">Immediate - Create when workflow starts</option>
+                    <option value="timeline">Timeline - Create X days before due date</option>
+                    <option value="dependency">Dependency - Create when prerequisites complete</option>
+                  </select>
+                  <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
+                    {formData.taskCreationTrigger === 'manual' && 'Tasks must be created manually'}
+                    {formData.taskCreationTrigger === 'immediate' && 'Task will be created as soon as the workflow starts'}
+                    {formData.taskCreationTrigger === 'timeline' && 'Task will be created based on the timeline (days before due date)'}
+                    {formData.taskCreationTrigger === 'dependency' && 'Task will be created when all dependency steps are completed'}
+                  </p>
+                </div>
+
+                {formData.taskCreationTrigger === 'timeline' && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem' }}>
+                      Days Before Due Date
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.taskCreationDaysBefore}
+                      onChange={(e) => handleInputChange('taskCreationDaysBefore', parseInt(e.target.value) || 0)}
+                      min="0"
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '0.375rem',
+                        fontSize: '0.875rem'
+                      }}
+                    />
+                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
+                      Task will be created {formData.taskCreationDaysBefore} days before this step's due date
+                    </p>
+                  </div>
+                )}
+
+                {formData.taskCreationTrigger === 'dependency' && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem' }}>
+                      Prerequisite Steps
+                    </label>
+                    <div style={{
+                      padding: '0.75rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.375rem',
+                      backgroundColor: '#fafafa',
+                      maxHeight: '200px',
+                      overflowY: 'auto'
+                    }}>
+                      {allSteps.length === 0 ? (
+                        <p style={{ margin: 0, fontSize: '0.8125rem', color: '#9ca3af', fontStyle: 'italic' }}>
+                          No other steps available yet. Add more steps to the template first.
+                        </p>
+                      ) : allSteps.filter(s => s.id !== formData.id).length === 0 ? (
+                        <p style={{ margin: 0, fontSize: '0.8125rem', color: '#9ca3af', fontStyle: 'italic' }}>
+                          No other steps available. This is the only step in the template.
+                        </p>
+                      ) : (
+                        allSteps
+                          .filter(s => s.id !== formData.id)
+                          .map(availableStep => (
+                            <label
+                              key={availableStep.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                padding: '0.5rem',
+                                cursor: 'pointer',
+                                borderRadius: '0.25rem',
+                                transition: 'background-color 0.15s ease',
+                                backgroundColor: formData.dependencies.includes(availableStep.id) ? '#eff6ff' : 'transparent'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!formData.dependencies.includes(availableStep.id)) {
+                                  e.currentTarget.style.backgroundColor = '#f3f4f6';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!formData.dependencies.includes(availableStep.id)) {
+                                  e.currentTarget.style.backgroundColor = 'transparent';
+                                }
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={formData.dependencies.includes(availableStep.id)}
+                                onChange={(e) => {
+                                  const isChecked = e.target.checked;
+                                  handleInputChange('dependencies',
+                                    isChecked
+                                      ? [...formData.dependencies, availableStep.id]
+                                      : formData.dependencies.filter(id => id !== availableStep.id)
+                                  );
+                                }}
+                                style={{
+                                  width: '16px',
+                                  height: '16px',
+                                  cursor: 'pointer',
+                                  accentColor: 'var(--primary-color, #3b82f6)'
+                                }}
+                              />
+                              <span style={{ fontSize: '0.8125rem', color: '#374151', flex: 1 }}>
+                                {availableStep.title}
+                              </span>
+                            </label>
+                          ))
+                      )}
+                    </div>
+                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
+                      Task will be created when ALL selected steps are completed
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* Micro-Steps */}
               <div style={{ marginBottom: '1.5rem' }}>
                 <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: '600' }}>
@@ -752,6 +970,216 @@ const StepEditor = ({
                     Add Micro-Step
                   </button>
                 </div>
+              </div>
+
+              {/* Tutorial Video */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Video size={18} />
+                  Tutorial Video
+                </h3>
+                <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', color: '#6b7280' }}>
+                  Add a tutorial video to help users complete this step. Use a YouTube/Vimeo URL or upload your own video file.
+                </p>
+
+                {/* Video Input Method Toggle */}
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setVideoInputMethod('url')}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem',
+                      border: videoInputMethod === 'url' ? '2px solid var(--primary-color)' : '1px solid #d1d5db',
+                      backgroundColor: videoInputMethod === 'url' ? '#eff6ff' : 'white',
+                      color: videoInputMethod === 'url' ? 'var(--primary-color)' : '#6b7280',
+                      borderRadius: '0.375rem',
+                      cursor: 'pointer',
+                      fontSize: '0.875rem',
+                      fontWeight: '500',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <Link size={16} />
+                    Video URL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVideoInputMethod('upload')}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem',
+                      border: videoInputMethod === 'upload' ? '2px solid var(--primary-color)' : '1px solid #d1d5db',
+                      backgroundColor: videoInputMethod === 'upload' ? '#eff6ff' : 'white',
+                      color: videoInputMethod === 'upload' ? 'var(--primary-color)' : '#6b7280',
+                      borderRadius: '0.375rem',
+                      cursor: 'pointer',
+                      fontSize: '0.875rem',
+                      fontWeight: '500',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <Upload size={16} />
+                    Upload File
+                  </button>
+                </div>
+
+                {/* URL Input */}
+                {videoInputMethod === 'url' && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem' }}>
+                      Video URL (YouTube, Vimeo, or direct link)
+                    </label>
+                    <input
+                      type="url"
+                      value={formData.tutorialVideoURL}
+                      onChange={(e) => handleInputChange('tutorialVideoURL', e.target.value)}
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '0.375rem',
+                        fontSize: '0.875rem'
+                      }}
+                    />
+                    {formData.tutorialVideoURL && (
+                      <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.75rem', color: '#10b981' }}>
+                        ✓ Video URL set
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* File Upload */}
+                {videoInputMethod === 'upload' && (
+                  <div>
+                    {!formData.tutorialVideoFile ? (
+                      <>
+                        <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem' }}>
+                          Upload Video File (MP4, MOV, AVI, WebM)
+                        </label>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                          <input
+                            type="file"
+                            accept=".mp4,.mov,.avi,.webm,video/mp4,video/quicktime,video/avi,video/webm"
+                            onChange={handleFileSelect}
+                            disabled={uploading}
+                            style={{
+                              flex: 1,
+                              padding: '0.5rem',
+                              border: '1px solid #d1d5db',
+                              borderRadius: '0.375rem',
+                              fontSize: '0.875rem'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleVideoUpload}
+                            disabled={!selectedFile || uploading}
+                            style={{
+                              padding: '0.5rem 1rem',
+                              border: 'none',
+                              backgroundColor: !selectedFile || uploading ? '#d1d5db' : 'var(--primary-color)',
+                              color: 'white',
+                              borderRadius: '0.375rem',
+                              cursor: !selectedFile || uploading ? 'not-allowed' : 'pointer',
+                              fontSize: '0.875rem',
+                              fontWeight: '500',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.5rem',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            <Upload size={16} />
+                            {uploading ? 'Uploading...' : 'Upload'}
+                          </button>
+                        </div>
+
+                        {selectedFile && (
+                          <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
+                            Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)})
+                          </p>
+                        )}
+
+                        {uploading && (
+                          <div style={{ marginTop: '0.5rem' }}>
+                            <div style={{
+                              width: '100%',
+                              height: '8px',
+                              backgroundColor: '#e5e7eb',
+                              borderRadius: '4px',
+                              overflow: 'hidden'
+                            }}>
+                              <div style={{
+                                width: `${uploadProgress}%`,
+                                height: '100%',
+                                backgroundColor: 'var(--primary-color)',
+                                transition: 'width 0.3s ease'
+                              }} />
+                            </div>
+                            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.75rem', color: '#6b7280', textAlign: 'center' }}>
+                              {uploadProgress}%
+                            </p>
+                          </div>
+                        )}
+
+                        {uploadError && (
+                          <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                            <AlertCircle size={14} />
+                            {uploadError}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{
+                        padding: '1rem',
+                        border: '1px solid #10b981',
+                        borderRadius: '0.375rem',
+                        backgroundColor: '#f0fdf4'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.875rem', fontWeight: '500', color: '#10b981' }}>
+                              ✓ Video uploaded successfully
+                            </p>
+                            <p style={{ margin: 0, fontSize: '0.75rem', color: '#6b7280' }}>
+                              Video is ready to be displayed in the workflow
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleDeleteUploadedVideo}
+                            style={{
+                              padding: '0.375rem',
+                              border: '1px solid #ef4444',
+                              backgroundColor: 'white',
+                              color: '#ef4444',
+                              borderRadius: '0.25rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.25rem',
+                              fontSize: '0.75rem'
+                            }}
+                          >
+                            <Trash2 size={14} />
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

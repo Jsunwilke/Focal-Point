@@ -3176,6 +3176,14 @@ export const updateWorkflowStep = async (workflowId, stepId, stepData) => {
 
     await updateDoc(workflowRef, updates);
 
+    // Sync relevant changes to linked task
+    try {
+      const { syncWorkflowStepToTask } = await import('../services/workflowTaskService');
+      await syncWorkflowStepToTask(workflowId, stepId, stepData);
+    } catch (syncError) {
+      console.error('Error syncing workflow step update:', syncError);
+    }
+
     return true;
   } catch (error) {
     throw error;
@@ -3224,6 +3232,22 @@ export const completeWorkflowStep = async (workflowId, stepId, completionData = 
 
     await updateDoc(workflowRef, updateData);
 
+    // Sync to linked task and check for dependency-triggered tasks
+    try {
+      const { syncWorkflowStepToTask, checkDependencyTasks } = await import('../services/workflowTaskService');
+
+      // Sync step completion to linked task
+      await syncWorkflowStepToTask(workflowId, stepId, { status: 'completed' });
+
+      // Check if any dependent steps are now ready for task creation
+      if (workflow.autoCreateTasks) {
+        await checkDependencyTasks(workflowId, stepId);
+      }
+    } catch (syncError) {
+      // Don't fail the workflow update if sync fails
+      console.error('Error syncing workflow step completion:', syncError);
+    }
+
     return true;
   } catch (error) {
     throw error;
@@ -3255,6 +3279,14 @@ export const assignWorkflowStep = async (workflowId, stepId, assigneeId) => {
       stepProgress: updatedStepProgress,
       updatedAt: serverTimestamp(),
     });
+
+    // Sync assignee change to linked task
+    try {
+      const { syncWorkflowStepToTask } = await import('../services/workflowTaskService');
+      await syncWorkflowStepToTask(workflowId, stepId, { assignedTo: assigneeId });
+    } catch (syncError) {
+      console.error('Error syncing workflow step assignment:', syncError);
+    }
 
     return true;
   } catch (error) {
@@ -3383,6 +3415,8 @@ export const createTrackingWorkflowForSchool = async (schoolId, organizationID, 
     
     // Initialize step progress for all steps in template with calculated due dates
     const stepProgress = {};
+    const stepOverrides = options.additionalData?.stepOverrides || {};
+
     trackingTemplate.steps.forEach((step, index) => {
       // Calculate due date based on tracking start date and step's dueOffsetDays
       let dueDate = null;
@@ -3390,7 +3424,16 @@ export const createTrackingWorkflowForSchool = async (schoolId, organizationID, 
         dueDate = new Date(trackingStartDate);
         dueDate.setDate(dueDate.getDate() + step.dueOffsetDays);
       }
-      
+
+      // Apply step overrides if they exist
+      const override = stepOverrides[step.id] || {};
+      const taskCreationTrigger = override.taskCreationTrigger !== undefined
+        ? override.taskCreationTrigger
+        : step.taskCreationTrigger || 'manual';
+      const taskCreationDaysBefore = override.taskCreationDaysBefore !== undefined
+        ? override.taskCreationDaysBefore
+        : step.taskCreationDaysBefore || 7;
+
       stepProgress[step.id] = {
         status: "pending",
         assignedTo: null,
@@ -3399,9 +3442,13 @@ export const createTrackingWorkflowForSchool = async (schoolId, organizationID, 
         dueDate: dueDate,
         notes: "",
         files: [],
+        linkedTaskId: null,          // ID of auto-created task
+        taskCreated: false,           // Flag to prevent duplicate task creation
+        taskCreationTrigger,          // How this step creates tasks (manual, immediate, timeline, dependency)
+        taskCreationDaysBefore,       // Days before due date for timeline-based creation
         createdAt: serverTimestamp(),
       };
-      
+
     });
 
     // Create tracking workflow instance
@@ -3414,18 +3461,19 @@ export const createTrackingWorkflowForSchool = async (schoolId, organizationID, 
       academicYear,
       trackingStartDate: trackingStartDate.toISOString().split('T')[0], // Store as date string
       trackingEndDate: trackingEndDate.toISOString().split('T')[0],
-      
+
       // Template and workflow fields
       templateName: trackingTemplate.name,
       templateVersion: trackingTemplate.version || 1,
       currentStep: trackingTemplate.steps[0]?.id || null,
       stepProgress,
       status: "active",
-      
+      autoCreateTasks: true,  // Enable auto-task creation by default
+
       // Context fields
       schoolName: schoolData.value || schoolData.name || "Unknown School",
       workflowType: "tracking", // Flag to distinguish from session workflows
-      
+
       // Optional fields
       ...options.additionalData
     };
@@ -3580,6 +3628,8 @@ export const autoCreateWorkflowForSession = async (sessionId, organizationID, se
         dueDate: dueDate,
         notes: "",
         files: [],
+        linkedTaskId: null,          // ID of auto-created task
+        taskCreated: false,           // Flag to prevent duplicate task creation
         createdAt: serverTimestamp(),
       };
       
@@ -3597,6 +3647,7 @@ export const autoCreateWorkflowForSession = async (sessionId, organizationID, se
       stepProgress,
       status: "active",
       sessionDate: sessionData.date,
+      autoCreateTasks: true,  // Enable auto-task creation by default
 
       // Denormalize school data for faster lookups (matches tracking workflow pattern)
       schoolId: sessionData.schoolId,
@@ -3606,6 +3657,22 @@ export const autoCreateWorkflowForSession = async (sessionId, organizationID, se
     const workflowId = await createWorkflowInstance(workflowData);
 
     if (workflowId) {
+      // Auto-create tasks for steps with immediate trigger
+      if (workflowData.autoCreateTasks) {
+        try {
+          const { createTaskForWorkflowStep } = await import('../services/workflowTaskService');
+
+          for (const step of defaultTemplate.steps) {
+            // Create task immediately if configured with immediate trigger
+            if (step.taskCreationTrigger === 'immediate') {
+              await createTaskForWorkflowStep(workflowData, workflowId, step, step.id);
+            }
+          }
+        } catch (taskError) {
+          // Don't fail workflow creation if task creation fails
+          console.error('Error creating immediate tasks:', taskError);
+        }
+      }
     } else {
     }
 

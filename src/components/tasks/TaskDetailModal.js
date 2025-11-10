@@ -35,9 +35,9 @@ const TaskDetailModal = ({ isOpen, onClose, taskId }) => {
     assignedTo: [],
     dueDate: '',
     estimatedHours: 0,
-    sessionID: '',
-    workflowID: '',
-    workflowStepID: '',
+    sessionId: '',
+    workflowId: '',
+    workflowStepId: '',
     subtasks: []
   });
 
@@ -53,9 +53,9 @@ const TaskDetailModal = ({ isOpen, onClose, taskId }) => {
         assignedTo: task.assignedTo || [],
         dueDate: task.dueDate ? formatDateForInput(task.dueDate) : '',
         estimatedHours: task.estimatedHours || 0,
-        sessionID: task.sessionID || '',
-        workflowID: task.workflowID || '',
-        workflowStepID: task.workflowStepID || '',
+        sessionId: task.sessionId || '',
+        workflowId: task.workflowId || '',
+        workflowStepId: task.workflowStepId || '',
         subtasks: task.subtasks || []
       });
     }
@@ -86,16 +86,16 @@ const TaskDetailModal = ({ isOpen, onClose, taskId }) => {
 
   // Get session name
   const getSessionName = () => {
-    if (!task?.sessionID) return null;
-    const session = sessions?.find(s => s.id === task.sessionID);
-    return session ? `${session.schoolName} - ${formatDateForDisplay(session.date)}` : task.sessionID;
+    if (!task?.sessionId) return null;
+    const session = sessions?.find(s => s.id === task.sessionId);
+    return session ? `${session.schoolName} - ${formatDateForDisplay(session.date)}` : task.sessionId;
   };
 
   // Get workflow name
   const getWorkflowName = () => {
-    if (!task?.workflowID) return null;
-    const workflow = workflows?.find(w => w.id === task.workflowID);
-    return workflow ? workflow.name : task.workflowID;
+    if (!task?.workflowId) return null;
+    const workflow = workflows?.find(w => w.id === task.workflowId);
+    return workflow ? workflow.name : task.workflowId;
   };
 
   // Get initials for avatar
@@ -244,9 +244,9 @@ const TaskDetailModal = ({ isOpen, onClose, taskId }) => {
         assignedTo: task.assignedTo || [],
         dueDate: task.dueDate ? formatDateForInput(task.dueDate) : '',
         estimatedHours: task.estimatedHours || 0,
-        sessionID: task.sessionID || '',
-        workflowID: task.workflowID || '',
-        workflowStepID: task.workflowStepID || '',
+        sessionId: task.sessionId || '',
+        workflowId: task.workflowId || '',
+        workflowStepId: task.workflowStepId || '',
         subtasks: task.subtasks || []
       });
     }
@@ -532,7 +532,7 @@ const TaskDetailModal = ({ isOpen, onClose, taskId }) => {
                         </span>
                       </div>
 
-                      {task.sessionID && (
+                      {task.sessionId && (
                         <div className="task-detail-field task-detail-field--full">
                           <span className="task-detail-label">Session</span>
                           <span className="task-detail-value">
@@ -542,7 +542,7 @@ const TaskDetailModal = ({ isOpen, onClose, taskId }) => {
                         </div>
                       )}
 
-                      {task.workflowID && (
+                      {task.workflowId && (
                         <div className="task-detail-field task-detail-field--full">
                           <span className="task-detail-label">Workflow</span>
                           <span className="task-detail-value">

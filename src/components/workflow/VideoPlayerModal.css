@@ -1,0 +1,41 @@
+/* src/components/workflow/VideoPlayerModal.css */
+
+.video-player-overlay {
+  animation: fadeIn 0.2s ease;
+}
+
+.video-player-container {
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .video-player-container {
+    max-width: 100%;
+    margin: 0;
+  }
+
+  .video-player-overlay {
+    padding: 0;
+  }
+}

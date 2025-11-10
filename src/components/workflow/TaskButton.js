@@ -13,7 +13,9 @@ const TaskButton = ({
   stepId,
   sessionID,
   tasks = [],
-  onTaskClick
+  onTaskClick,
+  linkedTaskId = null,
+  linkedTaskStatus = null
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -23,6 +25,7 @@ const TaskButton = ({
   const incompleteTasks = tasks.filter(t => t.status !== 'completed' && t.status !== 'cancelled');
   const hasIncompleteTasks = incompleteTasks.length > 0;
   const hasUrgent = tasks.some(t => t.priority === 'urgent' && t.status !== 'completed');
+  const hasLinkedTask = linkedTaskId !== null;
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -62,22 +65,40 @@ const TaskButton = ({
 
   const getStatusLabel = (status) => {
     switch (status) {
-      case 'pending': return 'Pending';
+      case 'todo': return 'To Do';
       case 'in_progress': return 'In Progress';
       case 'completed': return 'Completed';
+      case 'on_hold': return 'On Hold';
       case 'cancelled': return 'Cancelled';
       default: return status;
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'todo': return '#3b82f6';
+      case 'in_progress': return '#f59e0b';
+      case 'completed': return '#10b981';
+      case 'on_hold': return '#ef4444';
+      case 'cancelled': return '#6b7280';
+      default: return '#6b7280';
     }
   };
 
   return (
     <div className="task-button-wrapper" ref={dropdownRef}>
       <button
-        className={`task-button ${hasIncompleteTasks ? 'task-button--has-tasks' : ''} ${hasUrgent ? 'task-button--urgent' : ''}`}
+        className={`task-button ${hasIncompleteTasks ? 'task-button--has-tasks' : ''} ${hasUrgent ? 'task-button--urgent' : ''} ${hasLinkedTask ? 'task-button--linked' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
-        title={taskCount > 0 ? `${taskCount} task${taskCount !== 1 ? 's' : ''}` : 'Create task'}
+        title={hasLinkedTask ? `Linked task (${getStatusLabel(linkedTaskStatus)})` : (taskCount > 0 ? `${taskCount} task${taskCount !== 1 ? 's' : ''}` : 'Create task')}
       >
         <CheckSquare size={12} />
+        {hasLinkedTask && (
+          <span
+            className="task-button-status-badge"
+            style={{ backgroundColor: getStatusColor(linkedTaskStatus) }}
+          />
+        )}
         {taskCount > 0 && (
           <span className="task-button-count">{taskCount}</span>
         )}
@@ -102,25 +123,32 @@ const TaskButton = ({
           {/* Task List */}
           {taskCount > 0 ? (
             <div className="task-button-list">
-              {tasks.map(task => (
-                <button
-                  key={task.id}
-                  className={`task-button-item task-button-item--${task.status}`}
-                  onClick={(e) => handleTaskClick(task.id, e)}
-                >
-                  <div className="task-button-item-header">
-                    <Circle
-                      size={8}
-                      fill={getPriorityColor(task.priority)}
-                      color={getPriorityColor(task.priority)}
-                    />
-                    <span className="task-button-item-title">{task.title}</span>
-                  </div>
-                  <span className="task-button-item-status">
-                    {getStatusLabel(task.status)}
-                  </span>
-                </button>
-              ))}
+              {tasks.map(task => {
+                const isLinked = task.id === linkedTaskId;
+                return (
+                  <button
+                    key={task.id}
+                    className={`task-button-item task-button-item--${task.status} ${isLinked ? 'task-button-item--linked' : ''}`}
+                    onClick={(e) => handleTaskClick(task.id, e)}
+                    title={isLinked ? 'Auto-created from workflow step' : ''}
+                  >
+                    <div className="task-button-item-header">
+                      <Circle
+                        size={8}
+                        fill={getPriorityColor(task.priority)}
+                        color={getPriorityColor(task.priority)}
+                      />
+                      <span className="task-button-item-title">
+                        {task.title}
+                        {isLinked && <span className="task-button-item-linked-badge">Linked</span>}
+                      </span>
+                    </div>
+                    <span className="task-button-item-status">
+                      {getStatusLabel(task.status)}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <div className="task-button-empty">

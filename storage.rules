@@ -330,6 +330,34 @@ service firebase.storage {
                        isAdmin();
     }
 
+    // Workflow tutorial videos - organization-scoped with template and step validation
+    match /workflow-videos/{orgId}/{templateId}/{stepId}/{fileName} {
+      // Read: Users can read videos if they belong to the org
+      allow read: if isAuthenticated() &&
+                     getOrganizationId() == orgId &&
+                     userExists();
+
+      // Write: Managers and admins can upload tutorial videos
+      allow write: if isAuthenticated() &&
+                      getOrganizationId() == orgId &&
+                      userExists() &&
+                      isManager() &&
+                      // Validate video file type
+                      (request.resource.contentType == 'video/mp4' ||
+                       request.resource.contentType == 'video/quicktime' ||
+                       request.resource.contentType == 'video/avi' ||
+                       request.resource.contentType == 'video/webm' ||
+                       request.resource.contentType == 'video/x-msvideo') &&
+                      // 100MB file size limit for videos
+                      isValidFileSize(100);
+
+      // Delete: Managers and admins can delete tutorial videos
+      allow delete: if isAuthenticated() &&
+                       getOrganizationId() == orgId &&
+                       userExists() &&
+                       isManager();
+    }
+
     // Task attachments - organization-scoped with task access validation
     match /task-attachments/{orgId}/{taskId}/{fileName} {
       // Read: Users can read attachments if they belong to the org and can access the parent task

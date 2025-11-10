@@ -1518,6 +1518,7 @@ const WorkflowTemplateBuilder = ({
           step={activeStep}
           onSave={handleUpdateStep}
           organizationID={organizationID}
+          allSteps={formData.steps}
         />
       )}
 
