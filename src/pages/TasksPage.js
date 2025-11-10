@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTask } from '../contexts/TaskContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { secureLogger } from '../services/secureLogger';
 import { ListTodo, Plus, Search, Filter, X, CheckSquare, Clock, AlertCircle, LayoutGrid, List, GitBranch } from 'lucide-react';
 import CreateTaskModal from '../components/tasks/CreateTaskModal';
 import TaskBoardView from '../components/tasks/TaskBoardView';
@@ -244,7 +245,7 @@ const TasksPage = () => {
       showToast(`Deleted ${selectedTaskIds.length} task${selectedTaskIds.length !== 1 ? 's' : ''}`, 'success');
       setSelectedTaskIds([]);
     } catch (error) {
-      console.error('Error deleting tasks:', error);
+      secureLogger.error('Error deleting tasks', { error: error.message, count: selectedTaskIds.length });
       showToast('Failed to delete tasks', 'error');
     }
   };

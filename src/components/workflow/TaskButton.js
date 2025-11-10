@@ -1,7 +1,8 @@
 // src/components/workflow/TaskButton.js
 import React, { useState, useRef, useEffect } from 'react';
-import { CheckSquare, Plus, Circle } from 'lucide-react';
+import { CheckSquare, Plus, Circle, Loader2 } from 'lucide-react';
 import { useWorkflow } from '../../contexts/WorkflowContext';
+import { secureLogger } from '../../services/secureLogger';
 import './TaskButton.css';
 
 /**
@@ -18,6 +19,7 @@ const TaskButton = ({
   linkedTaskStatus = null
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
   const dropdownRef = useRef(null);
   const { createTaskForWorkflowStep } = useWorkflow();
 
@@ -41,10 +43,26 @@ const TaskButton = ({
     }
   }, [isOpen]);
 
-  const handleCreateTask = (e) => {
+  const handleCreateTask = async (e) => {
     e.stopPropagation();
-    createTaskForWorkflowStep(workflowId, stepId, sessionID);
-    setIsOpen(false);
+
+    if (isCreatingTask) return; // Prevent double-click
+
+    setIsCreatingTask(true);
+    try {
+      await createTaskForWorkflowStep(workflowId, stepId, sessionID);
+      setIsOpen(false);
+    } catch (error) {
+      // Error is handled by the context, just ensure we reset loading state
+      secureLogger.error('Failed to create task in TaskButton', {
+        error: error.message,
+        workflowId,
+        stepId,
+        sessionID
+      });
+    } finally {
+      setIsCreatingTask(false);
+    }
   };
 
   const handleTaskClick = (taskId, e) => {
@@ -114,9 +132,18 @@ const TaskButton = ({
             <button
               className="task-button-create"
               onClick={handleCreateTask}
-              title="Create new task"
+              disabled={isCreatingTask}
+              title={isCreatingTask ? "Creating task..." : "Create new task"}
+              style={{
+                opacity: isCreatingTask ? 0.6 : 1,
+                cursor: isCreatingTask ? 'not-allowed' : 'pointer'
+              }}
             >
-              <Plus size={14} />
+              {isCreatingTask ? (
+                <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+              ) : (
+                <Plus size={14} />
+              )}
             </button>
           </div>
 
@@ -153,9 +180,26 @@ const TaskButton = ({
           ) : (
             <div className="task-button-empty">
               <p>No tasks yet</p>
-              <button className="task-button-empty-create" onClick={handleCreateTask}>
-                <Plus size={14} />
-                Create Task
+              <button
+                className="task-button-empty-create"
+                onClick={handleCreateTask}
+                disabled={isCreatingTask}
+                style={{
+                  opacity: isCreatingTask ? 0.6 : 1,
+                  cursor: isCreatingTask ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isCreatingTask ? (
+                  <>
+                    <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Plus size={14} />
+                    Create Task
+                  </>
+                )}
               </button>
             </div>
           )}

@@ -276,7 +276,7 @@ export const TaskProvider = ({ children }) => {
       return newTask;
     } catch (error) {
       console.error('Error creating task:', error);
-      showToast('Failed to create task', 'error');
+      showToast('Unable to Create Task', 'Your task could not be created. Please check your connection and try again.', 'error');
       throw error;
     }
   }, [organization?.id, userProfile?.id, canViewTeamTasks]);
@@ -325,7 +325,7 @@ export const TaskProvider = ({ children }) => {
       return newTask;
     } catch (error) {
       console.error('Error duplicating task:', error);
-      showToast('Failed to duplicate task', 'error');
+      showToast('Unable to Duplicate Task', 'The task could not be duplicated. Please try again.', 'error');
       throw error;
     }
   }, [myTasks, teamTasks, createTask]);
@@ -454,7 +454,7 @@ export const TaskProvider = ({ children }) => {
       return true;
     } catch (error) {
       console.error('Error updating task:', error);
-      showToast('Failed to update task', 'error');
+      showToast('Unable to Save Changes', 'Your task updates could not be saved. Please check your connection and try again.', 'error');
       throw error;
     }
   }, [canViewTeamTasks, myTasks, teamTasks, userProfile?.id, organization?.id]);
@@ -522,7 +522,7 @@ export const TaskProvider = ({ children }) => {
       return true;
     } catch (error) {
       console.error('Error marking task complete:', error);
-      showToast('Failed to mark task complete', 'error');
+      showToast('Unable to Complete Task', 'The task could not be marked as complete. Please try again.', 'error');
       throw error;
     }
   }, [userProfile?.id, organization?.id, myTasks, teamTasks]);
@@ -557,7 +557,7 @@ export const TaskProvider = ({ children }) => {
       return true;
     } catch (error) {
       console.error('Error updating subtask:', error);
-      showToast('Failed to update subtask', 'error');
+      showToast('Unable to Update Subtask', 'The subtask status could not be updated. Please try again.', 'error');
       throw error;
     }
   }, [userProfile?.id, organization?.id, myTasks, teamTasks]);
@@ -624,7 +624,7 @@ export const TaskProvider = ({ children }) => {
       return newComment;
     } catch (error) {
       console.error('Error adding comment:', error);
-      showToast('Failed to add comment', 'error');
+      showToast('Unable to Add Comment', 'Your comment could not be added. Please try again.', 'error');
       throw error;
     }
   }, [userProfile?.id, userProfile?.firstName, userProfile?.lastName, organization?.id, myTasks, teamTasks]);

@@ -167,10 +167,44 @@ const ShootDetailsModal = ({
     }
   }, [organization]);
 
+  // Focus management
+  useEffect(() => {
+    if (workflow) {
+      const previouslyFocused = document.activeElement;
+
+      setTimeout(() => {
+        const modal = document.querySelector('[role="dialog"][aria-labelledby="shoot-details-title"]');
+        if (modal) modal.focus();
+      }, 100);
+
+      return () => {
+        if (previouslyFocused) previouslyFocused.focus();
+      };
+    }
+  }, [workflow]);
+
+  // Keyboard support (Escape key)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && workflow) {
+        onClose();
+      }
+    };
+
+    if (workflow) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [workflow, onClose]);
+
   const modalContent = (
     <div
       className="shoot-details-overlay"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="shoot-details-title"
+      tabIndex={-1}
       style={{
         position: 'fixed',
         top: 0,
@@ -203,8 +237,8 @@ const ShootDetailsModal = ({
       >
         {/* Header */}
         <div className="shoot-details-header">
-          <h2>{sessionInfo.schoolName}</h2>
-          <button onClick={onClose} className="shoot-details-close">
+          <h2 id="shoot-details-title">{sessionInfo.schoolName}</h2>
+          <button onClick={onClose} className="shoot-details-close" aria-label="Close shoot details modal">
             <X size={24} />
           </button>
         </div>

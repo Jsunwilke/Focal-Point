@@ -3,14 +3,44 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import { Trash2, AlertCircle } from 'lucide-react';
 
-const DeleteWorkflowModal = ({ 
-  isOpen, 
-  onClose, 
-  onConfirm, 
+const DeleteWorkflowModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
   workflow,
   sessionData = {},
-  loading = false 
+  loading = false
 }) => {
+  // Focus management
+  React.useEffect(() => {
+    if (isOpen) {
+      const previouslyFocused = document.activeElement;
+
+      setTimeout(() => {
+        const modal = document.querySelector('[role="alertdialog"]');
+        if (modal) modal.focus();
+      }, 100);
+
+      return () => {
+        if (previouslyFocused) previouslyFocused.focus();
+      };
+    }
+  }, [isOpen]);
+
+  // Keyboard support (Escape key)
+  React.useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isOpen && !loading) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, onClose, loading]);
+
   if (!isOpen || !workflow) return null;
 
   const handleBackdropClick = (e) => {
@@ -43,7 +73,12 @@ const DeleteWorkflowModal = ({
   const displayInfo = getWorkflowDisplayInfo();
 
   const modalContent = (
-    <div 
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="delete-workflow-title"
+      aria-describedby="delete-workflow-description"
+      tabIndex={-1}
       style={{
         position: 'fixed',
         top: 0,
@@ -94,16 +129,21 @@ const DeleteWorkflowModal = ({
             <AlertCircle size={24} style={{ color: '#ef4444' }} />
           </div>
           <div style={{ flex: 1 }}>
-            <h3 style={{ 
-              margin: 0, 
-              fontSize: '1.25rem', 
-              fontWeight: '600', 
-              color: '#111827',
-              lineHeight: '1.4'
-            }}>
+            <h3
+              id="delete-workflow-title"
+              style={{
+                margin: 0,
+                fontSize: '1.25rem',
+                fontWeight: '600',
+                color: '#111827',
+                lineHeight: '1.4'
+              }}
+            >
               Delete Workflow
             </h3>
-            <p style={{ 
+            <p
+              id="delete-workflow-description"
+              style={{ 
               margin: '0.5rem 0 0 0', 
               fontSize: '0.875rem', 
               color: '#ef4444',
@@ -204,6 +244,7 @@ const DeleteWorkflowModal = ({
           <button
             onClick={onClose}
             disabled={loading}
+            aria-label="Cancel workflow deletion"
             style={{
               padding: '0.625rem 1.25rem',
               border: '1px solid #d1d5db',
@@ -232,6 +273,7 @@ const DeleteWorkflowModal = ({
           <button
             onClick={onConfirm}
             disabled={loading}
+            aria-label={`Delete workflow for ${displayInfo.title}`}
             style={{
               padding: '0.625rem 1.25rem',
               border: 'none',

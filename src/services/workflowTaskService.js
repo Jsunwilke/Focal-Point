@@ -7,12 +7,42 @@ import {
   doc,
   updateDoc,
   getDoc,
-  Timestamp
+  Timestamp,
+  runTransaction
 } from 'firebase/firestore';
 import { firestore } from '../firebase/config';
 import { createTask, updateTask } from '../firebase/tasks';
 import { readCounter } from './readCounter';
 import { secureLogger } from './secureLogger';
+
+/**
+ * Retry a function with exponential backoff
+ * @param {Function} fn - Function to retry
+ * @param {number} maxRetries - Maximum number of retries
+ * @param {number} baseDelay - Base delay in ms (doubles each retry)
+ * @returns {Promise<any>} Result of the function
+ */
+const retryWithBackoff = async (fn, maxRetries = 3, baseDelay = 1000) => {
+  let lastError;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+
+      if (attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        secureLogger.debug(`Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`, {
+          error: error.message
+        });
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw lastError;
+};
 
 /**
  * Workflow Task Auto-Creation Service
@@ -24,6 +54,11 @@ import { secureLogger } from './secureLogger';
  *
  * Also handles bi-directional sync between tasks and workflow steps.
  */
+
+// Configuration constants
+const MAX_OVERDUE_DAYS = 30; // Maximum days overdue to create tasks for
+const TASK_CREATION_RETRY_ATTEMPTS = 3; // Number of retries for task creation
+const TASK_CREATION_BASE_DELAY = 1000; // Base delay for retry backoff (ms)
 
 /**
  * Create a task from a workflow step
@@ -66,19 +101,27 @@ export const createTaskForWorkflowStep = async (workflow, workflowId, step, step
       sessionId: workflow.sessionId || null
     };
 
-    // Create the task
-    const task = await createTask(taskData);
+    // Create the task with retry logic
+    const task = await retryWithBackoff(
+      async () => await createTask(taskData),
+      TASK_CREATION_RETRY_ATTEMPTS,
+      TASK_CREATION_BASE_DELAY
+    );
 
     if (task && task.id) {
-      // Update workflow step progress with task linkage
+      // Update workflow step progress with task linkage (with retry)
       const workflowRef = doc(firestore, 'workflows', workflowId);
-      await updateDoc(workflowRef, {
-        [`stepProgress.${stepId}.linkedTaskId`]: task.id,
-        [`stepProgress.${stepId}.taskCreated`]: true,
-        [`stepProgress.${stepId}.updatedAt`]: Timestamp.now()
-      });
+      await retryWithBackoff(
+        async () => await updateDoc(workflowRef, {
+          [`stepProgress.${stepId}.linkedTaskId`]: task.id,
+          [`stepProgress.${stepId}.taskCreated`]: true,
+          [`stepProgress.${stepId}.updatedAt`]: Timestamp.now()
+        }),
+        TASK_CREATION_RETRY_ATTEMPTS,
+        TASK_CREATION_BASE_DELAY
+      );
 
-      secureLogger.debug('Auto-created task for workflow step', {
+      secureLogger.info('Auto-created task for workflow step', {
         workflowId,
         stepId,
         taskId: task.id,
@@ -88,6 +131,7 @@ export const createTaskForWorkflowStep = async (workflow, workflowId, step, step
       return task.id;
     }
 
+    secureLogger.warn('Task creation returned null result', { workflowId, stepId });
     return null;
   } catch (error) {
     secureLogger.error('Error creating task for workflow step', {
@@ -96,6 +140,86 @@ export const createTaskForWorkflowStep = async (workflow, workflowId, step, step
       stepId
     });
     readCounter.recordError('workflows', 'createTaskForWorkflowStep', error.message);
+    throw error;
+  }
+};
+
+/**
+ * Create tasks with immediate trigger for a specific workflow
+ * Called when a workflow is created or activated
+ * @param {string} workflowId - Workflow ID
+ * @returns {Promise<number>} Number of tasks created
+ */
+export const checkImmediateTasks = async (workflowId) => {
+  try {
+    let tasksCreated = 0;
+
+    // Get workflow
+    const workflowRef = doc(firestore, 'workflows', workflowId);
+    const workflowDoc = await getDoc(workflowRef);
+    readCounter.recordRead('get', 'workflows', 'checkImmediateTasks', 1);
+
+    if (!workflowDoc.exists()) {
+      return 0;
+    }
+
+    const workflow = workflowDoc.data();
+
+    // Check if auto-create is enabled
+    if (!workflow.autoCreateTasks) {
+      return 0;
+    }
+
+    // Get workflow template
+    const templateRef = doc(firestore, 'workflowTemplates', workflow.templateId);
+    const templateDoc = await getDoc(templateRef);
+    readCounter.recordRead('get', 'workflowTemplates', 'checkImmediateTasks', 1);
+
+    if (!templateDoc.exists()) {
+      return 0;
+    }
+
+    const template = templateDoc.data();
+
+    // Check each step for immediate trigger
+    for (const step of template.steps) {
+      const stepProgress = workflow.stepProgress[step.id];
+
+      if (!stepProgress || stepProgress.taskCreated) {
+        continue; // Skip if no progress or task already created
+      }
+
+      // Read task creation trigger from stepProgress (includes overrides)
+      const taskCreationTrigger = stepProgress.taskCreationTrigger || step.taskCreationTrigger || 'manual';
+
+      if (taskCreationTrigger === 'immediate') {
+        // Create task immediately
+        const taskId = await createTaskForWorkflowStep(workflow, workflowId, step, step.id);
+        if (taskId) {
+          tasksCreated++;
+          secureLogger.debug('Created immediate-trigger task', {
+            workflowId,
+            stepId: step.id,
+            taskId
+          });
+        }
+      }
+    }
+
+    if (tasksCreated > 0) {
+      secureLogger.info('Created immediate-trigger tasks for workflow', {
+        workflowId,
+        tasksCreated
+      });
+    }
+
+    return tasksCreated;
+  } catch (error) {
+    secureLogger.error('Error checking immediate tasks', {
+      workflowId,
+      error: error.message
+    });
+    readCounter.recordError('workflows', 'checkImmediateTasks', error.message);
     throw error;
   }
 };
@@ -167,7 +291,8 @@ export const checkTimelineTasks = async () => {
               const daysUntilDue = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
 
               // Create task if within threshold
-              if (daysUntilDue <= threshold && daysUntilDue >= -30) { // Include overdue up to 30 days
+              // Prevent creating hundreds of overdue tasks by limiting to MAX_OVERDUE_DAYS
+              if (daysUntilDue <= threshold && daysUntilDue >= -MAX_OVERDUE_DAYS) {
                 const taskId = await createTaskForWorkflowStep(workflow, workflowId, step, step.id);
                 if (taskId) {
                   stats.tasksCreated++;
@@ -297,32 +422,66 @@ export const syncTaskToWorkflowStep = async (taskId, task, userId) => {
     }
 
     const workflowRef = doc(firestore, 'workflows', task.workflowId);
-    const workflowDoc = await getDoc(workflowRef);
-    readCounter.recordRead('get', 'workflows', 'syncTaskToWorkflowStep', 1);
 
-    if (!workflowDoc.exists()) {
-      secureLogger.warn('Workflow not found for task sync', {
-        taskId,
-        workflowId: task.workflowId
+    // Use transaction for conflict resolution
+    await runTransaction(firestore, async (transaction) => {
+      const workflowDoc = await transaction.get(workflowRef);
+      readCounter.recordRead('get', 'workflows', 'syncTaskToWorkflowStep', 1);
+
+      if (!workflowDoc.exists()) {
+        secureLogger.warn('Workflow not found for task sync', {
+          taskId,
+          workflowId: task.workflowId
+        });
+        return;
+      }
+
+      const workflow = workflowDoc.data();
+      const stepProgress = workflow.stepProgress?.[task.workflowStepId];
+
+      if (!stepProgress) {
+        secureLogger.warn('Step progress not found in workflow', {
+          taskId,
+          workflowId: task.workflowId,
+          stepId: task.workflowStepId
+        });
+        return;
+      }
+
+      // Conflict resolution: check current state
+      if (stepProgress.status === 'completed') {
+        // Step already completed - check if it's newer than our update
+        const existingCompletedAt = stepProgress.completedAt?.toMillis?.() || 0;
+        const taskCompletedAt = task.completedAt?.toMillis?.() || Date.now();
+
+        if (existingCompletedAt > taskCompletedAt) {
+          secureLogger.info('Step already completed more recently, skipping sync', {
+            taskId,
+            workflowId: task.workflowId,
+            stepId: task.workflowStepId,
+            existingTime: new Date(existingCompletedAt).toISOString(),
+            taskTime: new Date(taskCompletedAt).toISOString()
+          });
+          return;
+        }
+      }
+
+      // Update workflow step to completed
+      transaction.update(workflowRef, {
+        [`stepProgress.${task.workflowStepId}.status`]: 'completed',
+        [`stepProgress.${task.workflowStepId}.completedAt`]: Timestamp.now(),
+        [`stepProgress.${task.workflowStepId}.completedBy`]: userId,
+        [`stepProgress.${task.workflowStepId}.updatedAt`]: Timestamp.now()
       });
-      return;
-    }
 
-    // Update workflow step to completed
-    await updateDoc(workflowRef, {
-      [`stepProgress.${task.workflowStepId}.status`]: 'completed',
-      [`stepProgress.${task.workflowStepId}.completedAt`]: Timestamp.now(),
-      [`stepProgress.${task.workflowStepId}.completedBy`]: userId,
-      [`stepProgress.${task.workflowStepId}.updatedAt`]: Timestamp.now()
+      secureLogger.debug('Synced task completion to workflow step', {
+        taskId,
+        workflowId: task.workflowId,
+        stepId: task.workflowStepId
+      });
     });
 
-    secureLogger.debug('Synced task completion to workflow step', {
-      taskId,
-      workflowId: task.workflowId,
-      stepId: task.workflowStepId
-    });
-
-    // Check for dependent tasks after this step completes
+    // Check for dependent tasks after this step completes (outside transaction)
     await checkDependencyTasks(task.workflowId, task.workflowStepId);
 
   } catch (error) {
@@ -361,30 +520,73 @@ export const syncWorkflowStepToTask = async (workflowId, stepId, updates) => {
     }
 
     const taskId = stepProgress.linkedTaskId;
-    const taskUpdates = {};
 
-    // Sync assignee changes
-    if (updates.assignedTo !== undefined) {
-      taskUpdates.assignedTo = updates.assignedTo ? [updates.assignedTo] : [];
+    // Get current task state to check for conflicts
+    const taskRef = doc(firestore, 'tasks', taskId);
+    const taskDoc = await getDoc(taskRef);
+    readCounter.recordRead('get', 'tasks', 'syncWorkflowStepToTask', 1);
+
+    if (!taskDoc.exists()) {
+      secureLogger.warn('Linked task not found for workflow step sync', {
+        workflowId,
+        stepId,
+        taskId
+      });
+      return;
     }
 
-    // Sync status changes
+    const currentTask = taskDoc.data();
+    const taskUpdates = {};
+
+    // Sync assignee changes (only if task not manually reassigned)
+    if (updates.assignedTo !== undefined) {
+      // Only sync if task hasn't been updated more recently
+      const stepUpdatedAt = stepProgress.updatedAt?.toMillis?.() || 0;
+      const taskUpdatedAt = currentTask.updatedAt?.toMillis?.() || 0;
+
+      if (stepUpdatedAt >= taskUpdatedAt) {
+        taskUpdates.assignedTo = updates.assignedTo ? [updates.assignedTo] : [];
+      } else {
+        secureLogger.debug('Skipping assignee sync - task updated more recently', {
+          workflowId,
+          stepId,
+          taskId
+        });
+      }
+    }
+
+    // Sync status changes (with conflict resolution)
     if (updates.status === 'completed') {
-      taskUpdates.status = 'completed';
+      // Only mark completed if not already completed by a different source
+      if (currentTask.status !== 'completed' || !currentTask.completedBy) {
+        taskUpdates.status = 'completed';
+      }
     } else if (updates.status === 'in_progress') {
-      taskUpdates.status = 'in_progress';
+      // Only mark in_progress if not already completed
+      if (currentTask.status !== 'completed') {
+        taskUpdates.status = 'in_progress';
+      }
     }
 
     // Only update if there are changes
     if (Object.keys(taskUpdates).length > 0) {
-      await updateTask(taskId, taskUpdates);
+      try {
+        await updateTask(taskId, taskUpdates);
 
-      secureLogger.debug('Synced workflow step changes to task', {
-        workflowId,
-        stepId,
-        taskId,
-        updates: taskUpdates
-      });
+        secureLogger.debug('Synced workflow step changes to task', {
+          workflowId,
+          stepId,
+          taskId,
+          updates: taskUpdates
+        });
+      } catch (updateError) {
+        secureLogger.error('Failed to update task during sync', {
+          workflowId,
+          stepId,
+          taskId,
+          error: updateError.message
+        });
+      }
     }
 
   } catch (error) {
@@ -434,6 +636,7 @@ export const handleTaskDeletion = async (task) => {
 
 export default {
   createTaskForWorkflowStep,
+  checkImmediateTasks,
   checkTimelineTasks,
   checkDependencyTasks,
   syncTaskToWorkflowStep,

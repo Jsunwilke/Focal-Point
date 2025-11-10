@@ -1,7 +1,7 @@
 // src/components/workflow/overview/views/WorkflowMatrixView.js
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { Check, Clock, EyeOff, Eye, PlayCircle } from 'lucide-react';
+import { Check, Clock, EyeOff, Eye, PlayCircle, Lock, CheckCircle2, AlertCircle, Trash2, RefreshCw, Inbox, FileQuestion } from 'lucide-react';
 import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import DataGrid from 'react-data-grid';
 import 'react-data-grid/lib/styles.css';
@@ -12,6 +12,8 @@ import { useAuth } from '../../../../contexts/AuthContext';
 import { useWorkflow } from '../../../../contexts/WorkflowContext';
 import { useTask } from '../../../../contexts/TaskContext';
 import { readCounter } from '../../../../services/readCounter';
+import workflowCacheService from '../../../../services/workflowCacheService';
+import { secureLogger } from '../../../../services/secureLogger';
 import { getStepGroupColor } from '../../../../utils/workflowTemplates';
 import ShootDetailsModal from '../../ShootDetailsModal';
 import TaskButton from '../../TaskButton';
@@ -147,7 +149,7 @@ function MicroMeter({ label, templateMicros, normalizedMicros, onToggle }) {
 
       // Close if button is scrolled out of view
       if (rect.bottom < 0 || rect.top > window.innerHeight) {
-        console.log('❌ Button out of view, closing checklist');
+        secureLogger.debug('Button out of view, closing checklist');
         setOpen(false);
         return;
       }
@@ -156,7 +158,7 @@ function MicroMeter({ label, templateMicros, normalizedMicros, onToggle }) {
         top: rect.bottom + 4,
         left: rect.left + (rect.width / 2)
       };
-      console.log('📍 Updating checklist position: top=' + newPos.top + 'px, left=' + newPos.left + 'px');
+      secureLogger.debug('Updating checklist position', { top: newPos.top, left: newPos.left });
       setChecklistPosition(newPos);
     }
   };
@@ -164,7 +166,7 @@ function MicroMeter({ label, templateMicros, normalizedMicros, onToggle }) {
   // Calculate checklist position when opening
   const handleToggle = () => {
     if (!open) {
-      console.log('🎯 Opening checklist');
+      secureLogger.debug('Opening checklist');
       updateChecklistPosition();
     }
     setOpen(v => !v);
@@ -208,7 +210,7 @@ function MicroMeter({ label, templateMicros, normalizedMicros, onToggle }) {
 
     // Update checklist position on scroll
     const handleScroll = (e) => {
-      console.log('📜 Scroll event fired on:', e.target.className || e.target);
+      secureLogger.debug('Scroll event fired', { target: e.target.className || e.target.tagName });
       updateChecklistPosition();
 
       // Check distance after scroll using last known mouse position
@@ -217,7 +219,7 @@ function MicroMeter({ label, templateMicros, normalizedMicros, onToggle }) {
         const rect = checklist.getBoundingClientRect();
         const distance = getDistanceToRect(lastMousePos.current.x, lastMousePos.current.y, rect);
         if (distance > 50) {
-          console.log('❌ Too far after scroll, closing');
+          secureLogger.debug('Too far after scroll, closing checklist');
           setOpen(false);
         }
       }
@@ -229,11 +231,12 @@ function MicroMeter({ label, templateMicros, normalizedMicros, onToggle }) {
     const rdgViewport = dataGrid?.querySelector('[role="grid"]')?.parentElement;
     const anyScrollable = dataGrid?.querySelector('[class*="viewport"], [class*="scroll"]');
 
-    console.log('🔍 Scrollable elements check:');
-    console.log('  - .workflow-matrix__data-grid:', dataGrid);
-    console.log('  - .rdg:', rdg);
-    console.log('  - [role="grid"] parent:', rdgViewport);
-    console.log('  - any scrollable:', anyScrollable);
+    secureLogger.debug('Scrollable elements check', {
+      dataGrid: !!dataGrid,
+      rdg: !!rdg,
+      rdgViewport: !!rdgViewport,
+      anyScrollable: !!anyScrollable
+    });
 
     // Build array of candidates - try all possibilities
     const scrollableElements = [
@@ -244,9 +247,11 @@ function MicroMeter({ label, templateMicros, normalizedMicros, onToggle }) {
       window
     ].filter(Boolean);
 
-    console.log('  - will attach listeners to', scrollableElements.length, 'elements:');
-    scrollableElements.forEach((el, i) => {
-      console.log('    ' + i + ':', el === window ? 'window' : el.className || el.tagName);
+    secureLogger.debug('Attaching scroll listeners', {
+      count: scrollableElements.length,
+      elements: scrollableElements.map((el, i) =>
+        el === window ? 'window' : el.className || el.tagName
+      )
     });
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -541,7 +546,7 @@ const TaskCell = ({
 
 const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
   const { userProfile, organization } = useAuth();
-  const { openTaskDetailModal } = useWorkflow();
+  const { openTaskDetailModal, deleteWorkflow } = useWorkflow();
   const { myTasks, teamTasks } = useTask();
   const [activeTab, setActiveTab] = useState(null);
   const [showDates, setShowDates] = useState(false);
@@ -595,6 +600,9 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
     const templateMap = new Map();
     const orphanedWorkflows = [];
 
+    // Only check for orphaned workflows if workflowTemplates is populated
+    const hasTemplates = workflowTemplates && Object.keys(workflowTemplates).length > 0;
+
     workflows.forEach(workflow => {
       const template = workflowTemplates[workflow.templateId];
       if (template && !templateMap.has(workflow.templateId)) {
@@ -604,8 +612,9 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
           steps: template.steps || [],
           groups: template.groups || []
         });
-      } else if (!template) {
-        // Workflow has invalid/missing template
+      } else if (!template && hasTemplates) {
+        // Only mark as orphaned if we have templates loaded and this workflow's template is missing
+        // This prevents false positives during initial load
         orphanedWorkflows.push({
           id: workflow.id,
           templateId: workflow.templateId,
@@ -616,7 +625,10 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
     });
 
     if (orphanedWorkflows.length > 0) {
-      console.warn('⚠️ ORPHANED WORKFLOWS (missing templates):', orphanedWorkflows);
+      secureLogger.warn('Orphaned workflows detected (missing templates)', {
+        count: orphanedWorkflows.length,
+        workflows: orphanedWorkflows
+      });
     }
 
     const tabsArray = Array.from(templateMap.values());
@@ -640,22 +652,22 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
       });
     }
 
-    return tabsArray;
+    return { tabs: tabsArray, orphanedWorkflows };
   }, [workflows, workflowTemplates, savedTabOrder]);
 
   // Set initial active tab - respects saved tab order
   useEffect(() => {
-    if (tabs.length === 0) return;
+    if (tabs.tabs.length === 0) return;
 
     // Always set to first tab if no active tab
     if (!activeTab) {
-      setActiveTab(tabs[0].id);
+      setActiveTab(tabs.tabs[0].id);
       return;
     }
 
     // If savedTabOrder just loaded for the first time, switch to the first tab in sorted order
-    if (savedTabOrderLoadedRef.current && activeTab !== tabs[0].id) {
-      setActiveTab(tabs[0].id);
+    if (savedTabOrderLoadedRef.current && activeTab !== tabs.tabs[0].id) {
+      setActiveTab(tabs.tabs[0].id);
       savedTabOrderLoadedRef.current = false; // Only do this once
     }
   }, [tabs, activeTab]);
@@ -673,7 +685,7 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
             if (docSnap.exists()) {
               const data = docSnap.data();
               const order = data.workflowTabOrder || [];
-              console.log('Loaded workflow tab order:', order);
+              secureLogger.info('Loaded workflow tab order', { orderLength: order.length });
 
               // Set flag to trigger active tab update on first load
               if (!savedTabOrderLoadedRef.current && order.length > 0) {
@@ -684,13 +696,13 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
             }
           },
           (error) => {
-            console.error('Error loading tab order:', error);
+            secureLogger.error('Error loading tab order', { error: error.message });
           }
         );
 
         return unsubscribe;
       } catch (error) {
-        console.error('Error setting up tab order listener:', error);
+        secureLogger.error('Error setting up tab order listener', { error: error.message });
       }
     };
 
@@ -714,7 +726,7 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
         const schoolsData = await getSchools(organization.id);
         setSchools(schoolsData);
       } catch (error) {
-        console.error('Error loading schools:', error);
+        secureLogger.error('Error loading schools', { error: error.message });
       }
     };
     loadSchoolsData();
@@ -722,17 +734,38 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
 
   // Tab-scoped real-time listener - only listen to workflows for active template
   // This dramatically reduces Firebase reads (10-20 workflows instead of 100+)
+  // CACHE-FIRST PATTERN: Load from cache immediately, then listen for updates
   useEffect(() => {
-    if (!activeTab || !organization?.id) return;
+    if (!activeTab || !organization?.id || !userProfile?.uid) return;
 
     // Clean up previous listener when tab changes
     if (listenerUnsubscribeRef.current) {
-      console.log('Cleaning up previous tab listener');
+      secureLogger.debug('Cleaning up previous tab listener');
       listenerUnsubscribeRef.current();
       listenerUnsubscribeRef.current = null;
     }
 
-    console.log('Setting up tab-scoped listener for template:', activeTab);
+    secureLogger.debug('Setting up tab-scoped listener for template', { templateId: activeTab });
+
+    // STEP 1: Try to load from cache first (instant display)
+    const cachedWorkflows = workflowCacheService.getCachedWorkflows(
+      userProfile.uid,
+      organization.id,
+      `template_${activeTab}`,
+      'WorkflowMatrixView'
+    );
+
+    if (cachedWorkflows && cachedWorkflows.length > 0) {
+      secureLogger.info('Cache hit - loaded workflows from cache', {
+        count: cachedWorkflows.length,
+        templateId: activeTab
+      });
+      setRealtimeWorkflows(cachedWorkflows);
+      // Cache hit already recorded by workflowCacheService
+    } else {
+      secureLogger.debug('Cache miss - no cached workflows', { templateId: activeTab });
+      // Cache miss already recorded by workflowCacheService
+    }
 
     // Query only workflows for the active template
     const tabWorkflowsQuery = query(
@@ -750,7 +783,7 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
       { includeMetadataChanges: false },
       (snapshot) => {
         if (snapshot.metadata.fromCache) {
-          console.log('Snapshot from cache, ignoring');
+          secureLogger.debug('Snapshot from cache, ignoring');
           return;
         }
 
@@ -761,7 +794,10 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
         if (isInitialLoad) {
           // Initial load: Build full array from snapshot
           const workflowCount = snapshot.docs.length;
-          console.log(`[Initial] Tab listener loaded ${workflowCount} workflows for template ${activeTab}`);
+          secureLogger.info('Tab listener initial load', {
+            count: workflowCount,
+            templateId: activeTab
+          });
 
           readCounter.recordRead('onSnapshot-initial', 'workflows', 'WorkflowMatrixView', workflowCount);
 
@@ -770,12 +806,23 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
             ...doc.data()
           }));
 
+          // STEP 2: Update cache with fresh data from Firestore
+          workflowCacheService.setCachedWorkflows(
+            userProfile.uid,
+            organization.id,
+            `template_${activeTab}`,
+            tabWorkflows
+          );
+
           setRealtimeWorkflows(tabWorkflows);
           isInitialLoad = false;
 
         } else if (changes.length > 0) {
           // Subsequent updates: Process only changed documents
-          console.log(`[Update] Processing ${changes.length} changed workflows for template ${activeTab}`);
+          secureLogger.info('Tab listener incremental update', {
+            changedCount: changes.length,
+            templateId: activeTab
+          });
 
           readCounter.recordRead('onSnapshot-update', 'workflows', 'WorkflowMatrixView', changes.length);
 
@@ -800,12 +847,20 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
               }
             });
 
+            // STEP 3: Update cache with incremental changes
+            workflowCacheService.setCachedWorkflows(
+              userProfile.uid,
+              organization.id,
+              `template_${activeTab}`,
+              updated
+            );
+
             return updated;
           });
         }
       },
       (error) => {
-        console.error('Tab listener error:', error);
+        secureLogger.error('Tab listener error', { error: error.message, templateId: activeTab });
       }
     );
 
@@ -814,7 +869,7 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
     // Cleanup on unmount or tab change
     return () => {
       if (listenerUnsubscribeRef.current) {
-        console.log('Tab change: cleaning up listener');
+        secureLogger.debug('Tab change - cleaning up listener');
         listenerUnsubscribeRef.current();
         listenerUnsubscribeRef.current = null;
       }
@@ -823,7 +878,7 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
 
   // Get active template
   const activeTemplate = useMemo(() => {
-    return tabs.find(tab => tab.id === activeTab);
+    return tabs.tabs.find(tab => tab.id === activeTab);
   }, [tabs, activeTab]);
 
   // Load saved column widths from localStorage when template changes
@@ -844,7 +899,7 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
         }
         return; // Use saved widths, skip auto-sizing
       } catch (error) {
-        console.error('Error loading saved column widths:', error);
+        secureLogger.error('Error loading saved column widths', { error: error.message });
       }
     }
 
@@ -967,7 +1022,7 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
         const tasksByStep = await getWorkflowStepTasksBatch(workflowStepPairs, organization.id);
         setWorkflowStepTasks(tasksByStep);
       } catch (error) {
-        console.error('Error loading workflow step tasks:', error);
+        secureLogger.error('Error loading workflow step tasks', { error: error.message });
       } finally {
         setLoadingTasks(false);
       }
@@ -1016,13 +1071,13 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
 
     // Validate initials (1-4 characters, letters only - allow partial input)
     if (trimmed && !/^[A-Z]{1,4}$/.test(trimmed)) {
-      console.log('Invalid initials format, rejecting:', trimmed);
+      secureLogger.debug('Invalid initials format, rejecting', { value: trimmed });
       return; // Invalid format - don't update
     }
 
     const cellKey = `${workflowId}-${stepId}`;
 
-    console.log('Initials change:', { cellKey, value, trimmed });
+    secureLogger.debug('Initials change', { cellKey, value, trimmed });
 
     // IMMEDIATE: Update optimistic state for instant UI feedback
     setOptimisticUpdates(prev => ({
@@ -1039,7 +1094,7 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
     }
 
     debounceTimersRef.current[cellKey] = setTimeout(async () => {
-      console.log('Saving initials to Firebase:', { cellKey, trimmed });
+      secureLogger.debug('Saving initials to Firebase', { cellKey, trimmed });
 
       try {
         const updateData = {};
@@ -1073,14 +1128,14 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
 
         await updateWorkflowStep(workflowId, stepId, updateData);
 
-        console.log('Firebase save complete:', cellKey);
+        secureLogger.debug('Firebase save complete', { cellKey });
         readCounter.recordRead('updateDoc', 'workflows', 'WorkflowMatrixView', 1);
 
         // Don't clear optimistic update - let the listener update confirm the change
         // This prevents flickering if listener is delayed
 
       } catch (error) {
-        console.error('Error updating step:', error);
+        secureLogger.error('Error updating step', { error: error.message, cellKey });
         // Revert optimistic update on error
         setOptimisticUpdates(prev => {
           const next = { ...prev };
@@ -1095,7 +1150,7 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
   const handleDateChange = useCallback(async (workflowId, stepId, currentInitials, value, normalizedMicros) => {
     const cellKey = `${workflowId}-${stepId}`;
 
-    console.log('Date change:', { cellKey, value });
+    secureLogger.debug('Date change', { cellKey, value });
 
     try {
       const updateData = {
@@ -1116,10 +1171,10 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
 
       await updateWorkflowStep(workflowId, stepId, updateData);
 
-      console.log('Date save complete:', cellKey);
+      secureLogger.debug('Date save complete', { cellKey });
       readCounter.recordRead('updateDoc', 'workflows', 'WorkflowMatrixView', 1);
     } catch (error) {
-      console.error('Error updating date:', error);
+      secureLogger.error('Error updating date', { error: error.message, cellKey });
     }
   }, [userProfile?.id]);
 
@@ -1132,7 +1187,7 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
       m.key === microKey ? { ...m, done: !m.done } : m
     );
 
-    console.log('Micro toggle:', { cellKey, microKey, updatedMicros });
+    secureLogger.debug('Micro toggle', { cellKey, microKey });
 
     // IMMEDIATE: Optimistic update - Show change immediately in UI
     setOptimisticUpdates(prev => ({
@@ -1165,13 +1220,13 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
 
       await updateWorkflowStep(workflowId, stepId, updateData);
 
-      console.log('Micro toggle save complete:', cellKey);
+      secureLogger.debug('Micro toggle save complete', { cellKey });
       readCounter.recordRead('updateDoc', 'workflows', 'WorkflowMatrixView', 1);
 
       // Don't clear optimistic update - let listener confirm the change
 
     } catch (error) {
-      console.error('Error toggling micro-step:', error);
+      secureLogger.error('Error toggling micro-step', { error: error.message, cellKey });
       // Revert optimistic update on error
       setOptimisticUpdates(prev => {
         const next = { ...prev };
@@ -1212,10 +1267,10 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
       await updateDoc(orgRef, {
         workflowTabOrder: newOrder
       });
-      console.log('Tab order saved to organization:', newOrder);
+      secureLogger.info('Tab order saved to organization', { orderLength: newOrder.length });
       readCounter.recordRead('updateDoc', 'organizations', 'WorkflowMatrixView', 1);
     } catch (error) {
-      console.error('Error saving tab order:', error);
+      secureLogger.error('Error saving tab order', { error: error.message });
     }
   }, [organization?.id]);
 
@@ -1307,7 +1362,10 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
       [workflowId]: newHiddenState
     }));
 
-    console.log(`Optimistically ${newHiddenState ? 'hiding' : 'unhiding'} workflow ${workflowId}`);
+    secureLogger.debug('Optimistically toggling workflow hidden status', {
+      workflowId,
+      hidden: newHiddenState
+    });
 
     try {
       // BACKGROUND: Update Firebase
@@ -1316,7 +1374,10 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
         hidden: newHiddenState
       });
 
-      console.log(`Workflow ${workflowId} ${newHiddenState ? 'hidden' : 'unhidden'} in Firebase`);
+      secureLogger.info('Workflow hidden status updated in Firebase', {
+        workflowId,
+        hidden: newHiddenState
+      });
       readCounter.recordRead('updateDoc', 'workflows', 'WorkflowMatrixView', 1);
 
       // Clear optimistic state after Firebase confirms (listener will have updated)
@@ -1329,7 +1390,10 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
       }, 1000); // Wait 1 second for listener to process
 
     } catch (error) {
-      console.error('Error toggling workflow hidden status:', error);
+      secureLogger.error('Error toggling workflow hidden status', {
+        error: error.message,
+        workflowId
+      });
       // Revert optimistic update on error
       setOptimisticallyHidden(prev => {
         const next = { ...prev };
@@ -1466,6 +1530,20 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
         renderHeaderCell: () => {
           const hasVideo = step.tutorialVideoURL || step.tutorialVideoFile;
           const videoUrl = step.tutorialVideoFile || step.tutorialVideoURL;
+          const hasDependencies = step.dependencies && step.dependencies.length > 0;
+          const taskCreationTrigger = step.taskCreationTrigger;
+
+          // Build dependency tooltip
+          let dependencyTooltip = '';
+          if (hasDependencies && taskCreationTrigger === 'dependency') {
+            const depStepTitles = step.dependencies
+              .map(depId => {
+                const depStep = activeTemplate?.steps?.find(s => s.id === depId);
+                return depStep ? depStep.title : depId;
+              })
+              .join(', ');
+            dependencyTooltip = `Depends on: ${depStepTitles}`;
+          }
 
           return (
             <div style={{
@@ -1484,27 +1562,40 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
               gap: '4px'
             }}>
               <span style={{ flex: 1 }}>{step.title}</span>
-              {hasVideo && (
-                <PlayCircle
-                  size={16}
-                  style={{
-                    flexShrink: 0,
-                    cursor: 'pointer',
-                    opacity: 0.8,
-                    transition: 'opacity 0.15s ease'
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCurrentVideoData({
-                      url: videoUrl,
-                      title: step.title
-                    });
-                    setVideoModalOpen(true);
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                  onMouseLeave={(e) => e.currentTarget.style.opacity = '0.8'}
-                />
-              )}
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
+                {hasDependencies && taskCreationTrigger === 'dependency' && (
+                  <Lock
+                    size={14}
+                    style={{
+                      opacity: 0.7,
+                      flexShrink: 0
+                    }}
+                    title={dependencyTooltip}
+                  />
+                )}
+                {hasVideo && (
+                  <PlayCircle
+                    size={16}
+                    style={{
+                      flexShrink: 0,
+                      cursor: 'pointer',
+                      opacity: 0.8,
+                      transition: 'opacity 0.15s ease'
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentVideoData({
+                        url: videoUrl,
+                        title: step.title
+                      });
+                      setVideoModalOpen(true);
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.8'}
+                    title="Watch tutorial video"
+                  />
+                )}
+              </div>
             </div>
           );
         },
@@ -1675,7 +1766,7 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
     <div className="workflow-matrix">
       {/* Tabs */}
       <div className="workflow-matrix__tabs">
-        {tabs.map((tab, index) => {
+        {tabs.tabs.map((tab, index) => {
           const colors = getTemplateColors(tab.name);
           const isActive = activeTab === tab.id;
 
@@ -1711,6 +1802,104 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
           );
         })}
       </div>
+
+      {/* Orphaned Workflows Alert */}
+      {tabs.orphanedWorkflows && tabs.orphanedWorkflows.length > 0 && (
+        <div style={{
+          margin: '1rem',
+          padding: '1rem 1.25rem',
+          backgroundColor: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: '0.5rem',
+          display: 'flex',
+          gap: '1rem',
+          alignItems: 'flex-start'
+        }}>
+          <AlertCircle size={20} style={{ color: '#dc2626', flexShrink: 0, marginTop: '0.125rem' }} />
+          <div style={{ flex: 1 }}>
+            <h4 style={{
+              margin: '0 0 0.5rem 0',
+              fontSize: '0.9375rem',
+              fontWeight: '600',
+              color: '#991b1b'
+            }}>
+              {tabs.orphanedWorkflows.length} Orphaned Workflow{tabs.orphanedWorkflows.length !== 1 ? 's' : ''} Found
+            </h4>
+            <p style={{
+              margin: '0 0 1rem 0',
+              fontSize: '0.875rem',
+              color: '#7f1d1d',
+              lineHeight: '1.5'
+            }}>
+              The following workflows are linked to deleted templates and cannot function properly:
+            </p>
+            <ul style={{
+              margin: '0 0 1rem 0',
+              paddingLeft: '1.25rem',
+              fontSize: '0.875rem',
+              color: '#7f1d1d'
+            }}>
+              {tabs.orphanedWorkflows.slice(0, 5).map(wf => (
+                <li key={wf.id} style={{ marginBottom: '0.25rem' }}>
+                  {wf.schoolName || 'Unknown School'} (Template ID: {wf.templateId || 'Unknown'})
+                </li>
+              ))}
+              {tabs.orphanedWorkflows.length > 5 && (
+                <li style={{ fontStyle: 'italic' }}>
+                  ...and {tabs.orphanedWorkflows.length - 5} more
+                </li>
+              )}
+            </ul>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => {
+                  if (window.confirm(`Are you sure you want to delete ${tabs.orphanedWorkflows.length} orphaned workflow${tabs.orphanedWorkflows.length !== 1 ? 's' : ''}? This action cannot be undone.`)) {
+                    tabs.orphanedWorkflows.forEach(wf => {
+                      deleteWorkflow(wf.id);
+                    });
+                  }
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#dc2626',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#b91c1c'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
+              >
+                <Trash2 size={16} />
+                Delete All Orphaned Workflows
+              </button>
+              <a
+                href="https://docs.example.com/orphaned-workflows"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.5rem 1rem',
+                  color: '#991b1b',
+                  textDecoration: 'none',
+                  fontSize: '0.875rem',
+                  fontWeight: '500'
+                }}
+              >
+                Learn more about workflow recovery
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Controls */}
       <div className="workflow-matrix__controls">
@@ -1781,11 +1970,52 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
         )}
       </div>
 
-      {rows.length === 0 && (
-        <div className="workflow-matrix__empty-state">
-          <p>No workflows found for {activeTemplate.name}</p>
+      {rows.length === 0 && !loading && (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '4rem 2rem',
+          textAlign: 'center',
+          color: '#6b7280'
+        }}>
+          <Inbox size={64} style={{ color: '#d1d5db', marginBottom: '1.5rem' }} />
+          <h3 style={{
+            margin: '0 0 0.5rem 0',
+            fontSize: '1.25rem',
+            fontWeight: '600',
+            color: '#374151'
+          }}>
+            No Workflows Found
+          </h3>
+          <p style={{
+            margin: '0 0 1.5rem 0',
+            fontSize: '0.9375rem',
+            color: '#6b7280',
+            maxWidth: '400px',
+            lineHeight: '1.5'
+          }}>
+            {activeTemplate ?
+              `No workflows have been created for "${activeTemplate.name}" yet. Workflows will appear here once you create them for your sessions.` :
+              'Select a workflow template from the tabs above to view its workflows.'
+            }
+          </p>
+          {activeTemplate && (
+            <div style={{
+              padding: '1rem 1.5rem',
+              backgroundColor: '#f3f4f6',
+              borderRadius: '0.5rem',
+              fontSize: '0.875rem',
+              color: '#374151',
+              maxWidth: '500px'
+            }}>
+              <strong>Tip:</strong> Workflows are automatically created when you start a new session and assign this workflow template to it.
+            </div>
+          )}
         </div>
       )}
+
 
       {/* Shoot Details Modal */}
       {selectedWorkflow && (

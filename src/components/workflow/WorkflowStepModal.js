@@ -50,6 +50,36 @@ const WorkflowStepModal = ({
     }
   }, [isOpen, stepProgress]);
 
+  // Focus management
+  useEffect(() => {
+    if (isOpen) {
+      const previouslyFocused = document.activeElement;
+
+      setTimeout(() => {
+        const modal = document.querySelector('[role="dialog"][aria-labelledby="workflow-step-title"]');
+        if (modal) modal.focus();
+      }, 100);
+
+      return () => {
+        if (previouslyFocused) previouslyFocused.focus();
+      };
+    }
+  }, [isOpen]);
+
+  // Keyboard support (Escape key)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isOpen && !loading) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, onClose, loading]);
+
   if (!isOpen || !step) return null;
 
   const handleInputChange = (field, value) => {
@@ -144,6 +174,10 @@ const WorkflowStepModal = ({
 
   const modalContent = (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="workflow-step-title"
+      tabIndex={-1}
       style={{
         position: 'fixed',
         top: 0,
@@ -158,7 +192,7 @@ const WorkflowStepModal = ({
         padding: '20px'
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget && !loading) onClose();
       }}
     >
       <div
@@ -187,7 +221,7 @@ const WorkflowStepModal = ({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span style={{ fontSize: '1.25rem' }}>{getStepTypeIcon(step.type)}</span>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600' }}>
+              <h2 id="workflow-step-title" style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600' }}>
                 {step.title}
               </h2>
             </div>
@@ -220,6 +254,7 @@ const WorkflowStepModal = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close workflow step modal"
             style={{
               background: 'none',
               border: 'none',

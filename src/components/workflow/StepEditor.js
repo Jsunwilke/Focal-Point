@@ -1,5 +1,5 @@
 // src/components/workflow/StepEditor.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import {
   X,
@@ -13,7 +13,11 @@ import {
   Trash2,
   Video,
   Upload,
-  Link
+  Loader2,
+  Link,
+  PlayCircle,
+  RefreshCw,
+  HelpCircle
 } from 'lucide-react';
 import {
   getStepTypes,
@@ -27,6 +31,7 @@ import {
   validateVideoFile,
   formatFileSize
 } from '../../services/videoUploadService';
+import VideoPlayerModal from './VideoPlayerModal';
 
 const StepEditor = ({
   isOpen,
@@ -34,7 +39,8 @@ const StepEditor = ({
   step,
   onSave,
   organizationID,
-  allSteps = []
+  allSteps = [],
+  templateID = null
 }) => {
   const [formData, setFormData] = useState({
     id: step?.id || '',
@@ -72,7 +78,31 @@ const StepEditor = ({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
-  
+  const [showVideoPlayer, setShowVideoPlayer] = useState(false);
+  const [isReplacingVideo, setIsReplacingVideo] = useState(false);
+  const [previewVideoUrl, setPreviewVideoUrl] = useState(null);
+  const [lastUploadTime, setLastUploadTime] = useState(null);
+  const uploadTaskRef = useRef(null); // Store upload task for cancellation
+
+  // Rate limiting configuration
+  const UPLOAD_COOLDOWN_MS = 30000; // 30 seconds between uploads
+  const MIN_RETRY_DELAY_MS = 5000; // 5 seconds minimum between retry attempts
+
+  // Cleanup preview URL when component unmounts or file changes
+  useEffect(() => {
+    if (selectedFile) {
+      const url = URL.createObjectURL(selectedFile);
+      setPreviewVideoUrl(url);
+
+      return () => {
+        URL.revokeObjectURL(url);
+        setPreviewVideoUrl(null);
+      };
+    } else {
+      setPreviewVideoUrl(null);
+    }
+  }, [selectedFile]);
+
   // Get team members from cache
   const { users } = useDataCache();
   const teamMembers = (users || []).filter(m => m.isActive);
@@ -87,25 +117,85 @@ const StepEditor = ({
 
   if (!isOpen) return null;
 
+  /**
+   * Detect circular dependencies using depth-first search
+   * @param {string} stepId - The step ID to check
+   * @param {Array} newDependencies - The proposed new dependencies
+   * @returns {Array|null} - Array representing the cycle path, or null if no cycle
+   */
+  const detectCircularDependency = (stepId, newDependencies) => {
+    // Build dependency map including the proposed changes
+    const dependencyMap = {};
+
+    // Add all existing step dependencies
+    allSteps.forEach(s => {
+      if (s.id === stepId) {
+        // Use the new dependencies for the current step
+        dependencyMap[s.id] = newDependencies;
+      } else {
+        dependencyMap[s.id] = s.dependencies || [];
+      }
+    });
+
+    // DFS to detect cycles
+    const visited = new Set();
+    const recursionStack = new Set();
+
+    const hasCycle = (currentId, path = []) => {
+      visited.add(currentId);
+      recursionStack.add(currentId);
+      path.push(currentId);
+
+      const deps = dependencyMap[currentId] || [];
+      for (const depId of deps) {
+        if (!visited.has(depId)) {
+          const cyclePath = hasCycle(depId, [...path]);
+          if (cyclePath) return cyclePath;
+        } else if (recursionStack.has(depId)) {
+          // Found a cycle - return the path from depId to current
+          const cycleStart = path.indexOf(depId);
+          return path.slice(cycleStart).concat(depId);
+        }
+      }
+
+      recursionStack.delete(currentId);
+      return null;
+    };
+
+    return hasCycle(stepId);
+  };
+
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.title.trim()) {
       newErrors.title = 'Step title is required';
     }
-    
+
     if (!formData.type) {
       newErrors.type = 'Step type is required';
     }
-    
+
     if (formData.estimatedHours <= 0) {
       newErrors.estimatedHours = 'Estimated hours must be greater than 0';
     }
-    
+
     if (formData.assigneeRule === 'specific' && !formData.assigneeValue) {
       newErrors.assigneeValue = 'Please select a team member';
     }
-    
+
+    // Check for circular dependencies
+    if (formData.dependencies.length > 0) {
+      const cycle = detectCircularDependency(formData.id, formData.dependencies);
+      if (cycle) {
+        const cycleNames = cycle.map(id => {
+          const step = allSteps.find(s => s.id === id);
+          return step?.title || id;
+        }).join(' → ');
+        newErrors.dependencies = `Circular dependency detected: ${cycleNames}`;
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -115,8 +205,28 @@ const StepEditor = ({
       ...prev,
       [field]: value
     }));
-    
-    if (errors[field]) {
+
+    // Real-time validation for dependencies
+    if (field === 'dependencies' && value.length > 0) {
+      const cycle = detectCircularDependency(formData.id, value);
+      if (cycle) {
+        const cycleNames = cycle.map(id => {
+          const step = allSteps.find(s => s.id === id);
+          return step?.title || id;
+        }).join(' → ');
+        setErrors(prev => ({
+          ...prev,
+          dependencies: `Circular dependency detected: ${cycleNames}`
+        }));
+      } else {
+        // Clear dependency error if no cycle
+        setErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors.dependencies;
+          return newErrors;
+        });
+      }
+    } else if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
@@ -207,46 +317,140 @@ const StepEditor = ({
     setUploadError('');
   };
 
+  const checkRateLimit = () => {
+    if (!lastUploadTime) return { allowed: true };
+
+    const timeSinceLastUpload = Date.now() - lastUploadTime;
+    if (timeSinceLastUpload < UPLOAD_COOLDOWN_MS) {
+      const remainingSeconds = Math.ceil((UPLOAD_COOLDOWN_MS - timeSinceLastUpload) / 1000);
+      return {
+        allowed: false,
+        message: `Please wait ${remainingSeconds} seconds before uploading another video.`
+      };
+    }
+
+    return { allowed: true };
+  };
+
   const handleVideoUpload = async () => {
     if (!selectedFile) return;
+
+    // Validate required fields
     if (!organizationID || !formData.id) {
       setUploadError('Missing required information for upload');
+      return;
+    }
+
+    // Check if template has been saved
+    if (!templateID) {
+      setUploadError('Please save the workflow template before uploading videos');
+      return;
+    }
+
+    // Check rate limit
+    const rateLimitCheck = checkRateLimit();
+    if (!rateLimitCheck.allowed) {
+      setUploadError(rateLimitCheck.message);
+      return;
+    }
+
+    // Prevent multiple simultaneous uploads
+    if (uploading) {
+      setUploadError('An upload is already in progress. Please wait for it to complete.');
       return;
     }
 
     setUploading(true);
     setUploadProgress(0);
     setUploadError('');
+    uploadTaskRef.current = null; // Reset upload task ref
 
     try {
-      const templateID = 'template_' + Date.now(); // Placeholder - in real use would be actual template ID
+      // If replacing, delete the old video first
+      if (isReplacingVideo && formData.tutorialVideoFile) {
+        await deleteStepVideo(formData.tutorialVideoFile);
+      }
+
       const downloadURL = await uploadStepVideo(
         organizationID,
         templateID,
         formData.id,
         selectedFile,
-        (progress) => setUploadProgress(progress)
+        (progress) => setUploadProgress(progress),
+        (uploadTask) => {
+          // Store upload task for potential cancellation
+          uploadTaskRef.current = uploadTask;
+        }
       );
 
       // Update form data with video URL
       handleInputChange('tutorialVideoFile', downloadURL);
 
-      // Clear selected file
+      // Record upload time for rate limiting
+      setLastUploadTime(Date.now());
+
+      // Clear selected file and exit replace mode
       setSelectedFile(null);
       setUploading(false);
       setUploadProgress(0);
+      setIsReplacingVideo(false);
+      uploadTaskRef.current = null;
     } catch (error) {
-      setUploadError(error.message || 'Upload failed');
+      // Handle cancellation differently from other errors
+      if (error.code === 'storage/canceled') {
+        setUploadError('Upload cancelled');
+      } else {
+        setUploadError(error.message || 'Upload failed');
+      }
       setUploading(false);
       setUploadProgress(0);
+      uploadTaskRef.current = null;
     }
   };
 
+  const handleCancelUpload = () => {
+    if (!window.confirm('Are you sure you want to cancel the upload? All progress will be lost.')) {
+      return;
+    }
+
+    // Cancel the Firebase upload task
+    if (uploadTaskRef.current) {
+      uploadTaskRef.current.cancel();
+      uploadTaskRef.current = null;
+    }
+
+    // Reset upload state
+    setUploading(false);
+    setUploadProgress(0);
+    setUploadError('Upload cancelled by user');
+  };
+
   const handleDeleteUploadedVideo = async () => {
+    if (!window.confirm('Are you sure you want to delete this video? This action cannot be undone.')) {
+      return;
+    }
+
     if (formData.tutorialVideoFile) {
       await deleteStepVideo(formData.tutorialVideoFile);
       handleInputChange('tutorialVideoFile', null);
+      setIsReplacingVideo(false);
     }
+  };
+
+  const handleReplaceVideo = () => {
+    setIsReplacingVideo(true);
+    setSelectedFile(null);
+    setUploadError('');
+  };
+
+  const handleCancelReplace = () => {
+    setIsReplacingVideo(false);
+    setSelectedFile(null);
+    setUploadError('');
+  };
+
+  const handlePreviewVideo = () => {
+    setShowVideoPlayer(true);
   };
 
   const handleSave = () => {
@@ -281,7 +485,13 @@ const StepEditor = ({
         padding: '20px'
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) {
+          if (uploading) {
+            alert('Please wait for the video upload to complete before closing.');
+            return;
+          }
+          onClose();
+        }
       }}
     >
       <div
@@ -314,15 +524,95 @@ const StepEditor = ({
               Configure the details for this workflow step
             </p>
           </div>
-          <button onClick={onClose} style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '0.25rem'
-          }}>
+          <button
+            onClick={() => {
+              if (uploading) {
+                alert('Please wait for the video upload to complete before closing.');
+                return;
+              }
+              onClose();
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: uploading ? 'not-allowed' : 'pointer',
+              padding: '0.25rem',
+              opacity: uploading ? 0.5 : 1
+            }}
+            title={uploading ? 'Upload in progress...' : 'Close'}
+            disabled={uploading}
+          >
             <X size={20} />
           </button>
         </div>
+
+        {/* Upload Loading Overlay */}
+        {uploading && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            zIndex: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '1rem'
+          }}>
+            <Loader2 size={48} style={{ color: '#3b82f6', animation: 'spin 1s linear infinite' }} />
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', fontWeight: '600', color: '#1f2937' }}>
+                Uploading Video...
+              </p>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: '#6b7280' }}>
+                {uploadProgress}% complete
+              </p>
+              {uploadProgress > 0 && (
+                <div style={{
+                  width: '300px',
+                  height: '8px',
+                  backgroundColor: '#e5e7eb',
+                  borderRadius: '9999px',
+                  overflow: 'hidden',
+                  marginTop: '1rem'
+                }}>
+                  <div style={{
+                    width: `${uploadProgress}%`,
+                    height: '100%',
+                    backgroundColor: '#3b82f6',
+                    transition: 'width 0.3s ease'
+                  }} />
+                </div>
+              )}
+              <button
+                onClick={handleCancelUpload}
+                style={{
+                  marginTop: '1.5rem',
+                  padding: '0.5rem 1.5rem',
+                  backgroundColor: '#ef4444',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  margin: '1.5rem auto 0'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ef4444'}
+              >
+                <X size={16} />
+                Cancel Upload
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         <div style={{ padding: '1.5rem', overflow: 'auto', flex: 1 }}>
@@ -774,8 +1064,13 @@ const StepEditor = ({
                 </h3>
 
                 <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem' }}>
-                    Task Creation Trigger
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem' }}>
+                    <span>Task Creation Trigger</span>
+                    <HelpCircle
+                      size={14}
+                      style={{ color: '#6b7280', cursor: 'help' }}
+                      title="Controls when tasks are automatically created for this step. Choose 'Immediate' for tasks that should be available right away, 'Timeline' for time-based creation, 'Dependency' to wait for prerequisite steps, or 'Manual' if you'll create tasks manually."
+                    />
                   </label>
                   <select
                     value={formData.taskCreationTrigger}
@@ -828,8 +1123,13 @@ const StepEditor = ({
 
                 {formData.taskCreationTrigger === 'dependency' && (
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem' }}>
-                      Prerequisite Steps
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem' }}>
+                      <span>Prerequisite Steps</span>
+                      <HelpCircle
+                        size={14}
+                        style={{ color: '#6b7280', cursor: 'help' }}
+                        title="Select which steps must be completed before a task is created for this step. Tasks will be created automatically once ALL selected prerequisite steps are marked as completed. This helps ensure work is done in the correct order."
+                      />
                     </label>
                     <div style={{
                       padding: '0.75rem',
@@ -902,6 +1202,23 @@ const StepEditor = ({
                     <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
                       Task will be created when ALL selected steps are completed
                     </p>
+                    {errors.dependencies && (
+                      <div style={{
+                        marginTop: '0.5rem',
+                        padding: '0.75rem',
+                        backgroundColor: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        borderRadius: '0.375rem',
+                        display: 'flex',
+                        gap: '0.5rem',
+                        alignItems: 'flex-start'
+                      }}>
+                        <AlertCircle size={16} style={{ color: '#dc2626', flexShrink: 0, marginTop: '0.125rem' }} />
+                        <span style={{ fontSize: '0.875rem', color: '#991b1b' }}>
+                          {errors.dependencies}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1062,10 +1379,23 @@ const StepEditor = ({
                 {/* File Upload */}
                 {videoInputMethod === 'upload' && (
                   <div>
-                    {!formData.tutorialVideoFile ? (
+                    {!formData.tutorialVideoFile || isReplacingVideo ? (
                       <>
+                        {isReplacingVideo && (
+                          <div style={{
+                            padding: '0.75rem',
+                            backgroundColor: '#fef3c7',
+                            border: '1px solid #fbbf24',
+                            borderRadius: '0.375rem',
+                            marginBottom: '0.75rem',
+                            fontSize: '0.875rem',
+                            color: '#92400e'
+                          }}>
+                            Replacing existing video. Upload a new file or cancel to keep the current video.
+                          </div>
+                        )}
                         <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem' }}>
-                          Upload Video File (MP4, MOV, AVI, WebM)
+                          {isReplacingVideo ? 'Choose New Video File (MP4, MOV, AVI, WebM)' : 'Upload Video File (MP4, MOV, AVI, WebM)'}
                         </label>
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
                           <input
@@ -1103,12 +1433,78 @@ const StepEditor = ({
                             <Upload size={16} />
                             {uploading ? 'Uploading...' : 'Upload'}
                           </button>
+                          {isReplacingVideo && (
+                            <button
+                              type="button"
+                              onClick={handleCancelReplace}
+                              disabled={uploading}
+                              style={{
+                                padding: '0.5rem 1rem',
+                                border: '1px solid #d1d5db',
+                                backgroundColor: 'white',
+                                color: '#6b7280',
+                                borderRadius: '0.375rem',
+                                cursor: uploading ? 'not-allowed' : 'pointer',
+                                fontSize: '0.875rem',
+                                fontWeight: '500',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          )}
                         </div>
 
                         {selectedFile && (
-                          <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#6b7280' }}>
-                            Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)})
-                          </p>
+                          <div style={{
+                            marginTop: '0.75rem',
+                            padding: '1rem',
+                            border: '1px solid #d1d5db',
+                            borderRadius: '0.375rem',
+                            backgroundColor: '#f9fafb'
+                          }}>
+                            <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
+                              Preview Selected Video
+                            </p>
+                            <div style={{
+                              marginBottom: '0.75rem',
+                              backgroundColor: '#000',
+                              borderRadius: '0.375rem',
+                              overflow: 'hidden',
+                              maxHeight: '300px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}>
+                              {previewVideoUrl ? (
+                                <video
+                                  src={previewVideoUrl}
+                                  controls
+                                  style={{
+                                    width: '100%',
+                                    maxHeight: '300px',
+                                    display: 'block'
+                                  }}
+                                >
+                                  <track kind="captions" />
+                                  Your browser does not support the video tag.
+                                </video>
+                              ) : (
+                                <div style={{ padding: '2rem', color: '#9ca3af', fontSize: '0.875rem' }}>
+                                  Loading preview...
+                                </div>
+                              )}
+                            </div>
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              fontSize: '0.75rem',
+                              color: '#6b7280'
+                            }}>
+                              <span>File: {selectedFile.name}</span>
+                              <span>Size: {formatFileSize(selectedFile.size)}</span>
+                            </div>
+                          </div>
                         )}
 
                         {uploading && (
@@ -1147,7 +1543,7 @@ const StepEditor = ({
                         borderRadius: '0.375rem',
                         backgroundColor: '#f0fdf4'
                       }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
                           <div>
                             <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.875rem', fontWeight: '500', color: '#10b981' }}>
                               ✓ Video uploaded successfully
@@ -1156,23 +1552,66 @@ const StepEditor = ({
                               Video is ready to be displayed in the workflow
                             </p>
                           </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={handlePreviewVideo}
+                            style={{
+                              padding: '0.5rem 0.75rem',
+                              border: '1px solid #3b82f6',
+                              backgroundColor: 'white',
+                              color: '#3b82f6',
+                              borderRadius: '0.375rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.375rem',
+                              fontSize: '0.8125rem',
+                              fontWeight: '500'
+                            }}
+                          >
+                            <PlayCircle size={16} />
+                            Preview
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleReplaceVideo}
+                            style={{
+                              padding: '0.5rem 0.75rem',
+                              border: '1px solid #f59e0b',
+                              backgroundColor: 'white',
+                              color: '#f59e0b',
+                              borderRadius: '0.375rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.375rem',
+                              fontSize: '0.8125rem',
+                              fontWeight: '500'
+                            }}
+                          >
+                            <RefreshCw size={16} />
+                            Replace
+                          </button>
                           <button
                             type="button"
                             onClick={handleDeleteUploadedVideo}
                             style={{
-                              padding: '0.375rem',
+                              padding: '0.5rem 0.75rem',
                               border: '1px solid #ef4444',
                               backgroundColor: 'white',
                               color: '#ef4444',
-                              borderRadius: '0.25rem',
+                              borderRadius: '0.375rem',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '0.25rem',
-                              fontSize: '0.75rem'
+                              gap: '0.375rem',
+                              fontSize: '0.8125rem',
+                              fontWeight: '500'
                             }}
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={16} />
                             Delete
                           </button>
                         </div>
@@ -1202,35 +1641,44 @@ const StepEditor = ({
             )}
           </div>
           <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <button 
-              onClick={onClose}
+            <button
+              onClick={() => {
+                if (uploading) {
+                  alert('Please wait for the video upload to complete before closing.');
+                  return;
+                }
+                onClose();
+              }}
+              disabled={uploading}
               style={{
                 padding: '0.5rem 1rem',
                 border: '1px solid #d1d5db',
-                backgroundColor: 'white',
+                backgroundColor: uploading ? '#f3f4f6' : 'white',
                 borderRadius: '0.375rem',
-                cursor: 'pointer'
+                cursor: uploading ? 'not-allowed' : 'pointer',
+                opacity: uploading ? 0.6 : 1
               }}
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              disabled={Object.keys(errors).length > 0}
+              disabled={Object.keys(errors).length > 0 || uploading}
               style={{
                 padding: '0.5rem 1rem',
                 border: 'none',
-                backgroundColor: Object.keys(errors).length > 0 ? '#9ca3af' : '#3b82f6',
+                backgroundColor: (Object.keys(errors).length > 0 || uploading) ? '#9ca3af' : '#3b82f6',
                 color: 'white',
                 borderRadius: '0.375rem',
-                cursor: Object.keys(errors).length > 0 ? 'not-allowed' : 'pointer',
+                cursor: (Object.keys(errors).length > 0 || uploading) ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem'
               }}
+              title={uploading ? 'Upload in progress...' : ''}
             >
               <Save size={16} />
-              Save Step
+              {uploading ? 'Upload in Progress...' : 'Save Step'}
             </button>
           </div>
         </div>
@@ -1238,7 +1686,27 @@ const StepEditor = ({
     </div>
   );
 
-  return ReactDOM.createPortal(modalContent, document.body);
+  return (
+    <>
+      <style>
+        {`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}
+      </style>
+      {ReactDOM.createPortal(modalContent, document.body)}
+      {showVideoPlayer && (
+        <VideoPlayerModal
+          isOpen={showVideoPlayer}
+          onClose={() => setShowVideoPlayer(false)}
+          videoUrl={formData.tutorialVideoFile}
+          title={`${formData.title} - Tutorial Video`}
+        />
+      )}
+    </>
+  );
 };
 
 export default StepEditor;

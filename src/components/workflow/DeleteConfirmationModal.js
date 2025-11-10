@@ -3,13 +3,43 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import { Trash2, AlertCircle } from 'lucide-react';
 
-const DeleteConfirmationModal = ({ 
-  isOpen, 
-  onClose, 
-  onConfirm, 
-  templateName, 
-  loading = false 
+const DeleteConfirmationModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  templateName,
+  loading = false
 }) => {
+  // Focus management
+  React.useEffect(() => {
+    if (isOpen) {
+      const previouslyFocused = document.activeElement;
+
+      setTimeout(() => {
+        const modal = document.querySelector('[role="alertdialog"]');
+        if (modal) modal.focus();
+      }, 100);
+
+      return () => {
+        if (previouslyFocused) previouslyFocused.focus();
+      };
+    }
+  }, [isOpen]);
+
+  // Keyboard support (Escape key)
+  React.useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isOpen && !loading) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, onClose, loading]);
+
   if (!isOpen) return null;
 
   const handleBackdropClick = (e) => {
@@ -19,7 +49,12 @@ const DeleteConfirmationModal = ({
   };
 
   const modalContent = (
-    <div 
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="delete-modal-title"
+      aria-describedby="delete-modal-description"
+      tabIndex={-1}
       style={{
         position: 'fixed',
         top: 0,
@@ -36,7 +71,7 @@ const DeleteConfirmationModal = ({
       }}
       onClick={handleBackdropClick}
     >
-      <div 
+      <div
         style={{
           backgroundColor: 'white',
           borderRadius: '12px',
@@ -70,16 +105,21 @@ const DeleteConfirmationModal = ({
             <AlertCircle size={24} style={{ color: '#ef4444' }} />
           </div>
           <div style={{ flex: 1 }}>
-            <h3 style={{ 
-              margin: 0, 
-              fontSize: '1.25rem', 
-              fontWeight: '600', 
-              color: '#111827',
-              lineHeight: '1.4'
-            }}>
+            <h3
+              id="delete-modal-title"
+              style={{
+                margin: 0,
+                fontSize: '1.25rem',
+                fontWeight: '600',
+                color: '#111827',
+                lineHeight: '1.4'
+              }}
+            >
               Permanently Delete Template
             </h3>
-            <p style={{ 
+            <p
+              id="delete-modal-description"
+              style={{ 
               margin: '0.5rem 0 0 0', 
               fontSize: '0.875rem', 
               color: '#ef4444',
@@ -129,6 +169,7 @@ const DeleteConfirmationModal = ({
           <button
             onClick={onClose}
             disabled={loading}
+            aria-label="Cancel deletion"
             style={{
               padding: '0.625rem 1.25rem',
               border: '1px solid #d1d5db',
@@ -160,6 +201,7 @@ const DeleteConfirmationModal = ({
           <button
             onClick={onConfirm}
             disabled={loading}
+            aria-label={`Permanently delete ${templateName}`}
             style={{
               padding: '0.625rem 1.25rem',
               border: 'none',

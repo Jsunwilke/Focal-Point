@@ -9,6 +9,7 @@ import { useTask } from '../../contexts/TaskContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWorkflow } from '../../contexts/WorkflowContext';
 import { Timestamp } from 'firebase/firestore';
+import { secureLogger } from '../../services/secureLogger';
 import './TaskDetailModal.css';
 
 const TaskDetailModal = ({ isOpen, onClose, taskId }) => {
@@ -134,7 +135,7 @@ const TaskDetailModal = ({ isOpen, onClose, taskId }) => {
       await updateSubtaskStatus(task.id, subtaskId, !subtask.completed);
       // Task will update via real-time listener
     } catch (error) {
-      console.error('Error toggling subtask:', error);
+      secureLogger.error('Error toggling subtask', { error: error.message, taskId, subtaskIndex });
     }
   };
 
@@ -177,7 +178,7 @@ const TaskDetailModal = ({ isOpen, onClose, taskId }) => {
       await updateTask(task.id, updates);
       setIsEditing(false);
     } catch (error) {
-      console.error('Error saving task:', error);
+      secureLogger.error('Error saving task', { error: error.message, taskId });
     } finally {
       setLoading(false);
     }
@@ -190,7 +191,7 @@ const TaskDetailModal = ({ isOpen, onClose, taskId }) => {
       await markTaskComplete(task.id);
       onClose();
     } catch (error) {
-      console.error('Error marking task complete:', error);
+      secureLogger.error('Error marking task complete', { error: error.message, taskId });
     } finally {
       setLoading(false);
     }
@@ -198,14 +199,25 @@ const TaskDetailModal = ({ isOpen, onClose, taskId }) => {
 
   // Handle task deletion
   const handleDelete = async () => {
-    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    // Check if task is linked to a workflow
+    const isWorkflowTask = task.syncWithWorkflow && task.workflowId && task.workflowStepId;
+
+    let confirmMessage = 'Are you sure you want to delete this task?';
+    if (isWorkflowTask) {
+      confirmMessage = 'WARNING: This task is linked to a workflow step.\n\n' +
+        'Deleting this task will break the link between the task and the workflow step. ' +
+        'The workflow step will not be automatically completed when this task is deleted.\n\n' +
+        'Are you sure you want to delete this task?';
+    }
+
+    if (!window.confirm(confirmMessage)) return;
 
     setLoading(true);
     try {
       await deleteTask(task.id);
       onClose();
     } catch (error) {
-      console.error('Error deleting task:', error);
+      secureLogger.error('Error deleting task', { error: error.message, taskId });
     } finally {
       setLoading(false);
     }
@@ -226,7 +238,7 @@ const TaskDetailModal = ({ isOpen, onClose, taskId }) => {
       setNewComment('');
       // Comments will update via real-time listener
     } catch (error) {
-      console.error('Error adding comment:', error);
+      secureLogger.error('Error adding comment', { error: error.message, taskId });
     } finally {
       setLoading(false);
     }

@@ -1,14 +1,15 @@
 // src/components/workflow/overview/views/WorkflowTableView.js
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  Download, 
-  CheckCircle, 
-  Clock, 
-  AlertCircle, 
+import {
+  Download,
+  CheckCircle,
+  Clock,
+  AlertCircle,
   Circle,
   ChevronRight,
   ChevronDown,
-  Trash2
+  Trash2,
+  Inbox
 } from 'lucide-react';
 import { updateWorkflowStep } from '../../../../firebase/firestore';
 import { useToast } from '../../../../contexts/ToastContext';
@@ -608,9 +609,46 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
           </button>
         </div>
       </div>
-      
-      <div className="table-container">
-        {selectedWorkflowType === 'All Types' ? (
+
+      {workflows.length === 0 ? (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '400px',
+          textAlign: 'center',
+          padding: '3rem',
+          backgroundColor: '#f9fafb',
+          borderRadius: '0.5rem',
+          border: '2px dashed #d1d5db',
+          marginTop: '2rem'
+        }}>
+          <Inbox size={64} style={{ color: '#d1d5db', marginBottom: '1.5rem' }} />
+          <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.5rem', fontWeight: '600', color: '#1f2937' }}>
+            No Workflows to Display
+          </h3>
+          <p style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: '#6b7280', maxWidth: '500px' }}>
+            Workflows will appear here once sessions are created and linked to workflow templates.
+            Start by creating a session and selecting a workflow template.
+          </p>
+          <div style={{
+            backgroundColor: '#eff6ff',
+            padding: '1rem 1.5rem',
+            borderRadius: '0.5rem',
+            border: '1px solid #bfdbfe',
+            maxWidth: '500px',
+            marginTop: '1rem'
+          }}>
+            <strong style={{ color: '#1e40af' }}>Tip:</strong>
+            <span style={{ color: '#1e40af', marginLeft: '0.5rem' }}>
+              The Table view provides a detailed overview of all workflow steps, making it easy to track progress across multiple sessions.
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="table-container">
+          {selectedWorkflowType === 'All Types' ? (
           // Grouped view for "All Types"
           sortedGroups.map(groupKey => {
             const groupWorkflows = groupedWorkflows[groupKey];
@@ -1147,7 +1185,8 @@ const WorkflowTableView = ({ workflows, sessionData, workflowTemplates, calculat
             </div>
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       {/* Delete Workflow Modal */}
       <DeleteWorkflowModal

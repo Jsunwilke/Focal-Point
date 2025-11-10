@@ -1,4 +1,5 @@
 import { Timestamp } from 'firebase/firestore';
+import { readCounter } from './readCounter';
 
 class WorkflowCacheService {
   constructor() {
@@ -44,25 +45,36 @@ class WorkflowCacheService {
   }
 
   // Get cached user workflows
-  getCachedWorkflows(userId, organizationId, status) {
+  getCachedWorkflows(userId, organizationId, status, component = 'WorkflowCache') {
     try {
       const key = this.getWorkflowsKey(userId, organizationId, status);
       const cached = localStorage.getItem(key);
-      if (!cached) return null;
+
+      if (!cached) {
+        readCounter.recordCacheMiss('workflows', component);
+        return null;
+      }
 
       const cacheData = JSON.parse(cached);
-      
+
       // Check cache version and age
-      if (cacheData.version !== this.CACHE_VERSION || 
+      if (cacheData.version !== this.CACHE_VERSION ||
           Date.now() - cacheData.timestamp > this.WORKFLOW_CACHE_AGE) {
         localStorage.removeItem(key);
+        readCounter.recordCacheMiss('workflows', component);
         return null;
       }
 
       // Deserialize workflows
-      return cacheData.data.map(wf => this.deserializeWorkflow(wf));
+      const workflows = cacheData.data.map(wf => this.deserializeWorkflow(wf));
+
+      // Record cache hit with estimated saved reads
+      readCounter.recordCacheHit('workflows', component, workflows.length || 1);
+
+      return workflows;
     } catch (error) {
       console.warn('Failed to retrieve cached workflows:', error);
+      readCounter.recordCacheMiss('workflows', component);
       return null;
     }
   }
@@ -83,25 +95,36 @@ class WorkflowCacheService {
   }
 
   // Get cached organization workflows
-  getCachedOrgWorkflows(organizationId) {
+  getCachedOrgWorkflows(organizationId, component = 'WorkflowCache') {
     try {
       const key = this.getOrgWorkflowsKey(organizationId);
       const cached = localStorage.getItem(key);
-      if (!cached) return null;
+
+      if (!cached) {
+        readCounter.recordCacheMiss('workflows', component);
+        return null;
+      }
 
       const cacheData = JSON.parse(cached);
-      
+
       // Check cache version and age
-      if (cacheData.version !== this.CACHE_VERSION || 
+      if (cacheData.version !== this.CACHE_VERSION ||
           Date.now() - cacheData.timestamp > this.WORKFLOW_CACHE_AGE) {
         localStorage.removeItem(key);
+        readCounter.recordCacheMiss('workflows', component);
         return null;
       }
 
       // Deserialize workflows
-      return cacheData.data.map(wf => this.deserializeWorkflow(wf));
+      const workflows = cacheData.data.map(wf => this.deserializeWorkflow(wf));
+
+      // Record cache hit with estimated saved reads
+      readCounter.recordCacheHit('workflows', component, workflows.length || 1);
+
+      return workflows;
     } catch (error) {
       console.warn('Failed to retrieve cached org workflows:', error);
+      readCounter.recordCacheMiss('workflows', component);
       return null;
     }
   }
@@ -122,24 +145,33 @@ class WorkflowCacheService {
   }
 
   // Get cached workflow templates
-  getCachedTemplates(organizationId) {
+  getCachedTemplates(organizationId, component = 'WorkflowCache') {
     try {
       const key = this.getTemplatesKey(organizationId);
       const cached = localStorage.getItem(key);
-      if (!cached) return null;
 
-      const cacheData = JSON.parse(cached);
-      
-      // Check cache version and age (longer for templates)
-      if (cacheData.version !== this.CACHE_VERSION || 
-          Date.now() - cacheData.timestamp > this.TEMPLATE_CACHE_AGE) {
-        localStorage.removeItem(key);
+      if (!cached) {
+        readCounter.recordCacheMiss('workflowTemplates', component);
         return null;
       }
+
+      const cacheData = JSON.parse(cached);
+
+      // Check cache version and age (longer for templates)
+      if (cacheData.version !== this.CACHE_VERSION ||
+          Date.now() - cacheData.timestamp > this.TEMPLATE_CACHE_AGE) {
+        localStorage.removeItem(key);
+        readCounter.recordCacheMiss('workflowTemplates', component);
+        return null;
+      }
+
+      // Record cache hit with estimated saved reads
+      readCounter.recordCacheHit('workflowTemplates', component, cacheData.data?.length || 1);
 
       return cacheData.data;
     } catch (error) {
       console.warn('Failed to retrieve cached templates:', error);
+      readCounter.recordCacheMiss('workflowTemplates', component);
       return null;
     }
   }
@@ -160,11 +192,15 @@ class WorkflowCacheService {
   }
 
   // Get cached single template
-  getCachedTemplate(templateId) {
+  getCachedTemplate(templateId, component = 'WorkflowCache') {
     try {
       const key = this.getTemplateKey(templateId);
       const cached = localStorage.getItem(key);
-      if (!cached) return null;
+
+      if (!cached) {
+        readCounter.recordCacheMiss('workflowTemplates', component);
+        return null;
+      }
 
       const cacheData = JSON.parse(cached);
 
@@ -172,12 +208,17 @@ class WorkflowCacheService {
       if (cacheData.version !== this.CACHE_VERSION ||
           Date.now() - cacheData.timestamp > this.TEMPLATE_CACHE_AGE) {
         localStorage.removeItem(key);
+        readCounter.recordCacheMiss('workflowTemplates', component);
         return null;
       }
+
+      // Record cache hit (single template = 1 saved read)
+      readCounter.recordCacheHit('workflowTemplates', component, 1);
 
       return cacheData.data;
     } catch (error) {
       console.warn(`Failed to retrieve cached template ${templateId}:`, error);
+      readCounter.recordCacheMiss('workflowTemplates', component);
       return null;
     }
   }

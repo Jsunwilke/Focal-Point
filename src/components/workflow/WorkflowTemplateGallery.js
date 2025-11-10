@@ -138,7 +138,7 @@ const WorkflowTemplateGallery = ({
       // Refresh the custom templates list
       console.log('🔄 Refreshing templates list...');
       const templates = await getWorkflowTemplates(organizationID);
-      console.log('📋 Updated templates list:', templates.length, 'templates');
+      secureLogger.debug('Updated templates list', { count: templates.length });
       setCustomTemplates(templates);
       
       showToast(
@@ -673,20 +673,88 @@ const WorkflowTemplateGallery = ({
           {((activeTab === 'defaults' && defaultTemplates.length === 0) ||
             (activeTab === 'custom' && customTemplates.length === 0)) && (
             <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '4rem 2rem',
               textAlign: 'center',
-              padding: '3rem',
               color: '#6b7280'
             }}>
-              <Settings size={48} style={{ marginBottom: '1rem', opacity: 0.5 }} />
-              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem' }}>
-                {activeTab === 'defaults' ? 'No Default Templates' : 'No Organization Templates'}
+              <Settings size={64} style={{ color: '#d1d5db', marginBottom: '1.5rem' }} />
+              <h3 style={{
+                margin: '0 0 0.5rem 0',
+                fontSize: '1.25rem',
+                fontWeight: '600',
+                color: '#374151'
+              }}>
+                {activeTab === 'defaults' ? 'No Default Templates Available' : 'No Custom Templates Yet'}
               </h3>
-              <p style={{ margin: 0, fontSize: '0.875rem' }}>
-                {activeTab === 'defaults' 
-                  ? 'Default templates will appear here'
-                  : 'Create custom templates or copy from defaults to get started'
+              <p style={{
+                margin: '0 0 1.5rem 0',
+                fontSize: '0.9375rem',
+                color: '#6b7280',
+                maxWidth: '400px',
+                lineHeight: '1.5'
+              }}>
+                {activeTab === 'defaults'
+                  ? 'Default workflow templates will appear here. Check back later or contact your administrator.'
+                  : 'Get started by creating a custom workflow template or copying one from the default templates.'
                 }
               </p>
+              {activeTab === 'custom' && (
+                <div style={{
+                  display: 'flex',
+                  gap: '0.75rem',
+                  flexWrap: 'wrap',
+                  justifyContent: 'center'
+                }}>
+                  <button
+                    onClick={() => setShowBuilder(true)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.75rem 1.25rem',
+                      backgroundColor: '#3b82f6',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '0.5rem',
+                      fontSize: '0.9375rem',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#3b82f6'}
+                  >
+                    <Plus size={18} />
+                    Create Template
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('defaults')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.75rem 1.25rem',
+                      backgroundColor: '#fff',
+                      color: '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.5rem',
+                      fontSize: '0.9375rem',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}
+                  >
+                    <Eye size={18} />
+                    Browse Defaults
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

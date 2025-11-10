@@ -129,6 +129,32 @@ export const updateTask = async (taskId, updates) => {
 export const deleteTask = async (taskId, organizationID) => {
   try {
     const taskRef = doc(firestore, 'tasks', taskId);
+
+    // Get task data before deletion to check for workflow linkage
+    const taskDoc = await getDoc(taskRef);
+    readCounter.recordRead('get', 'tasks', 'deleteTask', 1);
+
+    if (!taskDoc.exists()) {
+      secureLogger.warn('Task not found for deletion', { taskId });
+      return false;
+    }
+
+    const taskData = taskDoc.data();
+
+    // Handle workflow sync before deletion
+    if (taskData.syncWithWorkflow && taskData.workflowId && taskData.workflowStepId) {
+      try {
+        const { handleTaskDeletion } = await import('../services/workflowTaskService');
+        await handleTaskDeletion({ id: taskId, ...taskData });
+      } catch (syncError) {
+        // Log but don't fail the deletion
+        secureLogger.error('Error handling workflow sync on task deletion', {
+          taskId,
+          error: syncError.message
+        });
+      }
+    }
+
     await deleteDoc(taskRef);
 
     secureLogger.debug('Task deleted successfully', { taskId });

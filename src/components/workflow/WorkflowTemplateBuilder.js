@@ -1519,6 +1519,7 @@ const WorkflowTemplateBuilder = ({
           onSave={handleUpdateStep}
           organizationID={organizationID}
           allSteps={formData.steps}
+          templateID={editTemplate?.id || null}
         />
       )}
 

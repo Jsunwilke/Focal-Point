@@ -28,6 +28,15 @@
   }
 }
 
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .video-player-container {

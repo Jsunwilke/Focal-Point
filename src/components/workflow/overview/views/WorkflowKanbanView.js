@@ -1,13 +1,14 @@
 // src/components/workflow/overview/views/WorkflowKanbanView.js
 import React, { useState } from 'react';
-import { 
-  Calendar, 
-  School, 
+import {
+  Calendar,
+  School,
   User,
   MoreVertical,
   CheckCircle,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Inbox
 } from 'lucide-react';
 import { updateWorkflowStep } from '../../../../firebase/firestore';
 import { useToast } from '../../../../contexts/ToastContext';
@@ -232,8 +233,44 @@ const WorkflowKanbanView = ({ workflows, sessionData, workflowTemplates }) => {
 
   return (
     <div className="workflow-kanban-view">
-      <div className="kanban-board">
-        {workflowGroups.map((group) => {
+      {workflows.length === 0 ? (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '400px',
+          textAlign: 'center',
+          padding: '3rem',
+          backgroundColor: '#f9fafb',
+          borderRadius: '0.5rem',
+          border: '2px dashed #d1d5db'
+        }}>
+          <Inbox size={64} style={{ color: '#d1d5db', marginBottom: '1.5rem' }} />
+          <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.5rem', fontWeight: '600', color: '#1f2937' }}>
+            No Workflows to Display
+          </h3>
+          <p style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: '#6b7280', maxWidth: '500px' }}>
+            Workflows will appear here once sessions are created and linked to workflow templates.
+            Start by creating a session and selecting a workflow template.
+          </p>
+          <div style={{
+            backgroundColor: '#eff6ff',
+            padding: '1rem 1.5rem',
+            borderRadius: '0.5rem',
+            border: '1px solid #bfdbfe',
+            maxWidth: '500px',
+            marginTop: '1rem'
+          }}>
+            <strong style={{ color: '#1e40af' }}>Tip:</strong>
+            <span style={{ color: '#1e40af', marginLeft: '0.5rem' }}>
+              The Kanban view organizes workflows by their current workflow group, making it easy to visualize progress at a glance.
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="kanban-board">
+          {workflowGroups.map((group) => {
           const groupWorkflows = getWorkflowsByGroup(group.id);
           
           return (
@@ -324,6 +361,7 @@ const WorkflowKanbanView = ({ workflows, sessionData, workflowTemplates }) => {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };

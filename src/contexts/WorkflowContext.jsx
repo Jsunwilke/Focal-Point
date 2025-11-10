@@ -22,6 +22,7 @@ import { useAuth } from './AuthContext';
 import { useDataCache } from './DataCacheContext';
 import workflowCacheService from '../services/workflowCacheService';
 import { readCounter } from '../services/readCounter';
+import { secureLogger } from '../services/secureLogger';
 
 const WorkflowContext = createContext();
 
@@ -134,7 +135,10 @@ export const WorkflowProvider = ({ children }) => {
             return { templateId: workflow.templateId, template };
           } catch (error) {
             // Log as warning for missing templates
-            console.warn(`Template ${workflow.templateId} not found or no permission:`, error.message);
+            secureLogger.warn('Template not found or no permission', {
+              templateId: workflow.templateId,
+              error: error.message
+            });
             return { templateId: workflow.templateId, template: null };
           }
         }
@@ -182,7 +186,7 @@ export const WorkflowProvider = ({ children }) => {
         } catch (error) {
           // Only log non-permission errors
           if (error.code !== 'permission-denied') {
-            console.error('Error loading session data:', error);
+            secureLogger.error('Error loading session data', { error: error.message });
           }
         }
       }
@@ -191,7 +195,7 @@ export const WorkflowProvider = ({ children }) => {
       checkForNotifications(workflows);
       
     } catch (error) {
-      console.error('Error loading user workflows:', error);
+      secureLogger.error('Error loading user workflows', { error: error.message });
       // Set empty arrays on error to prevent repeated failed requests
       setUserWorkflows([]);
     }
@@ -265,7 +269,10 @@ export const WorkflowProvider = ({ children }) => {
             return { templateId: workflow.templateId, template };
           } catch (error) {
             // Log as warning for missing templates
-            console.warn(`Template ${workflow.templateId} not found or no permission:`, error.message);
+            secureLogger.warn('Template not found or no permission', {
+              templateId: workflow.templateId,
+              error: error.message
+            });
             return { templateId: workflow.templateId, template: null };
           }
         }
@@ -284,7 +291,7 @@ export const WorkflowProvider = ({ children }) => {
       setOrganizationWorkflows(workflows);
 
     } catch (error) {
-      console.error('Error loading organization workflows:', error);
+      secureLogger.error('Error loading organization workflows', { error: error.message });
       // Set empty arrays on error to prevent repeated failed requests
       setOrganizationWorkflows([]);
     }
@@ -370,7 +377,7 @@ export const WorkflowProvider = ({ children }) => {
         updateWorkflowInState(workflowId, updatedWorkflow);
       }
     } catch (error) {
-      console.error('Error refreshing single workflow:', error);
+      secureLogger.error('Error refreshing single workflow', { error: error.message });
       // Fallback to full refresh if single update fails
       await refreshWorkflows();
     }
@@ -398,7 +405,7 @@ export const WorkflowProvider = ({ children }) => {
       // Clear workflow caches to ensure fresh data
       if (organization?.id) {
         workflowCacheService.clearWorkflowCaches(organization.id);
-        console.log('[WorkflowContext] Cleared workflow caches after deletion');
+        secureLogger.info('Cleared workflow caches after deletion');
       }
 
       // Refresh workflows from Firestore to update UI immediately
@@ -406,8 +413,8 @@ export const WorkflowProvider = ({ children }) => {
 
       showToast('Workflow Deleted', 'Workflow has been permanently deleted', 'success');
     } catch (error) {
-      console.error('Error deleting workflow:', error);
-      showToast('Error', 'Failed to delete workflow', 'error');
+      secureLogger.error('Error deleting workflow', { error: error.message });
+      showToast('Unable to Delete Workflow', 'The workflow could not be deleted. Please try again or contact support if the problem persists.', 'error');
 
       // Refresh workflows to ensure state is correct
       await refreshWorkflows();
@@ -498,9 +505,24 @@ export const WorkflowProvider = ({ children }) => {
     return stats;
   }, [userWorkflows, workflowTemplates, userProfile?.id]);
 
+  // Track previous organization ID to clear old caches
+  const prevOrgIdRef = useRef(null);
+
   // Load data on mount and when dependencies change
   useEffect(() => {
     if (userProfile?.id && organization?.id) {
+      // Clear previous organization's cache when switching organizations
+      if (prevOrgIdRef.current && prevOrgIdRef.current !== organization.id) {
+        secureLogger.info('Organization changed - clearing old caches', {
+          oldOrg: prevOrgIdRef.current,
+          newOrg: organization.id
+        });
+        workflowCacheService.clearWorkflowCaches(prevOrgIdRef.current);
+      }
+
+      // Update tracked organization ID
+      prevOrgIdRef.current = organization.id;
+
       // Initial load from cache
       loadUserWorkflows();
       loadOrganizationWorkflows();
@@ -515,13 +537,13 @@ export const WorkflowProvider = ({ children }) => {
   useEffect(() => {
     if (!organization?.id || !userProfile?.id) return;
 
-    console.log('[WorkflowContext] Broad listener DISABLED - using cache-first loading only');
-    console.log('[WorkflowContext] Real-time updates handled by tab-scoped listener in MatrixView');
+    secureLogger.info('Broad listener DISABLED - using cache-first loading only');
+    secureLogger.info('Real-time updates handled by tab-scoped listener in MatrixView');
 
     // Load cached workflows for initial display
     const cachedWorkflows = workflowCacheService.getCachedWorkflows(userProfile.id, organization.id, 'active');
     if (cachedWorkflows && cachedWorkflows.length > 0) {
-      console.log(`[WorkflowContext] Loaded ${cachedWorkflows.length} workflows from cache`);
+      secureLogger.info('Loaded workflows from cache', { count: cachedWorkflows.length });
       setUserWorkflows(cachedWorkflows);
     }
 
@@ -653,7 +675,7 @@ export const WorkflowProvider = ({ children }) => {
               // Filter out null templates
               return results.filter(result => result.template !== null);
             } catch (error) {
-              console.warn('Failed to load template group:', error.message);
+              secureLogger.warn('Failed to load template group', { error: error.message });
               return [];
             }
           });
@@ -686,7 +708,7 @@ export const WorkflowProvider = ({ children }) => {
         // instead of requiring the full workflows array
       },
       (error) => {
-        console.error('Error in workflows listener:', error);
+        secureLogger.error('Error in workflows listener', { error: error.message });
         // Fall back to manual load if listener fails
         loadUserWorkflows();
       }
@@ -717,12 +739,12 @@ export const WorkflowProvider = ({ children }) => {
         const stats = await checkTimelineTasks();
 
         if (stats.tasksCreated > 0) {
-          console.log(`[WorkflowContext] Timeline check created ${stats.tasksCreated} tasks`);
+          secureLogger.info('Timeline check completed', { tasksCreated: stats.tasksCreated });
           // Refresh workflows to show newly created tasks
           await refreshWorkflows();
         }
       } catch (error) {
-        console.error('[WorkflowContext] Error in timeline check:', error);
+        secureLogger.error('Error in timeline check', { error: error.message });
       }
     };
 
@@ -732,14 +754,14 @@ export const WorkflowProvider = ({ children }) => {
     const twelveHours = 12 * 60 * 60 * 1000;
 
     if (!lastCheckTime || (now - parseInt(lastCheckTime)) > twelveHours) {
-      console.log('[WorkflowContext] Running initial timeline check');
+      secureLogger.info('Running initial timeline check');
       runTimelineCheck();
       localStorage.setItem('workflow_timeline_last_check', now.toString());
     }
 
     // Set up daily interval (24 hours)
     const dailyInterval = setInterval(() => {
-      console.log('[WorkflowContext] Running scheduled timeline check');
+      secureLogger.info('Running scheduled timeline check');
       runTimelineCheck();
       localStorage.setItem('workflow_timeline_last_check', Date.now().toString());
     }, 24 * 60 * 60 * 1000); // 24 hours
@@ -753,13 +775,13 @@ export const WorkflowProvider = ({ children }) => {
   // Clear template from cache (for debugging)
   const clearTemplateCache = useCallback((templateId) => {
     workflowCacheService.clearTemplate(templateId);
-    console.log(`✅ Cleared cache for template: ${templateId}`);
+    secureLogger.info('Cleared cache for template', { templateId });
   }, []);
 
   // Clear all workflow caches (for debugging)
   const clearAllCaches = useCallback(() => {
     workflowCacheService.clearAllWorkflowCaches();
-    console.log('✅ Cleared all workflow caches');
+    secureLogger.info('Cleared all workflow caches');
   }, []);
 
   // Force reload templates by clearing in-memory state
@@ -767,7 +789,7 @@ export const WorkflowProvider = ({ children }) => {
     // Clear in-memory template state
     setWorkflowTemplates({});
     workflowTemplatesRef.current = {};
-    console.log('✅ Cleared in-memory template state, will reload on next workflow load');
+    secureLogger.info('Cleared in-memory template state, will reload on next workflow load');
   }, []);
 
   // Task modal management functions
@@ -798,7 +820,11 @@ export const WorkflowProvider = ({ children }) => {
     const step = template?.steps.find(s => s.id === stepId);
 
     if (!workflow || !template || !step) {
-      console.error('Invalid workflow, template, or step');
+      secureLogger.error('Invalid workflow, template, or step', {
+        workflowId,
+        templateId,
+        stepId
+      });
       return;
     }
 
