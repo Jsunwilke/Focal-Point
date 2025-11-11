@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, enableNetwork, disableNetwork } from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence, enableNetwork, disableNetwork } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
 
@@ -40,14 +40,18 @@ const auth = getAuth(app);
 // Use only the default database for all collections
 const firestore = getFirestore(app); // This connects to the (default) database
 
-// Enable offline persistence for better caching
-try {
-  // Enable network by default (this also enables offline persistence)
-  enableNetwork(firestore);
-} catch (error) {
-  // This is expected if offline persistence is already enabled
-  console.log('Firestore offline persistence already enabled or not supported');
-}
+// Enable offline persistence for better caching and reliability
+enableIndexedDbPersistence(firestore).catch((err) => {
+  if (err.code === 'failed-precondition') {
+    // Multiple tabs open, persistence can only be enabled in one tab at a time
+    console.warn('Firestore persistence failed: Multiple tabs open');
+  } else if (err.code === 'unimplemented') {
+    // The current browser doesn't support offline persistence
+    console.warn('Firestore persistence not supported in this browser');
+  } else {
+    console.error('Error enabling Firestore persistence:', err);
+  }
+});
 
 // Initialize Firebase Storage
 const storage = getStorage(app);

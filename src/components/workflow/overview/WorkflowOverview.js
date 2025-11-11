@@ -4,11 +4,11 @@ import { Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useWorkflow } from '../../../contexts/WorkflowContext';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useTask } from '../../../contexts/TaskContext';
 import WorkflowFilters from './WorkflowFilters';
 import WorkflowStats from './WorkflowStats';
 import WorkflowMatrixView from './views/WorkflowMatrixView';
 import CreateTaskModal from '../../tasks/CreateTaskModal';
-import TaskDetailModal from '../../tasks/TaskDetailModal';
 import '../WorkflowOverview.css';
 
 const WorkflowOverview = () => {
@@ -35,13 +35,11 @@ const WorkflowOverview = () => {
     // Task modal state
     isCreateTaskModalOpen,
     createTaskPrefill,
-    selectedTaskId,
-    isTaskDetailModalOpen,
-    closeCreateTaskModal,
-    closeTaskDetailModal
+    closeCreateTaskModal
   } = useWorkflow();
 
   const { userProfile, organization } = useAuth();
+  const { openPanelWithTask } = useTask();
 
   // Get workflows based on user role
   const workflows = userProfile?.role === 'admin' 
@@ -318,12 +316,6 @@ const WorkflowOverview = () => {
         isOpen={isCreateTaskModalOpen}
         onClose={closeCreateTaskModal}
         prefilledData={createTaskPrefill}
-      />
-
-      <TaskDetailModal
-        isOpen={isTaskDetailModalOpen}
-        onClose={closeTaskDetailModal}
-        taskId={selectedTaskId}
       />
     </div>
   );

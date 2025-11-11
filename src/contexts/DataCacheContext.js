@@ -695,16 +695,12 @@ export const DataCacheProvider = ({ children }) => {
         error: null
       });
       readCounter.recordCacheHit('users', 'DataCacheContext', cachedUsers.length);
-      
-      // Delay real-time sync slightly to avoid immediate reads
-      // Pass the cached users so the listener can detect changes
-      syncTimeout = setTimeout(() => {
-        if (!listenersActiveRef.current.users) {
-          unsubscribe = setupUsersListener(organization.id, cachedUsers);
-          listenersActiveRef.current.users = true;
-        } else {
-        }
-      }, 5000); // 5 second delay to match sessions
+
+      // Start real-time listener immediately for critical UI data (task assignments, etc.)
+      if (!listenersActiveRef.current.users) {
+        unsubscribe = setupUsersListener(organization.id, cachedUsers);
+        listenersActiveRef.current.users = true;
+      }
     } else {
       // No cache - need immediate sync
       setUsersCache(prev => ({ ...prev, loading: true, error: null }));
@@ -714,10 +710,9 @@ export const DataCacheProvider = ({ children }) => {
     }
 
     // Store cleanup function
-    setListeners(prev => ({ 
-      ...prev, 
+    setListeners(prev => ({
+      ...prev,
       users: () => {
-        if (syncTimeout) clearTimeout(syncTimeout);
         if (unsubscribe) unsubscribe();
         listenersActiveRef.current.users = false;
       }
@@ -725,8 +720,7 @@ export const DataCacheProvider = ({ children }) => {
 
     // Don't cleanup on navigation, only on organization change or unmount
     return () => {
-      // Only cleanup if organization is changing or component is unmounting
-      if (syncTimeout) clearTimeout(syncTimeout);
+      // Cleanup happens in listeners
     };
   }, [organization?.id, processUsersData, setupUsersListener]); // Depend on organization.id directly
 

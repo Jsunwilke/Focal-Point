@@ -242,4 +242,4 @@ const DeleteConfirmationModal = ({
   return ReactDOM.createPortal(modalContent, document.body);
 };
 
-export default DeleteConfirmationModal;
+export default React.memo(DeleteConfirmationModal);

@@ -17,6 +17,7 @@ const MentionTextarea = ({
   const [mentionSearch, setMentionSearch] = useState('');
   const [mentionPosition, setMentionPosition] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const textareaRef = useRef(null);
   const dropdownRef = useRef(null);
 
@@ -144,6 +145,34 @@ const MentionTextarea = ({
     }
   }, [selectedIndex, showMentionDropdown]);
 
+  // Calculate dropdown position when it shows
+  useEffect(() => {
+    if (showMentionDropdown && textareaRef.current) {
+      const rect = textareaRef.current.getBoundingClientRect();
+      const dropdownHeight = 300; // max-height from CSS
+      const viewportHeight = window.innerHeight;
+
+      // Determine if dropdown should appear above or below textarea
+      const spaceAbove = rect.top;
+      const spaceBelow = viewportHeight - rect.bottom;
+
+      let top, left;
+
+      if (spaceAbove > dropdownHeight || spaceAbove > spaceBelow) {
+        // Show above textarea
+        top = rect.top - dropdownHeight - 8; // 8px margin
+      } else {
+        // Show below textarea
+        top = rect.bottom + 8;
+      }
+
+      // Ensure dropdown stays within viewport horizontally
+      left = Math.max(8, Math.min(rect.left, window.innerWidth - 328)); // 320px width + 8px margin
+
+      setDropdownPosition({ top, left });
+    }
+  }, [showMentionDropdown]);
+
   return (
     <div className={`mention-textarea ${className}`}>
       <textarea
@@ -158,7 +187,14 @@ const MentionTextarea = ({
       />
 
       {showMentionDropdown && filteredUsers.length > 0 && (
-        <div ref={dropdownRef} className="mention-dropdown">
+        <div
+          ref={dropdownRef}
+          className="mention-dropdown"
+          style={{
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`
+          }}
+        >
           <div className="mention-dropdown__header">
             <AtSign size={14} />
             <span>Mention someone</span>

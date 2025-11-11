@@ -314,4 +314,4 @@ const DeleteWorkflowModal = ({
   return ReactDOM.createPortal(modalContent, document.body);
 };
 
-export default DeleteWorkflowModal;
+export default React.memo(DeleteWorkflowModal);

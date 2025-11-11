@@ -429,4 +429,4 @@ const VideoPlayerModal = ({ isOpen, onClose, videoUrl, title }) => {
   return ReactDOM.createPortal(modalContent, document.body);
 };
 
-export default VideoPlayerModal;
+export default React.memo(VideoPlayerModal);

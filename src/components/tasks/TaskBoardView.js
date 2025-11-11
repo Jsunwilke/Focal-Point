@@ -7,7 +7,7 @@ import TaskBoardColumn from './TaskBoardColumn';
 import './TaskBoardView.css';
 
 const TaskBoardView = ({ tasks, onTaskClick, filterSettings }) => {
-  const { updateTask } = useTask();
+  const { updateTask, batchUpdateTaskOrders } = useTask();
   const { users } = useDataCache();
   const isDraggingRef = useRef(false);
 
@@ -17,6 +17,36 @@ const TaskBoardView = ({ tasks, onTaskClick, filterSettings }) => {
     on_hold: [],
     completed: []
   });
+
+  // Helper function to check if a task was completed today
+  const isCompletedToday = (task) => {
+    if (!task.completedAt) return false;
+
+    try {
+      const completedDate = task.completedAt.toDate();
+      const today = new Date();
+
+      return (
+        completedDate.getDate() === today.getDate() &&
+        completedDate.getMonth() === today.getMonth() &&
+        completedDate.getFullYear() === today.getFullYear()
+      );
+    } catch (error) {
+      // If completedAt is not a Firestore Timestamp, try parsing as Date
+      try {
+        const completedDate = new Date(task.completedAt);
+        const today = new Date();
+
+        return (
+          completedDate.getDate() === today.getDate() &&
+          completedDate.getMonth() === today.getMonth() &&
+          completedDate.getFullYear() === today.getFullYear()
+        );
+      } catch {
+        return false;
+      }
+    }
+  };
 
   // Organize tasks by status and sort by order field
   useEffect(() => {
@@ -35,7 +65,14 @@ const TaskBoardView = ({ tasks, onTaskClick, filterSettings }) => {
     tasks.forEach(task => {
       const status = task.status || 'todo';
       if (organized[status]) {
-        organized[status].push(task);
+        // For completed tasks, only show those completed today
+        if (status === 'completed') {
+          if (isCompletedToday(task)) {
+            organized[status].push(task);
+          }
+        } else {
+          organized[status].push(task);
+        }
       }
     });
 
@@ -91,22 +128,24 @@ const TaskBoardView = ({ tasks, onTaskClick, filterSettings }) => {
     };
     setTasksByStatus(newTasksByStatus);
 
-    // Update task in database with new status and order
+    // Update task in database with new status and order using batch writes
     try {
-      // Calculate new order based on position in destination column
-      const newOrder = destination.index;
+      const batchUpdates = [];
 
-      // Update the moved task's status and order
-      await updateTask(draggableId, {
+      // Add the moved task with new status and order
+      batchUpdates.push({
+        taskId: draggableId,
         status: destStatus,
-        order: newOrder
+        order: destination.index
       });
 
       // Update order for all other tasks in the destination column
-      const updatePromises = [];
       destTasks.forEach((task, index) => {
         if (task.id !== draggableId && task.order !== index) {
-          updatePromises.push(updateTask(task.id, { order: index }));
+          batchUpdates.push({
+            taskId: task.id,
+            order: index
+          });
         }
       });
 
@@ -114,13 +153,16 @@ const TaskBoardView = ({ tasks, onTaskClick, filterSettings }) => {
       if (sourceStatus !== destStatus) {
         sourceTasks.forEach((task, index) => {
           if (task.order !== index) {
-            updatePromises.push(updateTask(task.id, { order: index }));
+            batchUpdates.push({
+              taskId: task.id,
+              order: index
+            });
           }
         });
       }
 
-      // Execute all order updates
-      await Promise.all(updatePromises);
+      // Execute all updates in a single batch operation
+      await batchUpdateTaskOrders(batchUpdates);
 
       // Clear dragging flag after a delay to allow Firebase to sync
       setTimeout(() => {

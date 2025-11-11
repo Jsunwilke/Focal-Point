@@ -537,4 +537,4 @@ const WorkflowStepModal = ({
   return ReactDOM.createPortal(modalContent, document.body);
 };
 
-export default WorkflowStepModal;
+export default React.memo(WorkflowStepModal);

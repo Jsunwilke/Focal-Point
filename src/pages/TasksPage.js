@@ -13,34 +13,60 @@ import BulkEditModal from '../components/tasks/BulkEditModal';
 import TaskExportButton from '../components/tasks/TaskExportButton';
 import './TasksPage.css';
 
+// LocalStorage keys
+const TASKS_VIEW_MODE_KEY = 'tasks_view_mode';
+const TASKS_FILTER_SETTINGS_KEY = 'tasks_filter_settings';
+
+// Default filter settings
+const DEFAULT_FILTERS = {
+  status: ['todo', 'in_progress', 'on_hold', 'completed'],
+  assignee: 'me', // 'me' | 'all' | specific userId
+  priority: [],
+  type: []
+};
+
 const TasksPage = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { myTasks, teamTasks, canViewTeamTasks, loading, openPanel, updateTask, deleteTask } = useTask();
+  const { myTasks, teamTasks, canViewTeamTasks, loading, openPanelWithTask, updateTask, deleteTask } = useTask();
   const { userProfile } = useAuth();
   const { showToast } = useToast();
 
   // State
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState([]);
   const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState(() => {
     // Load view preference from localStorage
-    return localStorage.getItem('tasks_view_mode') || 'list';
+    return localStorage.getItem(TASKS_VIEW_MODE_KEY) || 'list';
   });
-  const [filters, setFilters] = useState({
-    status: ['todo', 'in_progress'],
-    assignee: 'me', // 'me' | 'all' | specific userId
-    priority: [],
-    type: []
+  const [filters, setFilters] = useState(() => {
+    // Load filter settings from localStorage or use defaults
+    try {
+      const saved = localStorage.getItem(TASKS_FILTER_SETTINGS_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      console.error('Error loading filter settings:', error);
+    }
+    return DEFAULT_FILTERS;
   });
 
   // Save view mode preference to localStorage
   useEffect(() => {
-    localStorage.setItem('tasks_view_mode', viewMode);
+    localStorage.setItem(TASKS_VIEW_MODE_KEY, viewMode);
   }, [viewMode]);
+
+  // Save filter settings to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(TASKS_FILTER_SETTINGS_KEY, JSON.stringify(filters));
+    } catch (error) {
+      console.error('Error saving filter settings:', error);
+    }
+  }, [filters]);
 
   // Check for quickAdd param from task panel
   useEffect(() => {
@@ -180,12 +206,7 @@ const TasksPage = () => {
 
   // Reset filters
   const resetFilters = () => {
-    setFilters({
-      status: ['todo', 'in_progress'],
-      assignee: 'me',
-      priority: [],
-      type: []
-    });
+    setFilters(DEFAULT_FILTERS);
     setSearchQuery('');
   };
 
@@ -252,8 +273,7 @@ const TasksPage = () => {
 
   // Handle task click
   const handleTaskClick = (taskId) => {
-    setSelectedTaskId(taskId);
-    // TODO: Open TaskDetailModal
+    openPanelWithTask(taskId);
   };
 
   // Format due date

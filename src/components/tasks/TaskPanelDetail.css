@@ -10,12 +10,34 @@
 /* Header */
 .task-panel-detail__header {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.75rem;
   padding: 1rem;
   border-bottom: 1px solid var(--border-light);
   background-color: var(--background-secondary);
   flex-shrink: 0;
+}
+
+.task-panel-detail__header-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.task-panel-detail__header-title {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.task-panel-detail__header-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding-left: 2.25rem; /* Align with title (back button width + gap) */
 }
 
 .task-panel-detail__back-btn {
@@ -69,14 +91,6 @@
 .task-panel-detail__watch-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.task-panel-detail__header-content {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
 }
 
 .task-panel-detail__title {
@@ -430,6 +444,30 @@
   color: var(--text-muted);
 }
 
+.task-panel-detail__subtask-delete {
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color var(--transition-fast);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.task-panel-detail__subtask-item:hover .task-panel-detail__subtask-delete {
+  opacity: 1;
+}
+
+.task-panel-detail__subtask-delete:hover {
+  color: var(--danger-color);
+  background-color: var(--background-muted);
+}
+
 .task-panel-detail__subtask-add {
   display: flex;
   gap: 0.375rem;
@@ -564,4 +602,139 @@
 
 .task-panel-detail__body::-webkit-scrollbar-thumb:hover {
   background-color: #9ca3af;
+}
+
+/* Assignee Dropdown */
+.assignee-select-wrapper {
+  position: relative;
+}
+
+.assignee-select-trigger {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #dedede;
+  border-radius: 8px;
+  background-color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.18s ease;
+  min-height: 44px;
+}
+
+.assignee-select-trigger:hover {
+  border-color: #8b8a8b;
+}
+
+.assignee-select-trigger--open {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.assignee-select-value {
+  font-size: max(16px, 1em);
+  color: #15142e;
+  flex: 1;
+}
+
+.assignee-select-value--placeholder {
+  color: #9ca3af;
+}
+
+.assignee-select-icon {
+  color: #6b7280;
+  transition: transform 0.2s ease;
+}
+
+.assignee-select-icon--open {
+  transform: rotate(180deg);
+}
+
+.assignee-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 100;
+  padding: 0.5rem;
+}
+
+.assignee-dropdown--up {
+  top: auto;
+  bottom: calc(100% + 0.5rem);
+}
+
+.assignee-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.assignee-option:hover {
+  background-color: #f9fafb;
+}
+
+.assignee-option--selected {
+  background-color: #eff6ff;
+}
+
+.assignee-option-checkbox {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #d1d5db;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.assignee-option--selected .assignee-option-checkbox {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.assignee-option-checkbox svg {
+  width: 12px;
+  height: 12px;
+  color: white;
+}
+
+.assignee-option-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: white;
+  background-color: #6b7280;
+  flex-shrink: 0;
+}
+
+.assignee-option-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.assignee-option-name {
+  font-size: 0.9375rem;
+  color: #15142e;
+  font-weight: 500;
 }

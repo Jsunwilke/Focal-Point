@@ -2081,6 +2081,7 @@ export const clockIn = async (userId, organizationID, sessionId = null, notes = 
 
     if (taskId) {
       timeEntryData.taskId = taskId;
+      timeEntryData.taskStartTime = serverTimestamp(); // Track when they started on this specific task
     }
 
     if (notes) {
@@ -2088,8 +2089,6 @@ export const clockIn = async (userId, organizationID, sessionId = null, notes = 
     }
 
     const docRef = await addDoc(collection(firestore, "timeEntries"), timeEntryData);
-    readCounter.recordWrite('timeEntries', 'clockIn');
-
     return docRef.id;
   } catch (error) {
     throw error;
@@ -2180,7 +2179,7 @@ export const getCurrentTimeEntry = async (userId, organizationID) => {
     );
 
     const querySnapshot = await getDocs(q);
-    
+
     if (querySnapshot.empty) {
       return null;
     }
@@ -2189,6 +2188,37 @@ export const getCurrentTimeEntry = async (userId, organizationID) => {
     const doc = querySnapshot.docs[0];
     return { id: doc.id, ...doc.data() };
   } catch (error) {
+    throw error;
+  }
+};
+
+// Clock out time entry for a specific task (if active)
+export const clockOutTaskTimeEntry = async (userId, organizationID, taskId) => {
+  try {
+    // Get current active entry
+    const currentEntry = await getCurrentTimeEntry(userId, organizationID);
+
+    // No active entry - nothing to clock out
+    if (!currentEntry) {
+      return null;
+    }
+
+    // Active entry is for a different task - don't clock out
+    if (currentEntry.taskId !== taskId) {
+      return null;
+    }
+
+    // Clock out this specific entry
+    const updateData = {
+      clockOutTime: serverTimestamp(),
+      status: "clocked-out",
+      updatedAt: serverTimestamp(),
+    };
+
+    await updateDoc(doc(firestore, "timeEntries", currentEntry.id), updateData);
+    return currentEntry.id;
+  } catch (error) {
+    console.error('Error clocking out task time entry:', error);
     throw error;
   }
 };
@@ -2307,15 +2337,53 @@ export const getTaskTimeEntries = async (taskId, organizationID) => {
   }
 };
 
+// Subscribe to real-time updates for task time entries
+export const subscribeToTaskTimeEntries = (taskId, organizationID, callback, onError = null) => {
+  try {
+    const q = query(
+      collection(firestore, "timeEntries"),
+      where("taskId", "==", taskId),
+      where("organizationID", "==", organizationID),
+      orderBy("clockInTime", "desc")
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        const entries = [];
+        querySnapshot.forEach((doc) => {
+          entries.push({
+            id: doc.id,
+            ...doc.data(),
+          });
+        });
+
+        readCounter.recordRead('snapshot', 'timeEntries', 'subscribeToTaskTimeEntries', entries.length);
+        callback(entries);
+      },
+      (error) => {
+        console.error('Error in time entries listener:', error);
+        if (onError) onError(error);
+      }
+    );
+
+    return unsubscribe;
+  } catch (error) {
+    console.error('Error setting up time entries listener:', error);
+    if (onError) onError(error);
+    return () => {}; // Return no-op function
+  }
+};
+
 // Update an existing time entry to add/change taskId
 export const updateTimeEntryTask = async (timeEntryId, taskId) => {
   try {
     const timeEntryRef = doc(firestore, "timeEntries", timeEntryId);
     await updateDoc(timeEntryRef, {
       taskId: taskId,
+      taskStartTime: serverTimestamp(), // Track when they started on this specific task
       updatedAt: serverTimestamp()
     });
-    readCounter.recordWrite('timeEntries', 'updateTimeEntryTask');
   } catch (error) {
     throw error;
   }

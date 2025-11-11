@@ -364,7 +364,10 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
       };
 
       if (formData.dueDate) {
-        taskData.dueDate = Timestamp.fromDate(new Date(formData.dueDate));
+        // Parse as local date to avoid timezone offset issues
+        const [year, month, day] = formData.dueDate.split('-');
+        const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
+        taskData.dueDate = Timestamp.fromDate(localDate);
       }
 
       if (formData.estimatedHours) {

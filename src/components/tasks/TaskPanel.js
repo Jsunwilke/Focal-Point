@@ -26,13 +26,15 @@ const TaskPanel = () => {
     updateTask,
     myTasks,
     teamTasks,
-    canViewTeamTasks
+    canViewTeamTasks,
+    selectedTaskId,
+    setSelectedTaskId,
+    clearSelectedTask
   } = useTask();
 
   const { userProfile } = useAuth();
   const { teamMembers } = useDataCache();
   const navigate = useNavigate();
-  const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState('me'); // 'me' | 'all' | specific userId
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -192,7 +194,7 @@ const TaskPanel = () => {
   };
 
   const handleBackToList = () => {
-    setSelectedTaskId(null);
+    clearSelectedTask();
   };
 
   const handleToggleComplete = async (taskId) => {

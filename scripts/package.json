@@ -1,0 +1,27 @@
+{
+  "name": "focal-point-scripts",
+  "version": "1.0.0",
+  "description": "Administrative scripts for Focal Point application",
+  "main": "deleteWorkflowsBatch.js",
+  "scripts": {
+    "delete-workflows": "node deleteWorkflowsBatch.js",
+    "delete-workflows:dry": "node deleteWorkflowsBatch.js --dry-run",
+    "delete-workflows:execute": "node deleteWorkflowsBatch.js --execute"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  },
+  "devDependencies": {},
+  "keywords": [
+    "firebase",
+    "admin",
+    "scripts",
+    "workflows",
+    "batch-deletion"
+  ],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

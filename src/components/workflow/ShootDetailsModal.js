@@ -18,6 +18,71 @@ function formatDateToMMDDYYYY(dateString) {
   return dateString;
 }
 
+// Extracted style constants to prevent object recreation on every render
+const OVERLAY_STYLE = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 10001,
+  padding: '20px'
+};
+
+const MODAL_CONTAINER_STYLE = {
+  position: 'relative',
+  backgroundColor: 'white',
+  borderRadius: '8px',
+  maxWidth: '900px',
+  width: '100%',
+  maxHeight: '90vh',
+  overflow: 'auto',
+  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+  margin: 0,
+  transform: 'none'
+};
+
+const PHOTOGRAPHER_CONTAINER_STYLE = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '0.5rem'
+};
+
+const NO_PHOTOGRAPHERS_STYLE = {
+  color: '#6b7280',
+  fontSize: '14px'
+};
+
+const PHOTOGRAPHER_BADGE_BASE_STYLE = {
+  padding: '0.5rem 0.75rem',
+  borderRadius: '0.5rem',
+  fontSize: '0.875rem'
+};
+
+const NOTES_CONTAINER_BASE_STYLE = {
+  borderRadius: '0.5rem',
+  padding: '1rem',
+  fontSize: '0.875rem',
+  color: '#495057',
+  whiteSpace: 'pre-wrap'
+};
+
+const SESSION_NOTES_STYLE = {
+  ...NOTES_CONTAINER_BASE_STYLE,
+  backgroundColor: '#f8f9fa',
+  border: '1px solid #dee2e6'
+};
+
+const PHOTOGRAPHER_NOTES_STYLE = {
+  ...NOTES_CONTAINER_BASE_STYLE,
+  backgroundColor: '#fff8e1',
+  border: '1px solid #ffe082'
+};
+
 const ShootDetailsModal = ({
   workflow,
   session,
@@ -205,35 +270,12 @@ const ShootDetailsModal = ({
       aria-modal="true"
       aria-labelledby="shoot-details-title"
       tabIndex={-1}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 10001,
-        padding: '20px'
-      }}
+      style={OVERLAY_STYLE}
     >
       <div
         className="shoot-details-modal"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          position: 'relative',
-          backgroundColor: 'white',
-          borderRadius: '8px',
-          maxWidth: '900px',
-          width: '100%',
-          maxHeight: '90vh',
-          overflow: 'auto',
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-          margin: 0,
-          transform: 'none'
-        }}
+        style={MODAL_CONTAINER_STYLE}
       >
         {/* Header */}
         <div className="shoot-details-header">
@@ -330,7 +372,7 @@ const ShootDetailsModal = ({
           {/* Photographer Assignments */}
           <section className="shoot-details-section">
             <h3>Photographer Assignments</h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div style={PHOTOGRAPHER_CONTAINER_STYLE}>
               {(() => {
                 // Get photographers from fullSessionData
                 let photographers = [];
@@ -344,7 +386,7 @@ const ShootDetailsModal = ({
                 }
 
                 if (photographers.length === 0) {
-                  return <p style={{ color: '#6b7280', fontSize: '14px' }}>No photographers assigned</p>;
+                  return <p style={NO_PHOTOGRAPHERS_STYLE}>No photographers assigned</p>;
                 }
 
                 return photographers.map((photographer, index) => {
@@ -360,13 +402,11 @@ const ShootDetailsModal = ({
                     <span
                       key={index}
                       style={{
+                        ...PHOTOGRAPHER_BADGE_BASE_STYLE,
                         backgroundColor: isCurrentUser ? '#e3f2fd' : '#f1f3f4',
                         border: isCurrentUser ? '2px solid #007bff' : '1px solid #dee2e6',
                         color: isCurrentUser ? '#007bff' : '#495057',
-                        padding: '0.5rem 0.75rem',
-                        borderRadius: '0.5rem',
-                        fontSize: '0.875rem',
-                        fontWeight: isCurrentUser ? '600' : '500',
+                        fontWeight: isCurrentUser ? '600' : '500'
                       }}
                     >
                       {displayName}
@@ -382,15 +422,7 @@ const ShootDetailsModal = ({
           {fullSessionData?.notes && (
             <section className="shoot-details-section">
               <h3>Session Notes (Shared)</h3>
-              <div style={{
-                backgroundColor: '#f8f9fa',
-                border: '1px solid #dee2e6',
-                borderRadius: '0.5rem',
-                padding: '1rem',
-                fontSize: '0.875rem',
-                color: '#495057',
-                whiteSpace: 'pre-wrap'
-              }}>
+              <div style={SESSION_NOTES_STYLE}>
                 {fullSessionData.notes}
               </div>
             </section>
@@ -400,15 +432,7 @@ const ShootDetailsModal = ({
           {fullSessionData?.photographerNotes && (
             <section className="shoot-details-section">
               <h3>Photographer Notes</h3>
-              <div style={{
-                backgroundColor: '#fff8e1',
-                border: '1px solid #ffe082',
-                borderRadius: '0.5rem',
-                padding: '1rem',
-                fontSize: '0.875rem',
-                color: '#495057',
-                whiteSpace: 'pre-wrap'
-              }}>
+              <div style={PHOTOGRAPHER_NOTES_STYLE}>
                 {fullSessionData.photographerNotes}
               </div>
             </section>
@@ -478,4 +502,4 @@ const ShootDetailsModal = ({
   return ReactDOM.createPortal(modalContent, document.body);
 };
 
-export default ShootDetailsModal;
+export default React.memo(ShootDetailsModal);

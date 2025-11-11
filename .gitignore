@@ -79,3 +79,7 @@ firestore-debug.log
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Service account keys (sensitive credentials)
+scripts/serviceAccountKey.json
+**/serviceAccountKey*.json

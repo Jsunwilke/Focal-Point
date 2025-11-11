@@ -209,4 +209,4 @@ const TaskButton = ({
   );
 };
 
-export default TaskButton;
+export default React.memo(TaskButton);

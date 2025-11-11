@@ -18,6 +18,7 @@ import {
   writeBatch,
   arrayUnion,
   arrayRemove,
+  increment,
   firestore
 } from "../services/firestoreWrapper";
 import secureLogger from '../utils/secureLogger';
@@ -60,9 +61,10 @@ export const createTask = async (taskData) => {
       commentCount: 0,
       timeEntryIds: [],
       order: maxOrder + 1, // Add order field
-      // Workflow linkage fields
-      workflowId: taskData.workflowId || null,
-      workflowStepId: taskData.workflowStepId || null,
+      // Workflow linkage fields - only include if they have values (Firestore rules require string or absent)
+      ...(taskData.workflowId && { workflowId: taskData.workflowId }),
+      ...(taskData.workflowStepId && { workflowStepId: taskData.workflowStepId }),
+      ...(taskData.sessionId && { sessionId: taskData.sessionId }),
       autoCreated: taskData.autoCreated || false,
       syncWithWorkflow: taskData.syncWithWorkflow || false,
       createdAt: serverTimestamp(),
@@ -97,25 +99,8 @@ export const updateTask = async (taskId, updates) => {
     readCounter.recordRead('updateDoc', 'tasks', 'updateTask', 1);
     secureLogger.debug('Task updated successfully', { taskId });
 
-    // Update single task cache
-    const taskDoc = await getDoc(taskRef);
-    if (taskDoc.exists()) {
-      const taskData = { id: taskDoc.id, ...taskDoc.data() };
-      taskCacheService.setCachedTask(taskId, taskData);
-
-      // Sync to workflow step if task is completed and has workflow linkage
-      if (updates.status === 'completed' && taskData.syncWithWorkflow && taskData.workflowId && taskData.workflowStepId) {
-        try {
-          const { syncTaskToWorkflowStep } = await import('../services/workflowTaskService');
-          // Get the user who completed the task - use current auth user or updatedBy field
-          const userId = updates.completedBy || updates.updatedBy || taskData.createdBy;
-          await syncTaskToWorkflowStep(taskId, taskData, userId);
-        } catch (syncError) {
-          // Don't fail the task update if sync fails
-          secureLogger.error('Error syncing task to workflow', { taskId, error: syncError.message });
-        }
-      }
-    }
+    // Cache update removed - real-time listener will handle cache sync
+    // Workflow sync moved to TaskContext listener to avoid offline read errors
 
     return true;
   } catch (error) {
@@ -130,43 +115,51 @@ export const deleteTask = async (taskId, organizationID) => {
   try {
     const taskRef = doc(firestore, 'tasks', taskId);
 
-    // Get task data before deletion to check for workflow linkage
-    const taskDoc = await getDoc(taskRef);
-    readCounter.recordRead('get', 'tasks', 'deleteTask', 1);
-
-    if (!taskDoc.exists()) {
-      secureLogger.warn('Task not found for deletion', { taskId });
-      return false;
-    }
-
-    const taskData = taskDoc.data();
-
-    // Handle workflow sync before deletion
-    if (taskData.syncWithWorkflow && taskData.workflowId && taskData.workflowStepId) {
-      try {
-        const { handleTaskDeletion } = await import('../services/workflowTaskService');
-        await handleTaskDeletion({ id: taskId, ...taskData });
-      } catch (syncError) {
-        // Log but don't fail the deletion
-        secureLogger.error('Error handling workflow sync on task deletion', {
-          taskId,
-          error: syncError.message
-        });
-      }
-    }
+    // Pre-delete read removed - deleteDoc succeeds even if document doesn't exist
+    // Workflow sync moved to TaskContext listener to avoid offline read errors
 
     await deleteDoc(taskRef);
-
     secureLogger.debug('Task deleted successfully', { taskId });
 
-    // Clear cache
+    // Clear cache to prevent deleted task from reloading on page refresh
     taskCacheService.clearOrganizationCache(organizationID);
-    taskCommentsCacheService.clearTaskComments(taskId);
 
     return true;
   } catch (error) {
     secureLogger.error('Error deleting task', { taskId, error: error.message });
     readCounter.recordError('tasks', 'deleteTask', error.message);
+    throw error;
+  }
+};
+
+// Batch update task orders (for drag-and-drop reordering)
+export const batchUpdateTaskOrders = async (updates) => {
+  try {
+    const batch = writeBatch(firestore);
+
+    updates.forEach(({ taskId, status, order }) => {
+      const taskRef = doc(firestore, 'tasks', taskId);
+      const updateData = {
+        updatedAt: serverTimestamp()
+      };
+
+      if (status !== undefined) {
+        updateData.status = status;
+      }
+      if (order !== undefined) {
+        updateData.order = order;
+      }
+
+      batch.update(taskRef, updateData);
+    });
+
+    await batch.commit();
+    secureLogger.debug('Batch task order update successful', { updateCount: updates.length });
+
+    return true;
+  } catch (error) {
+    secureLogger.error('Error batch updating task orders', { error: error.message });
+    readCounter.recordError('tasks', 'batchUpdateTaskOrders', error.message);
     throw error;
   }
 };
@@ -363,16 +356,21 @@ export const getWorkflowStepTasks = async (workflowID, workflowStepID, organizat
 export const getWorkflowStepTasksBatch = async (workflowStepPairs, organizationID) => {
   try {
     // workflowStepPairs is an array of { workflowID, workflowStepID }
-    // Due to Firestore limitations, we need to query each pair separately
+    // Process in batches of 5 concurrent requests to avoid Firestore rate limiting
     const tasksByStep = {};
+    const CONCURRENT_LIMIT = 5;
 
-    const promises = workflowStepPairs.map(async ({ workflowID, workflowStepID }) => {
-      const key = `${workflowID}_${workflowStepID}`;
-      const tasks = await getWorkflowStepTasks(workflowID, workflowStepID, organizationID);
-      tasksByStep[key] = tasks;
-    });
+    for (let i = 0; i < workflowStepPairs.length; i += CONCURRENT_LIMIT) {
+      const batch = workflowStepPairs.slice(i, i + CONCURRENT_LIMIT);
 
-    await Promise.all(promises);
+      const batchPromises = batch.map(async ({ workflowID, workflowStepID }) => {
+        const key = `${workflowID}_${workflowStepID}`;
+        const tasks = await getWorkflowStepTasks(workflowID, workflowStepID, organizationID);
+        tasksByStep[key] = tasks;
+      });
+
+      await Promise.all(batchPromises);
+    }
 
     return tasksByStep;
   } catch (error) {
@@ -549,7 +547,7 @@ export const addTaskComment = async (taskId, commentData) => {
     // Increment comment count on task
     const taskRef = doc(firestore, 'tasks', taskId);
     await updateDoc(taskRef, {
-      commentCount: arrayUnion(docRef.id).length,
+      commentCount: increment(1),
       updatedAt: serverTimestamp()
     });
 

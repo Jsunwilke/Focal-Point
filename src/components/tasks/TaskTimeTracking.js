@@ -5,6 +5,7 @@ import { getTaskTimeEntries, getCurrentTimeEntry, clockIn, updateTimeEntryTask }
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
 import { useToast } from '../../contexts/ToastContext';
+import { useTask } from '../../contexts/TaskContext';
 import { logActivity, ACTIVITY_TYPES } from '../../firebase/activity';
 import './TaskTimeTracking.css';
 
@@ -12,6 +13,7 @@ const TaskTimeTracking = ({ taskId }) => {
   const { userProfile, organization } = useAuth();
   const { users } = useDataCache();
   const { showToast } = useToast();
+  const { myTasks, teamTasks, updateTask } = useTask();
   const [timeEntries, setTimeEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totalHours, setTotalHours] = useState(0);
@@ -97,9 +99,21 @@ const TaskTimeTracking = ({ taskId }) => {
       const currentEntry = await getCurrentTimeEntry(userProfile.id, organization.id);
 
       if (currentEntry) {
-        // Update existing time entry to add this taskId
-        await updateTimeEntryTask(currentEntry.id, taskId);
-        showToast('Started tracking time on this task', 'success');
+        // Check if already tracking this task
+        if (currentEntry.taskId === taskId) {
+          // Already tracking - check if taskStartTime exists
+          if (!currentEntry.taskStartTime) {
+            // Add taskStartTime to existing entry tracking this task
+            await updateTimeEntryTask(currentEntry.id, taskId);
+            showToast('Updated tracking time for this task', 'success');
+          } else {
+            showToast('Already tracking time on this task', 'info');
+          }
+        } else {
+          // Update existing time entry to add this taskId
+          await updateTimeEntryTask(currentEntry.id, taskId);
+          showToast('Started tracking time on this task', 'success');
+        }
       } else {
         // Clock in with this taskId
         await clockIn(userProfile.id, organization.id, null, null, taskId);
@@ -114,6 +128,17 @@ const TaskTimeTracking = ({ taskId }) => {
         userProfile.id,
         organization.id
       );
+
+      // Auto-move task to "in progress" if not already
+      const task = [...myTasks, ...teamTasks].find(t => t.id === taskId);
+      if (task && task.status !== 'in_progress') {
+        try {
+          await updateTask(taskId, { status: 'in_progress' });
+        } catch (statusError) {
+          console.error('Failed to update task status:', statusError);
+          // Don't fail time tracking if status update fails
+        }
+      }
 
       // Reload time entries
       const entries = await getTaskTimeEntries(taskId, organization.id);

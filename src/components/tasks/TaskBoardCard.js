@@ -10,6 +10,17 @@ const TaskBoardCard = ({ task, index, onClick, users }) => {
     return users.find(u => u.id === task.assignedTo);
   };
 
+  // Strip HTML tags and get plain text preview
+  const getDescriptionPreview = (html) => {
+    if (!html) return '';
+    // Create a temporary div to parse HTML
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    // Get text content and truncate to ~150 characters
+    const text = temp.textContent || temp.innerText || '';
+    return text.length > 150 ? text.substring(0, 150) + '...' : text;
+  };
+
   const getPriorityClass = () => {
     switch (task.priority) {
       case 'urgent': return 'task-board-card--urgent';
@@ -73,7 +84,7 @@ const TaskBoardCard = ({ task, index, onClick, users }) => {
           </div>
 
           {task.description && (
-            <p className="task-board-card__description">{task.description}</p>
+            <p className="task-board-card__description">{getDescriptionPreview(task.description)}</p>
           )}
 
           <div className="task-board-card__footer">

@@ -3,9 +3,11 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import {
   getUserTasks,
   getOrganizationTasks,
+  getTask,
   createTask as createTaskFirebase,
   updateTask as updateTaskFirebase,
   deleteTask as deleteTaskFirebase,
+  batchUpdateTaskOrders,
   subscribeToUserTasks,
   subscribeToOrganizationTasks,
   updateSubtaskStatus as updateSubtaskStatusFirebase,
@@ -16,6 +18,7 @@ import {
 import { logActivity, ACTIVITY_TYPES } from '../firebase/activity';
 import { watchTask as watchTaskFirebase, unwatchTask as unwatchTaskFirebase, autoWatchTask } from '../firebase/taskWatchers';
 import { createMentionNotifications } from '../firebase/taskNotifications';
+import { clockOutTaskTimeEntry } from '../firebase/firestore';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
 import taskCacheService from '../services/taskCacheService';
@@ -39,6 +42,7 @@ export const TaskProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [panelFilter, setPanelFilter] = useState('all'); // 'all', 'today', 'urgent', 'watching'
+  const [selectedTaskId, setSelectedTaskId] = useState(null); // For panel task selection
 
   const { showToast } = useToast();
   const { userProfile, organization } = useAuth();
@@ -284,10 +288,15 @@ export const TaskProvider = ({ children }) => {
   // Duplicate a task
   const duplicateTask = useCallback(async (taskId) => {
     try {
-      // Find the original task
-      const originalTask = [...myTasks, ...teamTasks].find(t => t.id === taskId);
+      // Find the original task in state first
+      let originalTask = [...myTasks, ...teamTasks].find(t => t.id === taskId);
+
+      // If not found in state, fetch from Firestore
       if (!originalTask) {
-        throw new Error('Task not found');
+        originalTask = await getTask(taskId);
+        if (!originalTask) {
+          throw new Error('Task not found');
+        }
       }
 
       // Create duplicate with specific fields reset
@@ -459,6 +468,16 @@ export const TaskProvider = ({ children }) => {
     }
   }, [canViewTeamTasks, myTasks, teamTasks, userProfile?.id, organization?.id]);
 
+  // Permission check: Can user delete this task?
+  const canDeleteTask = useCallback((user, task) => {
+    if (!user || !task) return false;
+    // Admins can delete any task
+    if (user.role === 'admin') return true;
+    // Task creator can delete (if not completed)
+    if (task.createdBy === user.id && task.status !== 'completed') return true;
+    return false;
+  }, []);
+
   // Delete a task
   const deleteTask = useCallback(async (taskId) => {
     try {
@@ -466,7 +485,23 @@ export const TaskProvider = ({ children }) => {
         throw new Error('Organization ID is missing');
       }
 
+      // Find the task to check permissions
+      let task = [...myTasks, ...teamTasks].find(t => t.id === taskId);
+
+      // If not found in state, fetch from Firestore
+      if (!task) {
+        task = await getTask(taskId);
+      }
+
+      // Check permissions
+      if (task && !canDeleteTask(userProfile, task)) {
+        throw new Error('You do not have permission to delete this task');
+      }
+
       await deleteTaskFirebase(taskId, organization.id);
+
+      // Clear cache to prevent deleted task from reappearing on refresh
+      taskCacheService.clearOrganizationCache(organization.id);
 
       showToast('Task deleted successfully', 'success');
 
@@ -485,7 +520,7 @@ export const TaskProvider = ({ children }) => {
       showToast(`Failed to delete task: ${error.message}`, 'error');
       throw error;
     }
-  }, [organization?.id, canViewTeamTasks, userProfile?.id]);
+  }, [organization?.id, canViewTeamTasks, userProfile, myTasks, teamTasks, canDeleteTask]);
 
   // Mark task as complete
   const markTaskComplete = useCallback(async (taskId) => {
@@ -497,6 +532,16 @@ export const TaskProvider = ({ children }) => {
         completedAt: Timestamp.now(),
         completedBy: userProfile.id
       });
+
+      // Auto-stop time tracking if user is tracking this task
+      if (userProfile?.id && organization?.id) {
+        try {
+          await clockOutTaskTimeEntry(userProfile.id, organization.id, taskId);
+        } catch (timeError) {
+          console.error('Failed to auto-stop time tracking:', timeError);
+          // Don't fail task completion if time tracking fails
+        }
+      }
 
       // Log activity
       if (userProfile?.id && organization?.id) {
@@ -640,6 +685,16 @@ export const TaskProvider = ({ children }) => {
 
   const closePanel = useCallback(() => {
     setIsPanelOpen(false);
+    setSelectedTaskId(null); // Clear selection when panel closes
+  }, []);
+
+  const clearSelectedTask = useCallback(() => {
+    setSelectedTaskId(null);
+  }, []);
+
+  const openPanelWithTask = useCallback((taskId) => {
+    setSelectedTaskId(taskId);
+    setIsPanelOpen(true);
   }, []);
 
   // Get filtered tasks for panel
@@ -751,15 +806,6 @@ export const TaskProvider = ({ children }) => {
     return false;
   }, []);
 
-  const canDeleteTask = useCallback((user, task) => {
-    if (!user || !task) return false;
-    // Admins can delete any task
-    if (user.role === 'admin') return true;
-    // Task creator can delete (if not completed)
-    if (task.createdBy === user.id && task.status !== 'completed') return true;
-    return false;
-  }, []);
-
   // Watch task
   const watchTask = useCallback(async (taskId) => {
     try {
@@ -843,12 +889,14 @@ export const TaskProvider = ({ children }) => {
     loading,
     isPanelOpen,
     panelFilter,
+    selectedTaskId,
 
     // Actions
     createTask,
     duplicateTask,
     updateTask,
     deleteTask,
+    batchUpdateTaskOrders,
     markTaskComplete,
     updateSubtaskStatus,
     addComment,
@@ -862,6 +910,9 @@ export const TaskProvider = ({ children }) => {
     closePanel,
     setPanelFilter,
     getPanelTasks,
+    setSelectedTaskId,
+    clearSelectedTask,
+    openPanelWithTask,
 
     // Permissions
     canCreateTask,

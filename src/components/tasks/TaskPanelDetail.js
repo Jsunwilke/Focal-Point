@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft, FileText, Users, CalendarIcon, Clock, Flag, CheckSquare, MessageSquare,
-  Edit2, Trash2, Check, Plus, Send, LinkIcon, Workflow, Paperclip, Eye, EyeOff
+  Edit2, Trash2, Check, Plus, Send, LinkIcon, Workflow, Paperclip, Eye, EyeOff, X, ChevronDown
 } from 'lucide-react';
 import { useTask } from '../../contexts/TaskContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -15,13 +15,17 @@ import ActivityLog from './ActivityLog';
 import FileUploadButton from '../shared/FileUploadButton';
 import AttachmentList from './AttachmentList';
 import TaskTimeTracking from './TaskTimeTracking';
+import TaskTimeCounter from './TaskTimeCounter';
 import MentionTextarea from './MentionTextarea';
 import MentionRenderer from './MentionRenderer';
 import TaskDependencyManager from './TaskDependencyManager';
 import attachmentsService from '../../firebase/attachments';
 import { attachmentCacheService } from '../../services/attachmentCacheService';
+import { taskCommentsCacheService } from '../../services/taskCommentsCacheService';
 import { readCounter } from '../../services/readCounter';
 import { logActivity, ACTIVITY_TYPES } from '../../firebase/activity';
+import { getCurrentTimeEntry, updateTimeEntryTask, clockIn, clockOutTaskTimeEntry } from '../../firebase/firestore';
+import { getTaskComments, subscribeToTaskComments } from '../../firebase/tasks';
 import './TaskPanelDetail.css';
 
 const TaskPanelDetail = ({ taskId, onBack }) => {
@@ -38,6 +42,8 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
   const [newSubtask, setNewSubtask] = useState('');
   const [attachments, setAttachments] = useState([]);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
+  const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
+  const [dropdownDirection, setDropdownDirection] = useState('down');
 
   // Find the task from either myTasks or teamTasks
   const task = [...myTasks, ...teamTasks].find(t => t.id === taskId);
@@ -111,11 +117,96 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
     loadAttachments();
   }, [taskId]);
 
+  // Load comments with cache-first pattern and real-time updates
+  useEffect(() => {
+    if (!taskId) return;
+
+    let unsubscribe = null;
+
+    const loadComments = async () => {
+      try {
+        // Check cache first
+        const cachedComments = taskCommentsCacheService.getCachedComments(taskId);
+
+        if (cachedComments) {
+          setComments(cachedComments);
+          readCounter.recordCacheHit('taskComments', 'TaskPanelDetail', cachedComments.length);
+        } else {
+          readCounter.recordCacheMiss('taskComments', 'TaskPanelDetail');
+        }
+
+        // Fetch from Firestore
+        const fetchedComments = await getTaskComments(taskId);
+        setComments(fetchedComments);
+
+        // Update cache
+        taskCommentsCacheService.setCachedComments(taskId, fetchedComments);
+
+        // Set up real-time listener for new comments
+        const latestTimestamp = taskCommentsCacheService.getLatestCommentTimestamp(taskId);
+        unsubscribe = subscribeToTaskComments(taskId, (newComments) => {
+          if (newComments && newComments.length > 0) {
+            // Append new comments to existing ones
+            const updatedComments = taskCommentsCacheService.appendNewComments(taskId, newComments);
+            setComments(updatedComments);
+          }
+        }, latestTimestamp);
+      } catch (error) {
+        console.error('Error loading comments:', error);
+      }
+    };
+
+    loadComments();
+
+    // Cleanup listener on unmount or task change
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [taskId]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (assigneeDropdownOpen && !event.target.closest('.assignee-select-wrapper')) {
+        setAssigneeDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [assigneeDropdownOpen]);
+
+  // Calculate dropdown position based on available space
+  useEffect(() => {
+    if (assigneeDropdownOpen) {
+      const trigger = document.querySelector('.assignee-select-trigger');
+      if (trigger) {
+        const rect = trigger.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        const dropdownHeight = 280; // max-height from CSS
+
+        // Open upward if not enough space below AND more space above
+        if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+          setDropdownDirection('up');
+        } else {
+          setDropdownDirection('down');
+        }
+      }
+    }
+  }, [assigneeDropdownOpen]);
+
   // Format Firestore timestamp for date input
   const formatDateForInput = (timestamp) => {
     if (!timestamp) return '';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toISOString().split('T')[0];
+    // Use local date components to avoid timezone conversion
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   // Format date for display
@@ -222,22 +313,33 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
   };
 
   // Add new subtask
-  const handleAddSubtask = () => {
+  const handleAddSubtask = async () => {
     if (!newSubtask.trim()) return;
 
     const subtask = {
       id: `subtask_${Date.now()}`,
       title: newSubtask.trim(),
-      completed: false,
-      createdAt: Timestamp.now()
+      completed: false
     };
 
-    setFormData(prev => ({
-      ...prev,
-      subtasks: [...prev.subtasks, subtask]
-    }));
+    const updatedSubtasks = [...(task.subtasks || []), subtask];
 
-    setNewSubtask('');
+    try {
+      await updateTask(task.id, { subtasks: updatedSubtasks });
+      setNewSubtask('');
+    } catch (error) {
+      console.error('Error adding subtask:', error);
+    }
+  };
+
+  // Remove subtask
+  const handleRemoveSubtask = async (subtaskId) => {
+    try {
+      const updatedSubtasks = task.subtasks.filter(st => st.id !== subtaskId);
+      await updateTask(task.id, { subtasks: updatedSubtasks });
+    } catch (error) {
+      console.error('Error removing subtask:', error);
+    }
   };
 
   // Save task updates
@@ -245,9 +347,68 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
     setLoading(true);
     try {
       const updates = {
-        ...formData,
-        dueDate: formData.dueDate ? Timestamp.fromDate(new Date(formData.dueDate)) : null
+        ...formData
       };
+
+      // Parse date as local date to avoid timezone offset issues
+      if (formData.dueDate) {
+        const [year, month, day] = formData.dueDate.split('-');
+        const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
+        updates.dueDate = Timestamp.fromDate(localDate);
+      } else {
+        updates.dueDate = null;
+      }
+
+      // Check for status changes and handle time tracking
+      const oldStatus = task.status;
+      const newStatus = formData.status;
+
+      // Auto-start tracking when moving TO "in_progress"
+      if (oldStatus !== 'in_progress' && newStatus === 'in_progress') {
+        try {
+          // Check if user is already clocked in
+          const currentEntry = await getCurrentTimeEntry(userProfile.id, organization.id);
+
+          if (currentEntry) {
+            // Update existing time entry to add this taskId
+            await updateTimeEntryTask(currentEntry.id, taskId);
+          } else {
+            // Clock in with this taskId
+            await clockIn(userProfile.id, organization.id, null, null, taskId);
+          }
+
+          // Log activity
+          await logActivity(
+            taskId,
+            ACTIVITY_TYPES.TIME_LOGGED,
+            { action: 'auto_started_tracking' },
+            userProfile.id,
+            organization.id
+          );
+        } catch (trackError) {
+          console.error('Failed to auto-start tracking:', trackError);
+          // Don't fail task update if tracking fails
+        }
+      }
+
+      // Auto-stop tracking when moving FROM "in_progress"
+      if (oldStatus === 'in_progress' && newStatus !== 'in_progress') {
+        try {
+          await clockOutTaskTimeEntry(userProfile.id, organization.id, taskId);
+
+          // Log activity
+          await logActivity(
+            taskId,
+            ACTIVITY_TYPES.TIME_LOGGED,
+            { action: 'auto_stopped_tracking' },
+            userProfile.id,
+            organization.id
+          );
+        } catch (trackError) {
+          console.error('Failed to auto-stop tracking:', trackError);
+          // Don't fail task update if tracking fails
+        }
+      }
 
       await updateTask(task.id, updates);
       setIsEditing(false);
@@ -323,6 +484,11 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
       });
 
       setNewComment('');
+
+      // Refresh comments list to show the newly added comment
+      const updatedComments = await getTaskComments(taskId);
+      setComments(updatedComments);
+      taskCommentsCacheService.setCachedComments(taskId, updatedComments);
     } catch (error) {
       console.error('Error adding comment:', error);
     } finally {
@@ -461,41 +627,42 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
     <div className="task-panel-detail">
       {/* Header */}
       <div className="task-panel-detail__header">
-        <button
-          onClick={onBack}
-          className="task-panel-detail__back-btn"
-          disabled={loading}
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <div className="task-panel-detail__header-content">
-          <FileText size={18} />
-          <h2 className="task-panel-detail__title">{isEditing ? 'Edit Task' : task.title}</h2>
-          {!isEditing && (
-            <>
-              <span className={`task-panel-detail__badge ${getPriorityBadgeClass(task.priority)}`}>
-                <Flag size={12} />
-                {getPriorityLabel(task.priority)}
-              </span>
-              {isCompleted && (
-                <span className="task-panel-detail__badge task-panel-detail__badge--completed">
-                  <Check size={12} />
-                  Done
-                </span>
-              )}
-            </>
-          )}
+        <div className="task-panel-detail__header-row">
+          <button
+            onClick={onBack}
+            className="task-panel-detail__back-btn"
+            disabled={loading}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div className="task-panel-detail__header-title">
+            <FileText size={18} />
+            <h2 className="task-panel-detail__title">{isEditing ? 'Edit Task' : task.title}</h2>
+          </div>
         </div>
         {!isEditing && (
-          <button
-            onClick={handleWatchToggle}
-            className={`task-panel-detail__watch-btn ${isWatching ? 'task-panel-detail__watch-btn--watching' : ''}`}
-            disabled={loading}
-            title={isWatching ? 'Stop watching this task' : 'Watch this task'}
-          >
-            {isWatching ? <Eye size={18} /> : <EyeOff size={18} />}
-            {isWatching ? 'Watching' : 'Watch'}
-          </button>
+          <div className="task-panel-detail__header-badges">
+            <span className={`task-panel-detail__badge ${getPriorityBadgeClass(task.priority)}`}>
+              <Flag size={12} />
+              {getPriorityLabel(task.priority)}
+            </span>
+            {isCompleted && (
+              <span className="task-panel-detail__badge task-panel-detail__badge--completed">
+                <Check size={12} />
+                Done
+              </span>
+            )}
+            <TaskTimeCounter taskId={taskId} />
+            <button
+              onClick={handleWatchToggle}
+              className={`task-panel-detail__watch-btn ${isWatching ? 'task-panel-detail__watch-btn--watching' : ''}`}
+              disabled={loading}
+              title={isWatching ? 'Stop watching this task' : 'Watch this task'}
+            >
+              {isWatching ? <Eye size={18} /> : <EyeOff size={18} />}
+              {isWatching ? 'Watching' : 'Watch'}
+            </button>
+          </div>
         )}
       </div>
 
@@ -669,39 +836,78 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
                 {/* Assignees */}
                 <div className="form-group">
                   <label className="form-label">Assigned To</label>
-                  <div className="assignee-grid">
-                    {activeTeamMembers.map(member => {
-                      const isSelected = formData.assignedTo.includes(member.id);
-                      return (
-                        <div
-                          key={member.id}
-                          className={`assignee-card ${isSelected ? 'assignee-card--selected' : ''}`}
-                          onClick={() => !loading && handleAssigneeToggle(member.id)}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {}}
-                            disabled={loading}
-                          />
-                          <div className="assignee-avatar">
-                            {member.photoURL ? (
-                              <img src={member.photoURL} alt={`${member.firstName} ${member.lastName}`} />
-                            ) : (
-                              getInitials(member.firstName, member.lastName)
-                            )}
-                          </div>
-                          <div className="assignee-name">
-                            {member.firstName}<br />{member.lastName}
-                          </div>
-                          {isSelected && (
-                            <div className="assignee-check">
-                              <Check size={12} />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                  <div className="assignee-select-wrapper">
+                    <div
+                      className={`assignee-select-trigger ${assigneeDropdownOpen ? 'assignee-select-trigger--open' : ''}`}
+                      onClick={() => !loading && setAssigneeDropdownOpen(!assigneeDropdownOpen)}
+                    >
+                      <div className={`assignee-select-value ${formData.assignedTo.length === 0 ? 'assignee-select-value--placeholder' : ''}`}>
+                        {formData.assignedTo.length === 0
+                          ? 'Select team members...'
+                          : formData.assignedTo.length === 1
+                          ? activeTeamMembers.find(m => m.id === formData.assignedTo[0])?.firstName + ' ' + activeTeamMembers.find(m => m.id === formData.assignedTo[0])?.lastName
+                          : `${formData.assignedTo.length} people selected`
+                        }
+                      </div>
+                      <ChevronDown size={18} className={`assignee-select-icon ${assigneeDropdownOpen ? 'assignee-select-icon--open' : ''}`} />
+                    </div>
+
+                    {assigneeDropdownOpen && (
+                      <div className={`assignee-dropdown ${dropdownDirection === 'up' ? 'assignee-dropdown--up' : ''}`}>
+                        {/* Selected members first */}
+                        {activeTeamMembers
+                          .filter(member => formData.assignedTo.includes(member.id))
+                          .map(member => {
+                            return (
+                              <div
+                                key={member.id}
+                                className={`assignee-option assignee-option--selected`}
+                                onClick={() => !loading && handleAssigneeToggle(member.id)}
+                              >
+                                <div className="assignee-option-checkbox">
+                                  <Check size={12} />
+                                </div>
+                                <div className="assignee-option-avatar">
+                                  {member.photoURL ? (
+                                    <img src={member.photoURL} alt={`${member.firstName} ${member.lastName}`} />
+                                  ) : (
+                                    getInitials(member.firstName, member.lastName)
+                                  )}
+                                </div>
+                                <div className="assignee-option-name">
+                                  {member.firstName} {member.lastName}
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                        {/* Unselected members */}
+                        {activeTeamMembers
+                          .filter(member => !formData.assignedTo.includes(member.id))
+                          .map(member => {
+                            return (
+                              <div
+                                key={member.id}
+                                className={`assignee-option`}
+                                onClick={() => !loading && handleAssigneeToggle(member.id)}
+                              >
+                                <div className="assignee-option-checkbox">
+                                </div>
+                                <div className="assignee-option-avatar">
+                                  {member.photoURL ? (
+                                    <img src={member.photoURL} alt={`${member.firstName} ${member.lastName}`} />
+                                  ) : (
+                                    getInitials(member.firstName, member.lastName)
+                                  )}
+                                </div>
+                                <div className="assignee-option-name">
+                                  {member.firstName} {member.lastName}
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -815,6 +1021,16 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
                         disabled={loading || !canEdit}
                       />
                       <span className="task-panel-detail__subtask-title">{subtask.title}</span>
+                      {canEdit && (
+                        <button
+                          onClick={() => handleRemoveSubtask(subtask.id)}
+                          className="task-panel-detail__subtask-delete"
+                          disabled={loading}
+                          title="Delete subtask"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

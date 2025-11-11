@@ -57,7 +57,6 @@ export const createNotification = async ({
     };
 
     const docRef = await addDoc(collection(firestore, 'taskNotifications'), notificationData);
-    readCounter.recordWrite('taskNotifications', 'createNotification');
 
     return docRef.id;
   } catch (error) {
@@ -274,8 +273,6 @@ export const markNotificationAsRead = async (notificationId) => {
       read: true,
       readAt: serverTimestamp()
     });
-
-    readCounter.recordWrite('taskNotifications', 'markNotificationAsRead');
   } catch (error) {
     console.error('Error marking notification as read:', error);
     throw error;
@@ -308,7 +305,6 @@ export const markAllNotificationsAsRead = async (userId, organizationID) => {
     });
 
     await batch.commit();
-    readCounter.recordWrite('taskNotifications', 'markAllNotificationsAsRead', querySnapshot.size);
   } catch (error) {
     console.error('Error marking all notifications as read:', error);
     throw error;
@@ -321,7 +317,6 @@ export const markAllNotificationsAsRead = async (userId, organizationID) => {
 export const deleteNotification = async (notificationId) => {
   try {
     await deleteDoc(doc(firestore, 'taskNotifications', notificationId));
-    readCounter.recordWrite('taskNotifications', 'deleteNotification');
   } catch (error) {
     console.error('Error deleting notification:', error);
     throw error;
@@ -354,7 +349,6 @@ export const deleteOldNotifications = async (userId, organizationID, daysOld = 3
     });
 
     await batch.commit();
-    readCounter.recordWrite('taskNotifications', 'deleteOldNotifications', querySnapshot.size);
 
     return querySnapshot.size;
   } catch (error) {

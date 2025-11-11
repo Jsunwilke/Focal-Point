@@ -28,8 +28,6 @@ export const watchTask = async (taskId, userId, organizationId) => {
       updatedAt: new Date()
     });
 
-    readCounter.recordWrite('tasks', 'watchTask');
-
     // Log activity
     await logActivity(
       taskId,
@@ -62,8 +60,6 @@ export const unwatchTask = async (taskId, userId, organizationId) => {
       watchers: arrayRemove(userId),
       updatedAt: new Date()
     });
-
-    readCounter.recordWrite('tasks', 'unwatchTask');
 
     // Log activity
     await logActivity(
@@ -128,8 +124,6 @@ export const autoWatchTask = async (taskId, userId, organizationId, reason = 'ac
       watchers: arrayUnion(userId),
       updatedAt: new Date()
     });
-
-    readCounter.recordWrite('tasks', 'autoWatchTask');
 
     secureLogger.info('User auto-added as watcher', { taskId, userId, reason });
   } catch (error) {

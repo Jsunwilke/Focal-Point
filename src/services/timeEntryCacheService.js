@@ -7,6 +7,7 @@ class TimeEntryCacheService {
     this.ORG_ENTRIES_KEY = 'timeentries_org_';
     this.SESSION_STATS_KEY = 'session_stats_';
     this.SCHOOL_STATS_KEY = 'school_stats_';
+    this.TASK_ENTRIES_KEY = 'timeentries_task_';
   }
 
   // Helper to serialize timestamps
@@ -207,15 +208,69 @@ class TimeEntryCacheService {
     }
   }
 
+  // Get cache key for task time entries
+  getTaskEntriesKey(taskId) {
+    return `${this.TASK_ENTRIES_KEY}${taskId}`;
+  }
+
+  // Get cached task time entries
+  getCachedTaskEntries(taskId) {
+    try {
+      const key = this.getTaskEntriesKey(taskId);
+      const cached = localStorage.getItem(key);
+      if (!cached) return null;
+
+      const cacheData = this.deserializeData(cached);
+
+      // Check cache version and age
+      if (cacheData.version !== this.CACHE_VERSION ||
+          Date.now() - cacheData.timestamp > this.CACHE_DURATION) {
+        localStorage.removeItem(key);
+        return null;
+      }
+
+      return cacheData.data;
+    } catch (error) {
+      console.warn('Failed to retrieve cached task entries:', error);
+      return null;
+    }
+  }
+
+  // Cache task time entries
+  setCachedTaskEntries(taskId, entries) {
+    try {
+      const key = this.getTaskEntriesKey(taskId);
+      const cacheData = {
+        version: this.CACHE_VERSION,
+        timestamp: Date.now(),
+        data: entries
+      };
+      localStorage.setItem(key, this.serializeData(cacheData));
+    } catch (error) {
+      console.warn('Failed to cache task entries:', error);
+    }
+  }
+
+  // Clear cache for a specific task
+  clearTaskCache(taskId) {
+    try {
+      const key = this.getTaskEntriesKey(taskId);
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.warn('Failed to clear task cache:', error);
+    }
+  }
+
   // Clear all time entry caches
   clearCache() {
     try {
       const keys = Object.keys(localStorage);
       keys.forEach(key => {
-        if (key.startsWith(this.USER_ENTRIES_KEY) || 
+        if (key.startsWith(this.USER_ENTRIES_KEY) ||
             key.startsWith(this.ORG_ENTRIES_KEY) ||
             key.startsWith(this.SESSION_STATS_KEY) ||
-            key.startsWith(this.SCHOOL_STATS_KEY)) {
+            key.startsWith(this.SCHOOL_STATS_KEY) ||
+            key.startsWith(this.TASK_ENTRIES_KEY)) {
           localStorage.removeItem(key);
         }
       });
@@ -231,15 +286,16 @@ class TimeEntryCacheService {
       const now = Date.now();
       
       keys.forEach(key => {
-        if (key.startsWith(this.USER_ENTRIES_KEY) || 
+        if (key.startsWith(this.USER_ENTRIES_KEY) ||
             key.startsWith(this.ORG_ENTRIES_KEY) ||
             key.startsWith(this.SESSION_STATS_KEY) ||
-            key.startsWith(this.SCHOOL_STATS_KEY)) {
+            key.startsWith(this.SCHOOL_STATS_KEY) ||
+            key.startsWith(this.TASK_ENTRIES_KEY)) {
           try {
             const cached = localStorage.getItem(key);
             if (cached) {
               const cacheData = this.deserializeData(cached);
-              if (cacheData.version !== this.CACHE_VERSION || 
+              if (cacheData.version !== this.CACHE_VERSION ||
                   now - cacheData.timestamp > this.CACHE_DURATION) {
                 localStorage.removeItem(key);
               }

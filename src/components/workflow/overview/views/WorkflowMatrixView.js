@@ -110,26 +110,26 @@ function areAllMicrosCompleted(normalizedMicros) {
 }
 
 // Cell status badge component
-function CellBadge({ done }) {
+const CellBadge = React.memo(({ done }) => {
   return (
     <span className={`matrix-cell-badge ${done ? 'matrix-cell-badge--done' : 'matrix-cell-badge--pending'}`}>
       {done ? <Check className="matrix-cell-badge__icon" /> : <Clock className="matrix-cell-badge__icon" />}
       {done ? 'Done' : 'Pending'}
     </span>
   );
-}
+});
 
 // Progress bar component
-function ProgressBar({ pct }) {
+const ProgressBar = React.memo(({ pct }) => {
   return (
     <div className="matrix-progress-bar">
       <div className="matrix-progress-bar__fill" style={{ width: `${pct}%` }}></div>
     </div>
   );
-}
+});
 
 // Micro-step meter component with hover preview and portal checklist
-function MicroMeter({ label, templateMicros, normalizedMicros, onToggle }) {
+const MicroMeter = React.memo(({ label, templateMicros, normalizedMicros, onToggle }) => {
   const [open, setOpen] = React.useState(false);
   const [hover, setHover] = React.useState(false);
   const [checklistPosition, setChecklistPosition] = React.useState({ top: 0, left: 0 });
@@ -351,14 +351,116 @@ function MicroMeter({ label, templateMicros, normalizedMicros, onToggle }) {
       )}
     </div>
   );
-}
+});
 
 // ============================================================================
 // Cell Renderer Components for react-data-grid
 // ============================================================================
 
+// Extracted style constants for cell renderers to prevent object recreation
+const SCHOOL_CELL_CONTAINER_STYLE = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  height: '100%',
+  width: '100%',
+  padding: '8px'
+};
+
+const SCHOOL_BUTTON_STYLE = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  padding: '2px',
+  display: 'flex',
+  alignItems: 'center',
+  opacity: 0.7,
+  transition: 'opacity 0.2s'
+};
+
+const SCHOOL_SPAN_STYLE = {
+  flex: 1,
+  cursor: 'pointer',
+  whiteSpace: 'normal',
+  wordBreak: 'break-word',
+  overflow: 'visible',
+  fontSize: '12px',
+  lineHeight: '1.3',
+  textAlign: 'center'
+};
+
+const DATE_CELL_STYLE = {
+  width: '100%',
+  height: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  padding: '8px'
+};
+
+const PROGRESS_CELL_STYLE = {
+  width: '100%',
+  height: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  padding: '8px'
+};
+
+const TASK_CELL_STYLE = {
+  width: '100%',
+  height: '100%',
+  padding: '8px'
+};
+
+// Header cell styles
+const HEADER_CELL_BASE_STYLE = {
+  color: 'white',
+  flex: 1,
+  height: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  padding: '8px',
+  fontSize: '11px',
+  fontWeight: 600
+};
+
+const TASK_HEADER_CELL_STYLE = {
+  color: 'white',
+  flex: 1,
+  height: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '8px',
+  fontSize: '11px',
+  fontWeight: 600,
+  wordBreak: 'break-word',
+  lineHeight: '1.3',
+  gap: '4px'
+};
+
+const HEADER_TITLE_SPAN_STYLE = { flex: 1 };
+
+const HEADER_ICON_CONTAINER_STYLE = {
+  display: 'flex',
+  gap: '4px',
+  alignItems: 'center',
+  flexShrink: 0
+};
+
+const LOCK_ICON_STYLE = {
+  opacity: 0.7,
+  flexShrink: 0
+};
+
+const VIDEO_ICON_STYLE = {
+  flexShrink: 0,
+  cursor: 'pointer',
+  opacity: 0.8,
+  transition: 'opacity 0.15s ease'
+};
+
 // School cell with eye icon and click handler
-const SchoolCell = ({ row, colors, handleSchoolClick, toggleWorkflowHidden, optimisticallyHidden }) => {
+const SchoolCell = React.memo(({ row, colors, handleSchoolClick, toggleWorkflowHidden, optimisticallyHidden }) => {
   const { workflow, school } = row;
   const isHidden = optimisticallyHidden.hasOwnProperty(workflow.id)
     ? optimisticallyHidden[workflow.id]
@@ -366,13 +468,8 @@ const SchoolCell = ({ row, colors, handleSchoolClick, toggleWorkflowHidden, opti
 
   return (
     <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      height: '100%',
-      backgroundColor: colors.light,
-      width: '100%',
-      padding: '8px'
+      ...SCHOOL_CELL_CONTAINER_STYLE,
+      backgroundColor: colors.light
     }}>
       <button
         onClick={(e) => {
@@ -380,15 +477,8 @@ const SchoolCell = ({ row, colors, handleSchoolClick, toggleWorkflowHidden, opti
           toggleWorkflowHidden(workflow.id, isHidden);
         }}
         style={{
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          padding: '2px',
-          display: 'flex',
-          alignItems: 'center',
-          color: isHidden ? '#ef4444' : '#6b7280',
-          opacity: 0.7,
-          transition: 'opacity 0.2s'
+          ...SCHOOL_BUTTON_STYLE,
+          color: isHidden ? '#ef4444' : '#6b7280'
         }}
         onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
         onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
@@ -399,59 +489,39 @@ const SchoolCell = ({ row, colors, handleSchoolClick, toggleWorkflowHidden, opti
       <span
         className="workflow-matrix__cell--clickable"
         onClick={() => handleSchoolClick(workflow)}
-        style={{
-          flex: 1,
-          cursor: 'pointer',
-          whiteSpace: 'normal',
-          wordBreak: 'break-word',
-          overflow: 'visible',
-          fontSize: '12px',
-          lineHeight: '1.3',
-          textAlign: 'center'
-        }}
+        style={SCHOOL_SPAN_STYLE}
       >
         {school}
       </span>
     </div>
   );
-};
+});
 
 // Date cell - formatted date display
-const DateCell = ({ row, colors }) => {
+const DateCell = React.memo(({ row, colors }) => {
   const { date } = row;
   return (
     <div style={{
-      backgroundColor: colors.light,
-      width: '100%',
-      height: '100%',
-      display: 'flex',
-      alignItems: 'center',
-      padding: '8px'
+      ...DATE_CELL_STYLE,
+      backgroundColor: colors.light
     }}>
       <span>{formatDateToMMDDYYYY(date)}</span>
     </div>
   );
-};
+});
 
 // Progress cell - progress bar
-const ProgressCell = ({ row, colors }) => {
+const ProgressCell = React.memo(({ row, colors }) => {
   const { progress } = row;
   return (
-    <div style={{
-      backgroundColor: colors.light,
-      width: '100%',
-      height: '100%',
-      display: 'flex',
-      alignItems: 'center',
-      padding: '8px'
-    }}>
+    <div style={{ ...PROGRESS_CELL_STYLE, backgroundColor: colors.light }}>
       <ProgressBar pct={progress} />
     </div>
   );
-};
+});
 
 // Task cell - initials input, badge, micro-meter, date input, task button
-const TaskCell = ({
+const TaskCell = React.memo(({
   row,
   step,
   lastCompletedIdx,
@@ -488,10 +558,8 @@ const TaskCell = ({
     <div
       className="workflow-matrix__cell-content"
       style={{
-        backgroundColor: isCompleted ? undefined : colors.light,
-        width: '100%',
-        height: '100%',
-        padding: '8px'
+        ...TASK_CELL_STYLE,
+        backgroundColor: isCompleted ? undefined : colors.light
       }}
     >
       <div className="workflow-matrix__cell-row">
@@ -542,12 +610,12 @@ const TaskCell = ({
       </div>
     </div>
   );
-};
+});
 
 const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
   const { userProfile, organization } = useAuth();
-  const { openTaskDetailModal, deleteWorkflow } = useWorkflow();
-  const { myTasks, teamTasks } = useTask();
+  const { deleteWorkflow } = useWorkflow();
+  const { myTasks, teamTasks, openPanelWithTask } = useTask();
   const [activeTab, setActiveTab] = useState(null);
   const [showDates, setShowDates] = useState(false);
   const [optimisticUpdates, setOptimisticUpdates] = useState({}); // Local state for immediate UI feedback
@@ -1031,10 +1099,10 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
     loadTasks();
   }, [activeTemplate, filteredWorkflows, organization?.id, myTasks.length, teamTasks.length]);
 
-  // Handle task click to open detail modal
+  // Handle task click to open detail panel
   const handleTaskClick = useCallback((taskId) => {
-    openTaskDetailModal(taskId);
-  }, [openTaskDetailModal]);
+    openPanelWithTask(taskId);
+  }, [openPanelWithTask]);
 
   // Calculate progress for a workflow
   const calculateProgress = (workflow) => {
@@ -1428,17 +1496,7 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
       width: columnWidths.school,
       resizable: true,
       renderHeaderCell: () => (
-        <div style={{
-          backgroundColor: defaultColors.main,
-          color: 'white',
-          flex: 1,
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '8px',
-          fontSize: '11px',
-          fontWeight: 600
-        }}>
+        <div style={{ ...HEADER_CELL_BASE_STYLE, backgroundColor: defaultColors.main }}>
           School
         </div>
       ),
@@ -1462,17 +1520,7 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
       width: columnWidths.date,
       resizable: true,
       renderHeaderCell: () => (
-        <div style={{
-          backgroundColor: defaultColors.main,
-          color: 'white',
-          flex: 1,
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '8px',
-          fontSize: '11px',
-          fontWeight: 600
-        }}>
+        <div style={{ ...HEADER_CELL_BASE_STYLE, backgroundColor: defaultColors.main }}>
           Date
         </div>
       ),
@@ -1488,17 +1536,7 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
       width: columnWidths.progress,
       resizable: true,
       renderHeaderCell: () => (
-        <div style={{
-          backgroundColor: defaultColors.main,
-          color: 'white',
-          flex: 1,
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '8px',
-          fontSize: '11px',
-          fontWeight: 600
-        }}>
+        <div style={{ ...HEADER_CELL_BASE_STYLE, backgroundColor: defaultColors.main }}>
           Progress
         </div>
       ),
@@ -1546,42 +1584,20 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
           }
 
           return (
-            <div style={{
-              backgroundColor: stepColors.main,
-              color: 'white',
-              flex: 1,
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '8px',
-              fontSize: '11px',
-              fontWeight: 600,
-              wordBreak: 'break-word',
-              lineHeight: '1.3',
-              gap: '4px'
-            }}>
-              <span style={{ flex: 1 }}>{step.title}</span>
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
+            <div style={{ ...TASK_HEADER_CELL_STYLE, backgroundColor: stepColors.main }}>
+              <span style={HEADER_TITLE_SPAN_STYLE}>{step.title}</span>
+              <div style={HEADER_ICON_CONTAINER_STYLE}>
                 {hasDependencies && taskCreationTrigger === 'dependency' && (
                   <Lock
                     size={14}
-                    style={{
-                      opacity: 0.7,
-                      flexShrink: 0
-                    }}
+                    style={LOCK_ICON_STYLE}
                     title={dependencyTooltip}
                   />
                 )}
                 {hasVideo && (
                   <PlayCircle
                     size={16}
-                    style={{
-                      flexShrink: 0,
-                      cursor: 'pointer',
-                      opacity: 0.8,
-                      transition: 'opacity 0.15s ease'
-                    }}
+                    style={VIDEO_ICON_STYLE}
                     onClick={(e) => {
                       e.stopPropagation();
                       setCurrentVideoData({
