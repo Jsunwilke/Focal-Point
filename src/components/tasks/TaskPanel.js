@@ -5,6 +5,7 @@ import { X, Plus, ListTodo, ChevronDown, Search } from 'lucide-react';
 import { useTask } from '../../contexts/TaskContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
+import { useToast } from '../../contexts/ToastContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import TaskPanelItem from './TaskPanelItem';
 import TaskPanelDetail from './TaskPanelDetail';
@@ -13,6 +14,7 @@ import useKeyboardShortcuts from '../../hooks/useKeyboardShortcuts';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { batchUpdateTaskOrders } from '../../firebase/tasks';
 import { TASK_STATUS } from '../../constants/taskStatus';
+import { Timestamp } from 'firebase/firestore';
 import './TaskPanel.css';
 
 const TaskPanel = () => {
@@ -23,6 +25,7 @@ const TaskPanel = () => {
     setPanelFilter,
     getPanelTasks,
     markTaskComplete,
+    createTask,
     duplicateTask,
     deleteTask,
     updateTask,
@@ -34,8 +37,9 @@ const TaskPanel = () => {
     clearSelectedTask
   } = useTask();
 
-  const { userProfile } = useAuth();
+  const { userProfile, organization } = useAuth();
   const { teamMembers } = useDataCache();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -47,6 +51,13 @@ const TaskPanel = () => {
   const userDropdownRef = useRef(null);
   const searchInputRef = useRef(null);
   const panelRef = useRef(null);
+
+  // Quick Add state
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickAddTitle, setQuickAddTitle] = useState('');
+  const [quickAddDueDate, setQuickAddDueDate] = useState('');
+  const [quickAddPriority, setQuickAddPriority] = useState('medium');
+  const quickAddInputRef = useRef(null);
 
   // Check if user is manager or admin
   const isManagerOrAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager';
@@ -105,6 +116,71 @@ const TaskPanel = () => {
       };
     }
   }, [isPanelOpen, location.pathname, closePanel]);
+
+  // Auto-focus quick add input when opened
+  useEffect(() => {
+    if (isQuickAddOpen && quickAddInputRef.current) {
+      quickAddInputRef.current.focus();
+    }
+  }, [isQuickAddOpen]);
+
+  // Handle quick add form submission
+  const handleQuickAddSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!quickAddTitle.trim()) {
+      return;
+    }
+
+    // Check if user and organization are available
+    if (!userProfile?.id || !organization?.id) {
+      showToast('Unable to create task. Please refresh the page.', 'error');
+      return;
+    }
+
+    try {
+      await createTask({
+        title: quickAddTitle.trim(),
+        type: 'general',
+        priority: quickAddPriority,
+        dueDate: quickAddDueDate ? Timestamp.fromDate(new Date(quickAddDueDate)) : null,
+        assignedTo: [userProfile.id], // Auto-assign to current user
+        status: TASK_STATUS.TODO,  // Use proper status constant
+        description: ''  // Add empty description as it might be required
+      });
+
+      // Show success message
+      showToast('Task created successfully', 'success');
+
+      // Clear form after successful creation
+      setQuickAddTitle('');
+      setQuickAddDueDate('');
+      setQuickAddPriority('medium');
+
+      // Keep form open for rapid task entry
+      if (quickAddInputRef.current) {
+        quickAddInputRef.current.focus();
+      }
+    } catch (error) {
+      console.error('Error creating task:', error);
+      showToast('Failed to create task. Please try again.', 'error');
+    }
+  };
+
+  // Handle keyboard shortcuts for quick add
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Escape to close quick add
+      if (e.key === 'Escape' && isQuickAddOpen) {
+        setIsQuickAddOpen(false);
+      }
+    };
+
+    if (isQuickAddOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isQuickAddOpen]);
 
   // Get tasks based on selected user
   const panelTasks = useMemo(() => {
@@ -362,6 +438,7 @@ const TaskPanel = () => {
         <>
           {/* Header */}
           <div className="task-panel__header">
+            {/* First row: User selector and close button */}
             <div className="task-panel__header-top">
               <div className="task-panel__header-title">
                 <ListTodo size={20} />
@@ -414,23 +491,35 @@ const TaskPanel = () => {
                   <span>Tasks ({filteredTasks.length})</span>
                 )}
               </div>
-              <div className="task-panel__header-actions">
-                <button
-                  className="task-panel__new-task-btn"
-                  onClick={handleNewTaskClick}
-                  aria-label="New task"
-                >
-                  <Plus size={18} />
-                  New
-                </button>
-                <button
-                  className="task-panel__close-btn"
-                  onClick={closePanel}
-                  aria-label="Close tasks panel"
-                >
-                  <X size={20} />
-                </button>
-              </div>
+              <button
+                className="task-panel__close-btn"
+                onClick={closePanel}
+                aria-label="Close tasks panel"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Second row: Quick Add and New buttons */}
+            <div className="task-panel__header-actions">
+              <button
+                className="task-panel__quick-add-toggle-btn"
+                onClick={() => setIsQuickAddOpen(!isQuickAddOpen)}
+                aria-label="Toggle quick add"
+                title="Quick add task"
+              >
+                <Plus size={16} />
+                Quick Add
+              </button>
+              <button
+                className="task-panel__new-task-btn"
+                onClick={handleNewTaskClick}
+                aria-label="New task"
+                title="Create detailed task"
+              >
+                <Plus size={18} />
+                New
+              </button>
             </div>
 
             {/* Search */}
@@ -491,6 +580,55 @@ const TaskPanel = () => {
               </button>
             </div>
           </div>
+
+          {/* Quick Add Form */}
+          {isQuickAddOpen && (
+            <div className="task-panel__quick-add">
+              <form onSubmit={handleQuickAddSubmit} className="task-panel__quick-add-form">
+                <div className="task-panel__quick-add-title-row">
+                  <Plus size={16} className="task-panel__quick-add-icon" />
+                  <input
+                    ref={quickAddInputRef}
+                    type="text"
+                    value={quickAddTitle}
+                    onChange={(e) => setQuickAddTitle(e.target.value)}
+                    placeholder="Task title..."
+                    className="task-panel__quick-add-input"
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div className="task-panel__quick-add-controls">
+                  <input
+                    type="date"
+                    value={quickAddDueDate}
+                    onChange={(e) => setQuickAddDueDate(e.target.value)}
+                    className="task-panel__quick-add-date"
+                    placeholder="Due date"
+                  />
+
+                  <select
+                    value={quickAddPriority}
+                    onChange={(e) => setQuickAddPriority(e.target.value)}
+                    className="task-panel__quick-add-priority"
+                  >
+                    <option value="low">🟢 Low</option>
+                    <option value="medium">🟡 Medium</option>
+                    <option value="high">🟠 High</option>
+                    <option value="urgent">🔴 Urgent</option>
+                  </select>
+
+                  <button
+                    type="submit"
+                    disabled={!quickAddTitle.trim()}
+                    className="btn btn--primary btn--sm task-panel__quick-add-submit"
+                  >
+                    Add Task
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
 
           {/* Task list */}
           <DragDropContext onDragEnd={handleDragEnd}>
