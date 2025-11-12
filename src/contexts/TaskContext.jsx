@@ -25,6 +25,8 @@ import taskCacheService from '../services/taskCacheService';
 import taskCommentsCacheService from '../services/taskCommentsCacheService';
 import { readCounter } from '../services/readCounter';
 import { Timestamp } from 'firebase/firestore';
+import { TASK_STATUS } from '../constants/taskStatus';
+import { notifyTaskAssignment, notifyStatusChange, notifyComment, notifyMention } from '../services/taskNotificationHelper';
 
 const TaskContext = createContext();
 
@@ -50,6 +52,10 @@ export const TaskProvider = ({ children }) => {
   // Refs for listeners
   const userTasksListenerRef = useRef(null);
   const teamTasksListenerRef = useRef(null);
+
+  // Refs for initialization tracking (prevents race conditions)
+  const userTasksInitialized = useRef(false);
+  const teamTasksInitialized = useRef(false);
 
   // Check if user can view team tasks (admin/manager)
   const canViewTeamTasks = userProfile?.role === 'admin' || userProfile?.role === 'manager';
@@ -221,32 +227,60 @@ export const TaskProvider = ({ children }) => {
 
   // Initialize - load from cache and set up listeners
   useEffect(() => {
-    if (userProfile?.id && organization?.id) {
-      setLoading(true);
-
-      // Load tasks from cache first
-      loadMyTasks().then(() => {
-        // Then set up real-time listener
-        setupUserTasksListener();
-        setLoading(false);
-      });
-
-      // Load team tasks if user has permission
-      if (canViewTeamTasks) {
-        loadTeamTasks().then(() => {
-          setupTeamTasksListener();
-        });
-      }
+    if (!userProfile?.id || !organization?.id) {
+      return;
     }
 
-    // Cleanup listeners on unmount
+    setLoading(true);
+
+    // Reset initialization flags
+    userTasksInitialized.current = false;
+    teamTasksInitialized.current = false;
+
+    // RACE CONDITION FIX: Coordinate loading and listener setup
+    const initializeTasks = async () => {
+      try {
+        // Step 1: Load user tasks from cache first
+        await loadMyTasks();
+        userTasksInitialized.current = true;
+
+        // Step 2: Set up user tasks listener AFTER initial load
+        setupUserTasksListener();
+
+        // Step 3: Load team tasks if user has permission
+        if (canViewTeamTasks) {
+          await loadTeamTasks();
+          teamTasksInitialized.current = true;
+
+          // Step 4: Set up team tasks listener AFTER initial load
+          setupTeamTasksListener();
+        } else {
+          // Mark team tasks as "initialized" (not needed) so loading can complete
+          teamTasksInitialized.current = true;
+        }
+
+        // Step 5: Clear loading state only after all initialization is complete
+        setLoading(false);
+      } catch (error) {
+        console.error('Error initializing tasks:', error);
+        setLoading(false);
+      }
+    };
+
+    initializeTasks();
+
+    // Cleanup listeners on unmount or when dependencies change
     return () => {
       if (userTasksListenerRef.current) {
         userTasksListenerRef.current();
+        userTasksListenerRef.current = null;
       }
       if (teamTasksListenerRef.current) {
         teamTasksListenerRef.current();
+        teamTasksListenerRef.current = null;
       }
+      userTasksInitialized.current = false;
+      teamTasksInitialized.current = false;
     };
   }, [userProfile?.id, organization?.id, canViewTeamTasks]);
 
@@ -270,6 +304,16 @@ export const TaskProvider = ({ children }) => {
         );
       } catch (activityError) {
         console.error('Failed to log task creation activity:', activityError);
+      }
+
+      // Send assignment notifications
+      if (taskData.assignedTo && taskData.assignedTo.length > 0) {
+        try {
+          await notifyTaskAssignment(newTask, taskData.assignedTo, userProfile.id);
+        } catch (notifError) {
+          console.error('Failed to send assignment notifications:', notifError);
+          // Don't fail task creation if notification fails
+        }
       }
 
       showToast('Task created successfully', 'success');
@@ -323,7 +367,7 @@ export const TaskProvider = ({ children }) => {
           completedBy: null
         })) || [],
         // Reset status and completion fields
-        status: 'todo',
+        status: TASK_STATUS.TODO,
         completedAt: null,
         completedBy: null,
         commentCount: 0
@@ -437,6 +481,29 @@ export const TaskProvider = ({ children }) => {
                 organization.id
               );
             }
+
+            // Send notifications to newly added assignees
+            if (added.length > 0) {
+              try {
+                await notifyTaskAssignment({ ...currentTask, ...updates }, added, userProfile.id);
+              } catch (notifError) {
+                console.error('Failed to send assignment notifications:', notifError);
+              }
+            }
+          }
+
+          // Status change notifications
+          if (updates.status && updates.status !== currentTask.status) {
+            try {
+              await notifyStatusChange(
+                { ...currentTask, ...updates },
+                currentTask.status,
+                updates.status,
+                userProfile.id
+              );
+            } catch (notifError) {
+              console.error('Failed to send status change notifications:', notifError);
+            }
           }
         } catch (activityError) {
           console.error('Failed to log task update activity:', activityError);
@@ -471,10 +538,16 @@ export const TaskProvider = ({ children }) => {
   // Permission check: Can user delete this task?
   const canDeleteTask = useCallback((user, task) => {
     if (!user || !task) return false;
-    // Admins can delete any task
+
+    // Admins can delete any task (including completed tasks)
     if (user.role === 'admin') return true;
-    // Task creator can delete (if not completed)
-    if (task.createdBy === user.id && task.status !== 'completed') return true;
+
+    // Non-admins cannot delete completed tasks (business rule: protect completed work)
+    if (task.status === TASK_STATUS.COMPLETED) return false;
+
+    // Task creator can delete their own non-completed tasks
+    if (task.createdBy === user.id) return true;
+
     return false;
   }, []);
 
@@ -485,19 +558,28 @@ export const TaskProvider = ({ children }) => {
         throw new Error('Organization ID is missing');
       }
 
-      // Find the task to check permissions
+      // Find the task in state first (avoid unnecessary Firestore read)
       let task = [...myTasks, ...teamTasks].find(t => t.id === taskId);
 
-      // If not found in state, fetch from Firestore
-      if (!task) {
+      // Check permissions BEFORE any Firestore operations
+      if (task) {
+        if (!canDeleteTask(userProfile, task)) {
+          throw new Error('You do not have permission to delete this task');
+        }
+      } else {
+        // Task not in cache - need to fetch to check permissions
         task = await getTask(taskId);
+
+        if (!task) {
+          throw new Error('Task not found');
+        }
+
+        if (!canDeleteTask(userProfile, task)) {
+          throw new Error('You do not have permission to delete this task');
+        }
       }
 
-      // Check permissions
-      if (task && !canDeleteTask(userProfile, task)) {
-        throw new Error('You do not have permission to delete this task');
-      }
-
+      // Permission check passed - proceed with deletion
       await deleteTaskFirebase(taskId, organization.id);
 
       // Clear cache to prevent deleted task from reappearing on refresh
@@ -528,7 +610,7 @@ export const TaskProvider = ({ children }) => {
       const currentTask = [...myTasks, ...teamTasks].find(t => t.id === taskId);
 
       await updateTaskFirebase(taskId, {
-        status: 'completed',
+        status: TASK_STATUS.COMPLETED,
         completedAt: Timestamp.now(),
         completedBy: userProfile.id
       });
@@ -578,7 +660,8 @@ export const TaskProvider = ({ children }) => {
       const currentTask = [...myTasks, ...teamTasks].find(t => t.id === taskId);
       const subtask = currentTask?.subtasks?.find(st => st.id === subtaskId);
 
-      await updateSubtaskStatusFirebase(taskId, subtaskId, completed, userProfile.id);
+      // OPTIMIZATION: Pass cached task to avoid Firestore read
+      await updateSubtaskStatusFirebase(taskId, subtaskId, completed, userProfile.id, currentTask);
 
       // Log activity
       if (subtask && userProfile?.id && organization?.id) {
@@ -648,8 +731,26 @@ export const TaskProvider = ({ children }) => {
             triggeredByName: `${userProfile.firstName} ${userProfile.lastName}`,
             organizationID: organization.id
           });
+
+          // Send email notifications for mentions
+          for (const mention of comment.mentions) {
+            try {
+              await notifyMention(task, mention.userId, userProfile.id, newComment);
+            } catch (notifError) {
+              console.error('Failed to send mention email notification:', notifError);
+            }
+          }
         } catch (notificationError) {
           console.error('Failed to create mention notifications:', notificationError);
+        }
+      }
+
+      // Send comment notification to watchers
+      if (task) {
+        try {
+          await notifyComment(task, userProfile.id, newComment);
+        } catch (notifError) {
+          console.error('Failed to send comment notifications:', notifError);
         }
       }
 
@@ -657,7 +758,8 @@ export const TaskProvider = ({ children }) => {
       if (comment.mentions && comment.mentions.length > 0) {
         comment.mentions.forEach(async (mention) => {
           try {
-            await autoWatchTask(taskId, mention.userId, organization.id, 'mention');
+            // Pass task object to avoid unnecessary Firestore read
+            await autoWatchTask(taskId, mention.userId, organization.id, 'mention', task);
           } catch (watchError) {
             console.error('Failed to auto-watch task for mentioned user:', watchError);
           }

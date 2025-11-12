@@ -108,12 +108,24 @@ export const isWatchingTask = async (taskId, userId) => {
  * @param {string} userId - The user ID
  * @param {string} organizationId - The organization ID
  * @param {string} reason - Reason for auto-watching (commented, mentioned, etc.)
+ * @param {Object} task - Optional task object from cache to avoid Firestore read
  * @returns {Promise<void>}
  */
-export const autoWatchTask = async (taskId, userId, organizationId, reason = 'activity') => {
+export const autoWatchTask = async (taskId, userId, organizationId, reason = 'activity', task = null) => {
   try {
-    // Check if already watching
-    const isWatching = await isWatchingTask(taskId, userId);
+    // Check if already watching - use cached task if available to avoid Firestore read
+    let isWatching = false;
+
+    if (task) {
+      // Use cached task data (OPTIMIZATION: avoids expensive Firestore read)
+      isWatching = task.watchers?.includes(userId) || false;
+      readCounter.recordCacheHit('tasks', 'autoWatchTask', 1);
+    } else {
+      // Fallback to Firestore read if task not provided
+      isWatching = await isWatchingTask(taskId, userId);
+      readCounter.recordCacheMiss('tasks', 'autoWatchTask');
+    }
+
     if (isWatching) {
       return; // Already watching, no need to add again
     }

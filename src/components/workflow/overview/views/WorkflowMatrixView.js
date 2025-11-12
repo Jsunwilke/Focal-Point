@@ -597,7 +597,7 @@ const TaskCell = React.memo(({
         <TaskButton
           workflowId={workflow.id}
           stepId={step.id}
-          sessionID={workflow.sessionID}
+          sessionId={workflow.sessionId}
           tasks={stepTasks}
           onTaskClick={onTaskClick}
           linkedTaskId={stepProgress.linkedTaskId || null}
@@ -1080,8 +1080,8 @@ const WorkflowMatrixView = ({ workflows, sessionData, workflowTemplates }) => {
         filteredWorkflows.forEach(workflow => {
           activeTemplate.steps.forEach(step => {
             workflowStepPairs.push({
-              workflowID: workflow.id,
-              workflowStepID: step.id
+              workflowId: workflow.id,
+              workflowStepId: step.id
             });
           });
         });

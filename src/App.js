@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { loadEmailJS } from "./services/emailService";
+import { emailNotificationService } from "./services/emailNotificationService";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { WorkflowProvider } from "./contexts/WorkflowContext";
 import { TaskProvider } from "./contexts/TaskContext";
@@ -12,6 +13,7 @@ import { StreamChatProvider } from "./contexts/StreamChatContext";
 import { DistrictProvider } from "./contexts/DistrictContext";
 import { YearbookProvider } from "./contexts/YearbookContext";
 import { OrdersProvider } from "./contexts/OrdersContext";
+import ErrorBoundary from "./components/shared/ErrorBoundary";
 import LoginPage from "./components/auth/LoginPage";
 import StudioSignup from "./components/auth/StudioSignup";
 import InvitationAcceptance from "./components/auth/InvitationAcceptance";
@@ -170,9 +172,13 @@ const AppContent = () => {
 const App = () => {
   // Initialize EmailJS when app loads
   useEffect(() => {
+    // Initialize the existing EmailJS service
     loadEmailJS().catch(error => {
       console.warn('EmailJS initialization failed:', error);
     });
+
+    // Initialize the new task notification service
+    emailNotificationService.init();
   }, []);
 
   return (
@@ -185,11 +191,18 @@ const App = () => {
                 <YearbookProvider>
                   <OrdersProvider>
                     <WorkflowProvider>
-                      <TaskProvider>
-                        <div className="app">
-                          <AppContent />
-                        </div>
-                      </TaskProvider>
+                      <ErrorBoundary
+                        name="TaskProvider"
+                        errorTitle="Task System Error"
+                        errorMessage="The task management system encountered an error. Your other features are still working."
+                        onReset={() => window.location.reload()}
+                      >
+                        <TaskProvider>
+                          <div className="app">
+                            <AppContent />
+                          </div>
+                        </TaskProvider>
+                      </ErrorBoundary>
                     </WorkflowProvider>
                   </OrdersProvider>
                 </YearbookProvider>

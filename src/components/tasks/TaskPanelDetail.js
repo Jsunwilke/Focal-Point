@@ -853,7 +853,8 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
                     </div>
 
                     {assigneeDropdownOpen && (
-                      <div className={`assignee-dropdown ${dropdownDirection === 'up' ? 'assignee-dropdown--up' : ''}`}>
+                      <div
+                        className={`assignee-dropdown ${dropdownDirection === 'up' ? 'assignee-dropdown--up' : 'assignee-dropdown--down'}`}>
                         {/* Selected members first */}
                         {activeTeamMembers
                           .filter(member => formData.assignedTo.includes(member.id))

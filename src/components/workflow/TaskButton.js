@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { CheckSquare, Plus, Circle, Loader2 } from 'lucide-react';
 import { useWorkflow } from '../../contexts/WorkflowContext';
 import { secureLogger } from '../../services/secureLogger';
+import { TASK_STATUS, getTaskStatusLabel, getTaskStatusColor } from '../../constants/taskStatus';
 import './TaskButton.css';
 
 /**
@@ -12,7 +13,7 @@ import './TaskButton.css';
 const TaskButton = ({
   workflowId,
   stepId,
-  sessionID,
+  sessionId,
   tasks = [],
   onTaskClick,
   linkedTaskId = null,
@@ -24,9 +25,9 @@ const TaskButton = ({
   const { createTaskForWorkflowStep } = useWorkflow();
 
   const taskCount = tasks.length;
-  const incompleteTasks = tasks.filter(t => t.status !== 'completed' && t.status !== 'cancelled');
+  const incompleteTasks = tasks.filter(t => t.status !== TASK_STATUS.COMPLETED && t.status !== TASK_STATUS.CANCELLED);
   const hasIncompleteTasks = incompleteTasks.length > 0;
-  const hasUrgent = tasks.some(t => t.priority === 'urgent' && t.status !== 'completed');
+  const hasUrgent = tasks.some(t => t.priority === 'urgent' && t.status !== TASK_STATUS.COMPLETED);
   const hasLinkedTask = linkedTaskId !== null;
 
   // Close dropdown when clicking outside
@@ -50,7 +51,7 @@ const TaskButton = ({
 
     setIsCreatingTask(true);
     try {
-      await createTaskForWorkflowStep(workflowId, stepId, sessionID);
+      await createTaskForWorkflowStep(workflowId, stepId, sessionId);
       setIsOpen(false);
     } catch (error) {
       // Error is handled by the context, just ensure we reset loading state
@@ -58,7 +59,7 @@ const TaskButton = ({
         error: error.message,
         workflowId,
         stepId,
-        sessionID
+        sessionId
       });
     } finally {
       setIsCreatingTask(false);
@@ -81,27 +82,9 @@ const TaskButton = ({
     }
   };
 
-  const getStatusLabel = (status) => {
-    switch (status) {
-      case 'todo': return 'To Do';
-      case 'in_progress': return 'In Progress';
-      case 'completed': return 'Completed';
-      case 'on_hold': return 'On Hold';
-      case 'cancelled': return 'Cancelled';
-      default: return status;
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'todo': return '#3b82f6';
-      case 'in_progress': return '#f59e0b';
-      case 'completed': return '#10b981';
-      case 'on_hold': return '#ef4444';
-      case 'cancelled': return '#6b7280';
-      default: return '#6b7280';
-    }
-  };
+  // Use centralized status functions
+  const getStatusLabel = getTaskStatusLabel;
+  const getStatusColor = getTaskStatusColor;
 
   return (
     <div className="task-button-wrapper" ref={dropdownRef}>

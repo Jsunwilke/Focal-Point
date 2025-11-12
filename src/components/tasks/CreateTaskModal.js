@@ -27,6 +27,7 @@ import TaskTemplateSelector from './TaskTemplateSelector';
 import RecurringTaskForm from './RecurringTaskForm';
 import { useDataCache } from '../../contexts/DataCacheContext';
 import { useWorkflow } from '../../contexts/WorkflowContext';
+import { TASK_STATUS } from '../../constants/taskStatus';
 import { useAuth } from '../../contexts/AuthContext';
 import { Timestamp } from 'firebase/firestore';
 import attachmentsService from '../../firebase/attachments';
@@ -135,7 +136,7 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
   const activeSessions = useMemo(() => {
     if (!sessions) return [];
     return sessions
-      .filter(session => session.status !== 'completed' && session.status !== 'cancelled')
+      .filter(session => session.status !== TASK_STATUS.COMPLETED && session.status !== TASK_STATUS.CANCELLED)
       .sort((a, b) => new Date(b.date) - new Date(a.date));
   }, [sessions]);
 
@@ -143,7 +144,7 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
   const activeWorkflows = useMemo(() => {
     if (!organizationWorkflows) return [];
     return organizationWorkflows
-      .filter(workflow => workflow.status === 'active' || workflow.status === 'in_progress')
+      .filter(workflow => workflow.status === 'active' || workflow.status === TASK_STATUS.IN_PROGRESS)
       .sort((a, b) => (a.schoolName || '').localeCompare(b.schoolName || ''));
   }, [organizationWorkflows]);
 
@@ -355,7 +356,7 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
         description: formData.description.trim(),
         type: formData.type,
         priority: formData.priority,
-        status: 'todo',
+        status: TASK_STATUS.TODO,
         assignedTo: formData.assignedTo,
         createdBy: userProfile?.id || userProfile?.uid,
         organizationID: organization?.id,

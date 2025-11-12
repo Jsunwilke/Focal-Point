@@ -1,0 +1,111 @@
+/* src/components/tasks/calendar/CalendarWeekView.css */
+
+.calendar-week-view {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 12px;
+  padding: 16px;
+  background: #fff;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.calendar-week-view__day {
+  display: flex;
+  flex-direction: column;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.calendar-week-view__day:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.calendar-week-view__day--today {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.calendar-week-view__day--today:hover {
+  border-color: #2563eb;
+  background: #dbeafe;
+}
+
+.calendar-week-view__day-header {
+  padding: 12px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.calendar-week-view__day--today .calendar-week-view__day-header {
+  background: #3b82f6;
+}
+
+.calendar-week-view__day-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.calendar-week-view__day--today .calendar-week-view__day-name {
+  color: #fff;
+}
+
+.calendar-week-view__day-date {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.calendar-week-view__day--today .calendar-week-view__day-date {
+  color: #fff;
+}
+
+.calendar-week-view__tasks {
+  flex: 1;
+  padding: 8px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbar */
+.calendar-week-view__tasks::-webkit-scrollbar {
+  width: 4px;
+}
+
+.calendar-week-view__tasks::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.calendar-week-view__tasks::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 2px;
+}
+
+.calendar-week-view__tasks::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+.calendar-week-view__no-tasks {
+  padding: 16px 8px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* Drag and drop states */
+.calendar-week-view__day--drag-over {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px #3b82f6 inset;
+  background: #dbeafe !important;
+}

@@ -1,0 +1,59 @@
+/* src/components/tasks/calendar/CalendarTaskCard.css */
+
+.calendar-task-card {
+  display: flex;
+  align-items: center;
+  padding: 4px 6px;
+  margin-bottom: 2px;
+  background: #fff;
+  border-radius: 4px;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.calendar-task-card:hover {
+  background: #f8f9fa;
+  transform: translateX(2px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-task-card--completed {
+  opacity: 0.6;
+}
+
+.calendar-task-card--completed:hover {
+  opacity: 0.8;
+}
+
+.calendar-task-card__content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+.calendar-task-card__icon {
+  flex-shrink: 0;
+}
+
+.calendar-task-card__icon--completed {
+  color: #10b981;
+}
+
+.calendar-task-card__title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: #374151;
+}
+
+.calendar-task-card--completed .calendar-task-card__title {
+  text-decoration: line-through;
+  color: #9ca3af;
+}

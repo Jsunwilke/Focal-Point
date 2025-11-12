@@ -1,0 +1,11 @@
+/* src/components/tasks/calendar/CalendarView.css */
+
+.calendar-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #f9fafb;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}

@@ -814,7 +814,7 @@ export const WorkflowProvider = ({ children }) => {
   }, []);
 
   // Helper to create task for workflow step
-  const createTaskForWorkflowStep = useCallback((workflowId, stepId, sessionID = null) => {
+  const createTaskForWorkflowStep = useCallback((workflowId, stepId, sessionId = null) => {
     const workflow = userWorkflows.find(w => w.id === workflowId);
     const template = workflow ? workflowTemplates[workflow.templateId] : null;
     const step = template?.steps.find(s => s.id === stepId);
@@ -833,7 +833,7 @@ export const WorkflowProvider = ({ children }) => {
       type: 'workflow',
       workflowId: workflowId,
       workflowStepId: stepId,
-      sessionId: sessionID || workflow.sessionID,
+      sessionId: sessionId || workflow.sessionId,
       title: `${step.name} - ${workflow.sessionName || 'Workflow Task'}`,
       description: step.description || '',
       assignedTo: workflow.stepProgress[stepId]?.assignedTo ? [workflow.stepProgress[stepId].assignedTo] : [],

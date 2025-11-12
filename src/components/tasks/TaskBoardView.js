@@ -4,6 +4,7 @@ import { DragDropContext } from 'react-beautiful-dnd';
 import { useTask } from '../../contexts/TaskContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
 import TaskBoardColumn from './TaskBoardColumn';
+import { TASK_STATUS } from '../../constants/taskStatus';
 import './TaskBoardView.css';
 
 const TaskBoardView = ({ tasks, onTaskClick, filterSettings }) => {
@@ -66,7 +67,7 @@ const TaskBoardView = ({ tasks, onTaskClick, filterSettings }) => {
       const status = task.status || 'todo';
       if (organized[status]) {
         // For completed tasks, only show those completed today
-        if (status === 'completed') {
+        if (status === TASK_STATUS.COMPLETED) {
           if (isCompletedToday(task)) {
             organized[status].push(task);
           }

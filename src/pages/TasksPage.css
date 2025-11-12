@@ -564,3 +564,10 @@
 .tasks-page__main--board {
   padding: 0 1rem 1rem;
 }
+
+/* Calendar view layout */
+.tasks-page__main--calendar {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}

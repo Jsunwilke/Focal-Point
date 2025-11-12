@@ -5,12 +5,14 @@ import { useTask } from '../contexts/TaskContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { secureLogger } from '../services/secureLogger';
-import { ListTodo, Plus, Search, Filter, X, CheckSquare, Clock, AlertCircle, LayoutGrid, List, GitBranch } from 'lucide-react';
+import { ListTodo, Plus, Search, Filter, X, CheckSquare, Clock, AlertCircle, LayoutGrid, List, GitBranch, Calendar } from 'lucide-react';
 import CreateTaskModal from '../components/tasks/CreateTaskModal';
 import TaskBoardView from '../components/tasks/TaskBoardView';
+import CalendarView from '../components/tasks/calendar/CalendarView';
 import BulkActionsBar from '../components/tasks/BulkActionsBar';
 import BulkEditModal from '../components/tasks/BulkEditModal';
 import TaskExportButton from '../components/tasks/TaskExportButton';
+import { TASK_STATUS } from '../constants/taskStatus';
 import './TasksPage.css';
 
 // LocalStorage keys
@@ -163,9 +165,9 @@ const TasksPage = () => {
 
     const now = new Date();
     filteredTasks.forEach(task => {
-      if (task.status === 'todo') counts.todo++;
-      if (task.status === 'in_progress') counts.in_progress++;
-      if (task.status === 'completed') counts.completed++;
+      if (task.status === TASK_STATUS.TODO) counts.todo++;
+      if (task.status === TASK_STATUS.IN_PROGRESS) counts.in_progress++;
+      if (task.status === TASK_STATUS.COMPLETED) counts.completed++;
       if (task.dueDate && task.dueDate.toDate && task.dueDate.toDate() < now && task.status !== 'completed') {
         counts.overdue++;
       }
@@ -360,6 +362,13 @@ const TasksPage = () => {
               title="Board view"
             >
               <LayoutGrid size={18} />
+            </button>
+            <button
+              className={`tasks-page__view-btn ${viewMode === 'calendar' ? 'tasks-page__view-btn--active' : ''}`}
+              onClick={() => setViewMode('calendar')}
+              title="Calendar view"
+            >
+              <Calendar size={18} />
             </button>
           </div>
           <button
@@ -587,8 +596,8 @@ const TasksPage = () => {
           </div>
         </div>
 
-        {/* Task List or Board */}
-        <div className={`tasks-page__main ${viewMode === 'board' ? 'tasks-page__main--board' : ''}`}>
+        {/* Task List, Board, or Calendar */}
+        <div className={`tasks-page__main ${viewMode === 'board' ? 'tasks-page__main--board' : ''} ${viewMode === 'calendar' ? 'tasks-page__main--calendar' : ''}`}>
           {filteredTasks.length === 0 ? (
             <div className="tasks-page__empty">
               <ListTodo size={64} className="tasks-page__empty-icon" />
@@ -612,6 +621,11 @@ const TasksPage = () => {
                 </button>
               )}
             </div>
+          ) : viewMode === 'calendar' ? (
+            <CalendarView
+              tasks={filteredTasks}
+              onTaskClick={handleTaskClick}
+            />
           ) : viewMode === 'board' ? (
             <TaskBoardView
               tasks={filteredTasks}
@@ -623,7 +637,7 @@ const TasksPage = () => {
               {filteredTasks.map(task => (
                 <div
                   key={task.id}
-                  className={`tasks-page__task ${isOverdue(task) ? 'tasks-page__task--overdue' : ''} ${task.status === 'completed' ? 'tasks-page__task--completed' : ''} ${selectedTaskIds.includes(task.id) ? 'tasks-page__task--selected' : ''}`}
+                  className={`tasks-page__task ${isOverdue(task) ? 'tasks-page__task--overdue' : ''} ${task.status === TASK_STATUS.COMPLETED ? 'tasks-page__task--completed' : ''} ${selectedTaskIds.includes(task.id) ? 'tasks-page__task--selected' : ''}`}
                 >
                   <div className="tasks-page__task-left">
                     <input
@@ -670,11 +684,11 @@ const TasksPage = () => {
                   </div>
                   <div className="tasks-page__task-right">
                     <span className={`tasks-page__task-status tasks-page__task-status--${task.status}`}>
-                      {task.status === 'todo' && 'To Do'}
-                      {task.status === 'in_progress' && 'In Progress'}
-                      {task.status === 'on_hold' && 'On Hold'}
-                      {task.status === 'completed' && 'Completed'}
-                      {task.status === 'cancelled' && 'Cancelled'}
+                      {task.status === TASK_STATUS.TODO && 'To Do'}
+                      {task.status === TASK_STATUS.IN_PROGRESS && 'In Progress'}
+                      {task.status === TASK_STATUS.ON_HOLD && 'On Hold'}
+                      {task.status === TASK_STATUS.COMPLETED && 'Completed'}
+                      {task.status === TASK_STATUS.CANCELLED && 'Cancelled'}
                     </span>
                   </div>
                 </div>

@@ -5,12 +5,14 @@ import { X, Plus, ListTodo, ChevronDown, Search } from 'lucide-react';
 import { useTask } from '../../contexts/TaskContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import TaskPanelItem from './TaskPanelItem';
 import TaskPanelDetail from './TaskPanelDetail';
 import CreateTaskModal from './CreateTaskModal';
 import useKeyboardShortcuts from '../../hooks/useKeyboardShortcuts';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import { batchUpdateTaskOrders } from '../../firebase/tasks';
+import { TASK_STATUS } from '../../constants/taskStatus';
 import './TaskPanel.css';
 
 const TaskPanel = () => {
@@ -35,6 +37,7 @@ const TaskPanel = () => {
   const { userProfile } = useAuth();
   const { teamMembers } = useDataCache();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState('me'); // 'me' | 'all' | specific userId
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -43,6 +46,7 @@ const TaskPanel = () => {
   const [optimisticOrder, setOptimisticOrder] = useState(null); // Store optimistic order during drag
   const userDropdownRef = useRef(null);
   const searchInputRef = useRef(null);
+  const panelRef = useRef(null);
 
   // Check if user is manager or admin
   const isManagerOrAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager';
@@ -70,6 +74,38 @@ const TaskPanel = () => {
     }
   }, [userDropdownOpen]);
 
+  // Close panel on click outside (only on tasks page)
+  useEffect(() => {
+    const isTasksPage = location.pathname === '/tasks';
+
+    const handleClickOutsidePanel = (event) => {
+      // Only close if we're on tasks page and panel is open
+      if (isTasksPage && panelRef.current && !panelRef.current.contains(event.target)) {
+        // Don't close if clicking on a modal or dropdown
+        const isModalClick = event.target.closest('.modal-overlay') ||
+                             event.target.closest('.create-task-modal') ||
+                             event.target.closest('.create-task-modal-overlay') ||
+                             event.target.closest('.create-task-modal-container') ||
+                             event.target.closest('.bulk-edit-modal');
+        if (!isModalClick) {
+          closePanel();
+        }
+      }
+    };
+
+    if (isPanelOpen && isTasksPage) {
+      // Small delay to prevent closing immediately if panel was just opened by click
+      const timer = setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutsidePanel);
+      }, 100);
+
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener('mousedown', handleClickOutsidePanel);
+      };
+    }
+  }, [isPanelOpen, location.pathname, closePanel]);
+
   // Get tasks based on selected user
   const panelTasks = useMemo(() => {
     if (selectedUserId === 'me') {
@@ -84,18 +120,18 @@ const TaskPanel = () => {
 
         switch (panelFilter) {
           case 'completed':
-            return task.status === 'completed';
+            return task.status === TASK_STATUS.COMPLETED;
           case 'today':
-            if (task.status === 'completed' || task.status === 'cancelled') return false;
+            if (task.status === TASK_STATUS.COMPLETED || task.status === TASK_STATUS.CANCELLED) return false;
             if (!task.dueDate) return false;
             const dueDate = task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate);
             return dueDate < tomorrow;
           case 'urgent':
-            if (task.status === 'completed' || task.status === 'cancelled') return false;
+            if (task.status === TASK_STATUS.COMPLETED || task.status === TASK_STATUS.CANCELLED) return false;
             return task.priority === 'urgent' || task.priority === 'high';
           case 'all':
           default:
-            return task.status !== 'completed' && task.status !== 'cancelled';
+            return task.status !== TASK_STATUS.COMPLETED && task.status !== TASK_STATUS.CANCELLED;
         }
       });
     } else {
@@ -114,18 +150,18 @@ const TaskPanel = () => {
 
         switch (panelFilter) {
           case 'completed':
-            return task.status === 'completed';
+            return task.status === TASK_STATUS.COMPLETED;
           case 'today':
-            if (task.status === 'completed' || task.status === 'cancelled') return false;
+            if (task.status === TASK_STATUS.COMPLETED || task.status === TASK_STATUS.CANCELLED) return false;
             if (!task.dueDate) return false;
             const dueDate = task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate);
             return dueDate < tomorrow;
           case 'urgent':
-            if (task.status === 'completed' || task.status === 'cancelled') return false;
+            if (task.status === TASK_STATUS.COMPLETED || task.status === TASK_STATUS.CANCELLED) return false;
             return task.priority === 'urgent' || task.priority === 'high';
           case 'all':
           default:
-            return task.status !== 'completed' && task.status !== 'cancelled';
+            return task.status !== TASK_STATUS.COMPLETED && task.status !== TASK_STATUS.CANCELLED;
         }
       });
     }
@@ -166,7 +202,7 @@ const TaskPanel = () => {
     });
   }, [panelTasks, debouncedSearchQuery, teamMembers]);
 
-  // Sort tasks by panelOrder (for drag & drop) or default sorting
+  // Sort tasks by order (for drag & drop) or default sorting
   const sortedTasks = useMemo(() => {
     // If we have optimistic order (during drag), use it
     if (optimisticOrder) {
@@ -174,15 +210,15 @@ const TaskPanel = () => {
     }
 
     return [...filteredTasks].sort((a, b) => {
-      // Use panelOrder if available, otherwise use fallback of 999999 to put at end
-      const orderA = a.panelOrder ?? 999999;
-      const orderB = b.panelOrder ?? 999999;
+      // Use order if available, otherwise use fallback of 999999 to put at end
+      const orderA = a.order ?? 999999;
+      const orderB = b.order ?? 999999;
 
       if (orderA !== orderB) {
         return orderA - orderB;
       }
 
-      // If both don't have panelOrder, sort by createdAt
+      // If both don't have order, sort by createdAt
       const timeA = a.createdAt?.toMillis?.() ?? 0;
       const timeB = b.createdAt?.toMillis?.() ?? 0;
       return timeB - timeA; // Newest first
@@ -255,16 +291,24 @@ const TaskPanel = () => {
     setOptimisticOrder(items);
 
     try {
-      // Update panelOrder for all tasks in the current view
-      const updatePromises = items.map((task, index) => {
-        // Only update if panelOrder has changed
-        if (task.panelOrder !== index) {
-          return updateTask(task.id, { panelOrder: index });
-        }
-        return Promise.resolve();
-      });
+      // Prepare batch updates for tasks that need order changes
+      const updates = items
+        .map((task, index) => {
+          // Only update if order has changed
+          if (task.order !== index) {
+            return {
+              taskId: task.id,
+              order: index
+            };
+          }
+          return null;
+        })
+        .filter(update => update !== null);
 
-      await Promise.all(updatePromises.filter(p => p));
+      // Use batch operation for efficient Firestore updates
+      if (updates.length > 0) {
+        await batchUpdateTaskOrders(updates);
+      }
 
       // Clear optimistic order after a delay to allow Firebase to sync
       setTimeout(() => {
@@ -306,7 +350,7 @@ const TaskPanel = () => {
   if (!isPanelOpen) return null;
 
   const panelContent = (
-    <div className="task-panel">
+    <div className="task-panel" ref={panelRef}>
       {selectedTaskId ? (
         // Detail View
         <TaskPanelDetail

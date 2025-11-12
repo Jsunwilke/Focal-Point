@@ -45,7 +45,9 @@ const Dashboard = () => {
       { id: 'time-tracking', component: TimeTrackingWidget, props: {} },
       { id: 'pto-balance', component: PTOBalanceWidget, props: {} },
       // Only show read counter widget in development
-      ...(process.env.NODE_ENV === 'development' ? [{ id: 'read-counter', component: ReadCounterWidget, props: {} }] : [])
+      ...(process.env.NODE_ENV === 'development' ? [
+        { id: 'read-counter', component: ReadCounterWidget, props: {} }
+      ] : [])
     ],
     column2: [
       { id: 'hours-tracking', component: HoursTrackingWidget, props: {} },
@@ -69,11 +71,13 @@ const Dashboard = () => {
       const filteredColumn1 = oldData.column1.filter(w => w.id !== 'placeholder-2');
       const filteredColumn2 = oldData.column2.filter(w => w.id !== 'placeholder-2');
       
-      // Add read-counter widget if not present (only in development)
-      if (process.env.NODE_ENV === 'development' && !filteredColumn1.find(w => w.id === 'read-counter')) {
-        const readCounterWidget = defaultWidgets.column1.find(w => w.id === 'read-counter');
-        if (readCounterWidget) {
-          filteredColumn1.push(readCounterWidget);
+      // Add development widgets if not present (only in development)
+      if (process.env.NODE_ENV === 'development') {
+        if (!filteredColumn1.find(w => w.id === 'read-counter')) {
+          const readCounterWidget = defaultWidgets.column1.find(w => w.id === 'read-counter');
+          if (readCounterWidget) {
+            filteredColumn1.push(readCounterWidget);
+          }
         }
       }
       

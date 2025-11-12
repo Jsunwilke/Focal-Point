@@ -296,13 +296,13 @@ export const getSessionTasks = async (sessionId, organizationID) => {
 };
 
 // Get tasks for a specific workflow
-export const getWorkflowTasks = async (workflowID, organizationID) => {
+export const getWorkflowTasks = async (workflowId, organizationID) => {
   try {
     const tasksRef = collection(firestore, 'tasks');
     const q = query(
       tasksRef,
       where('organizationID', '==', organizationID),
-      where('workflowID', '==', workflowID),
+      where('workflowId', '==', workflowId),
       orderBy('createdAt', 'desc')
     );
 
@@ -314,24 +314,24 @@ export const getWorkflowTasks = async (workflowID, organizationID) => {
       ...doc.data()
     }));
 
-    secureLogger.debug('Workflow tasks fetched', { workflowID, count: tasks.length });
+    secureLogger.debug('Workflow tasks fetched', { workflowId, count: tasks.length });
     return tasks;
   } catch (error) {
-    secureLogger.error('Error fetching workflow tasks', { workflowID, error: error.message });
+    secureLogger.error('Error fetching workflow tasks', { workflowId, error: error.message });
     readCounter.recordError('tasks', 'getWorkflowTasks', error.message);
     throw error;
   }
 };
 
 // Get tasks for a specific workflow step
-export const getWorkflowStepTasks = async (workflowID, workflowStepID, organizationID) => {
+export const getWorkflowStepTasks = async (workflowId, workflowStepId, organizationID) => {
   try {
     const tasksRef = collection(firestore, 'tasks');
     const q = query(
       tasksRef,
       where('organizationID', '==', organizationID),
-      where('workflowID', '==', workflowID),
-      where('workflowStepID', '==', workflowStepID),
+      where('workflowId', '==', workflowId),
+      where('workflowStepId', '==', workflowStepId),
       orderBy('createdAt', 'desc')
     );
 
@@ -343,10 +343,10 @@ export const getWorkflowStepTasks = async (workflowID, workflowStepID, organizat
       ...doc.data()
     }));
 
-    secureLogger.debug('Workflow step tasks fetched', { workflowID, workflowStepID, count: tasks.length });
+    secureLogger.debug('Workflow step tasks fetched', { workflowId, workflowStepId, count: tasks.length });
     return tasks;
   } catch (error) {
-    secureLogger.error('Error fetching workflow step tasks', { workflowID, workflowStepID, error: error.message });
+    secureLogger.error('Error fetching workflow step tasks', { workflowId, workflowStepId, error: error.message });
     readCounter.recordError('tasks', 'getWorkflowStepTasks', error.message);
     throw error;
   }
@@ -355,7 +355,7 @@ export const getWorkflowStepTasks = async (workflowID, workflowStepID, organizat
 // Get tasks for multiple workflow steps (batch query for matrix view)
 export const getWorkflowStepTasksBatch = async (workflowStepPairs, organizationID) => {
   try {
-    // workflowStepPairs is an array of { workflowID, workflowStepID }
+    // workflowStepPairs is an array of { workflowId, workflowStepId }
     // Process in batches of 5 concurrent requests to avoid Firestore rate limiting
     const tasksByStep = {};
     const CONCURRENT_LIMIT = 5;
@@ -363,9 +363,9 @@ export const getWorkflowStepTasksBatch = async (workflowStepPairs, organizationI
     for (let i = 0; i < workflowStepPairs.length; i += CONCURRENT_LIMIT) {
       const batch = workflowStepPairs.slice(i, i + CONCURRENT_LIMIT);
 
-      const batchPromises = batch.map(async ({ workflowID, workflowStepID }) => {
-        const key = `${workflowID}_${workflowStepID}`;
-        const tasks = await getWorkflowStepTasks(workflowID, workflowStepID, organizationID);
+      const batchPromises = batch.map(async ({ workflowId, workflowStepId }) => {
+        const key = `${workflowId}_${workflowStepId}`;
+        const tasks = await getWorkflowStepTasks(workflowId, workflowStepId, organizationID);
         tasksByStep[key] = tasks;
       });
 
@@ -685,16 +685,29 @@ export const deleteTaskComment = async (taskId, commentId) => {
 };
 
 // Update subtask completion status
-export const updateSubtaskStatus = async (taskId, subtaskId, completed, userId) => {
+export const updateSubtaskStatus = async (taskId, subtaskId, completed, userId, cachedTask = null) => {
   try {
     const taskRef = doc(firestore, 'tasks', taskId);
-    const taskDoc = await getDoc(taskRef);
+    let taskData;
 
-    if (!taskDoc.exists()) {
-      throw new Error('Task not found');
+    // OPTIMIZATION: Use cached task data if available to avoid Firestore read
+    if (cachedTask && cachedTask.id === taskId) {
+      taskData = cachedTask;
+      readCounter.recordCacheHit('tasks', 'updateSubtaskStatus', 1);
+      secureLogger.debug('Using cached task for subtask update', { taskId });
+    } else {
+      // Fall back to Firestore read if cache not available
+      readCounter.recordCacheMiss('tasks', 'updateSubtaskStatus');
+      const taskDoc = await getDoc(taskRef);
+
+      if (!taskDoc.exists()) {
+        throw new Error('Task not found');
+      }
+
+      taskData = taskDoc.data();
+      readCounter.recordRead('get', 'tasks', 'updateSubtaskStatus', 1);
     }
 
-    const taskData = taskDoc.data();
     const subtasks = taskData.subtasks || [];
 
     const updatedSubtasks = subtasks.map(subtask => {
@@ -714,7 +727,6 @@ export const updateSubtaskStatus = async (taskId, subtaskId, completed, userId) 
       updatedAt: serverTimestamp()
     });
 
-    readCounter.recordRead('updateDoc', 'tasks', 'updateSubtaskStatus', 1);
     secureLogger.debug('Subtask status updated', { taskId, subtaskId, completed });
 
     return true;
