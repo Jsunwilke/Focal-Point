@@ -313,30 +313,44 @@
   color: var(--primary-color);
 }
 
+.task-panel__quick-add-toggle-btn--active {
+  background: var(--primary-light);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
 .task-panel__quick-add-toggle-btn:active {
   transform: scale(0.98);
 }
 
-/* Quick add form container */
-.task-panel__quick-add {
-  padding: 0.625rem 1rem;
-  background: var(--background);
-  border-bottom: 1px solid var(--border-light);
-  flex-shrink: 0;
-  animation: slideDown 0.2s ease-out;
+/* Quick add form container wrapper for animation */
+.task-panel__quick-add-wrapper {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.25s ease-in-out;
+  position: relative;
+  z-index: 1;
 }
 
-@keyframes slideDown {
-  from {
-    max-height: 0;
-    opacity: 0;
-    padding: 0 1rem;
-  }
-  to {
-    max-height: 120px;
-    opacity: 1;
-    padding: 0.625rem 1rem;
-  }
+.task-panel__quick-add-wrapper--open {
+  max-height: 150px;
+  opacity: 1;
+}
+
+/* Quick add form container */
+.task-panel__quick-add {
+  padding: 0.875rem 1rem;
+  background: linear-gradient(135deg, #e8ecf4, #dde2ed);
+  border-top: 2px solid #c6cbd7;
+  border-bottom: 2px solid #c6cbd7;
+  box-shadow:
+    0 8px 16px -3px rgba(0, 0, 0, 0.18),
+    0 4px 8px -2px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  flex-shrink: 0;
 }
 
 .task-panel__quick-add-form {

@@ -32,6 +32,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Timestamp } from 'firebase/firestore';
 import attachmentsService from '../../firebase/attachments';
 import { createRecurringTask } from '../../firebase/recurringTasks';
+import { sanitizeTaskTitle, sanitizeTaskDescription } from '../../utils/sanitize';
 import './CreateTaskModal.css';
 
 const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
@@ -330,6 +331,26 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
       newErrors.estimatedHours = 'Estimated hours must be a positive number';
     }
 
+    // Validate due date
+    if (formData.dueDate) {
+      const [year, month, day] = formData.dueDate.split('-');
+      const dueDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 18, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Check if due date is in the past (only for non-completed tasks)
+      if (dueDate < today && formData.status !== TASK_STATUS.COMPLETED) {
+        newErrors.dueDate = 'Due date cannot be in the past for pending tasks';
+      }
+
+      // Check if due date is too far in the future (more than 2 years)
+      const maxFutureDate = new Date();
+      maxFutureDate.setFullYear(maxFutureDate.getFullYear() + 2);
+      if (dueDate > maxFutureDate) {
+        newErrors.dueDate = 'Due date cannot be more than 2 years in the future';
+      }
+    }
+
     const emptySubtasks = formData.subtasks.filter(st => !st.title.trim());
     if (emptySubtasks.length > 0) {
       newErrors.subtasks = 'All subtasks must have a title or be removed';
@@ -352,8 +373,8 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
       const validSubtasks = formData.subtasks.filter(st => st.title.trim());
 
       const taskData = {
-        title: formData.title.trim(),
-        description: formData.description.trim(),
+        title: sanitizeTaskTitle(formData.title),
+        description: sanitizeTaskDescription(formData.description),
         type: formData.type,
         priority: formData.priority,
         status: TASK_STATUS.TODO,
@@ -366,8 +387,9 @@ const CreateTaskModal = ({ isOpen, onClose, prefilledData = {} }) => {
 
       if (formData.dueDate) {
         // Parse as local date to avoid timezone offset issues
+        // Set to 6 PM (18:00) so "due today" means "by end of business day"
         const [year, month, day] = formData.dueDate.split('-');
-        const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
+        const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 18, 0, 0);
         taskData.dueDate = Timestamp.fromDate(localDate);
       }
 

@@ -1770,6 +1770,48 @@ service cloud.firestore {
                          (resource.data.userId == request.auth.uid ||
                           isAdminOrManager(request.auth.uid));
       }
+
+      // Task Watchers subcollection - Users watching this task
+      match /watchers/{watcherId} {
+        // Users can read watchers if they can access the parent task
+        allow read: if request.auth != null &&
+                       canAccessTask(request.auth.uid, get(/databases/$(database)/documents/tasks/$(taskId)).data);
+
+        // Users can add themselves as a watcher if they can access the parent task
+        allow create: if request.auth != null &&
+                         canAccessTask(request.auth.uid, get(/databases/$(database)/documents/tasks/$(taskId)).data) &&
+                         // Validate required fields
+                         request.resource.data.keys().hasAll(['userId']) &&
+                         // Validate data types
+                         request.resource.data.userId is string &&
+                         // User can only add themselves as a watcher
+                         request.resource.data.userId == request.auth.uid;
+
+        // Users can only delete themselves as watchers
+        allow delete: if request.auth != null &&
+                         (resource.data.userId == request.auth.uid ||
+                          isAdminOrManager(request.auth.uid));
+      }
+
+      // Task Dependencies subcollection - Task dependencies/blockers
+      match /dependencies/{dependencyId} {
+        // Users can read dependencies if they can access the parent task
+        allow read: if request.auth != null &&
+                       canAccessTask(request.auth.uid, get(/databases/$(database)/documents/tasks/$(taskId)).data);
+
+        // Users can create dependencies if they can access the parent task
+        allow create: if request.auth != null &&
+                         canAccessTask(request.auth.uid, get(/databases/$(database)/documents/tasks/$(taskId)).data) &&
+                         // Validate required fields
+                         request.resource.data.keys().hasAll(['dependsOnTaskId', 'type']) &&
+                         // Validate data types
+                         request.resource.data.dependsOnTaskId is string &&
+                         request.resource.data.type in ['blocks', 'blockedBy', 'relates'];
+
+        // Users can delete dependencies if they can access the parent task
+        allow delete: if request.auth != null &&
+                         canAccessTask(request.auth.uid, get(/databases/$(database)/documents/tasks/$(taskId)).data);
+      }
     }
 
     // Task Activities - Activity log for tasks

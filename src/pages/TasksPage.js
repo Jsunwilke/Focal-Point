@@ -12,6 +12,7 @@ import CalendarView from '../components/tasks/calendar/CalendarView';
 import BulkActionsBar from '../components/tasks/BulkActionsBar';
 import BulkEditModal from '../components/tasks/BulkEditModal';
 import TaskExportButton from '../components/tasks/TaskExportButton';
+import ErrorBoundary from '../components/shared/ErrorBoundary';
 import { TASK_STATUS } from '../constants/taskStatus';
 import './TasksPage.css';
 
@@ -622,16 +623,28 @@ const TasksPage = () => {
               )}
             </div>
           ) : viewMode === 'calendar' ? (
-            <CalendarView
-              tasks={filteredTasks}
-              onTaskClick={handleTaskClick}
-            />
+            <ErrorBoundary
+              name="CalendarView"
+              errorTitle="Calendar View Error"
+              errorMessage="Failed to load calendar view. Please try switching to a different view."
+            >
+              <CalendarView
+                tasks={filteredTasks}
+                onTaskClick={handleTaskClick}
+              />
+            </ErrorBoundary>
           ) : viewMode === 'board' ? (
-            <TaskBoardView
-              tasks={filteredTasks}
-              onTaskClick={(task) => handleTaskClick(task.id)}
-              filterSettings={filters}
-            />
+            <ErrorBoundary
+              name="TaskBoardView"
+              errorTitle="Board View Error"
+              errorMessage="Failed to load board view. Please try switching to a different view."
+            >
+              <TaskBoardView
+                tasks={filteredTasks}
+                onTaskClick={(task) => handleTaskClick(task.id)}
+                filterSettings={filters}
+              />
+            </ErrorBoundary>
           ) : (
             <div className="tasks-page__list">
               {filteredTasks.map(task => (
@@ -705,23 +718,35 @@ const TasksPage = () => {
       />
 
       {/* Bulk Edit Modal */}
-      <BulkEditModal
-        isOpen={isBulkEditModalOpen}
-        onClose={() => setIsBulkEditModalOpen(false)}
-        selectedTasks={filteredTasks.filter(t => selectedTaskIds.includes(t.id))}
-        onBulkUpdate={handleBulkUpdate}
-      />
+      <ErrorBoundary
+        name="BulkEditModal"
+        errorTitle="Bulk Edit Error"
+        errorMessage="Failed to load bulk edit modal. Please try again."
+      >
+        <BulkEditModal
+          isOpen={isBulkEditModalOpen}
+          onClose={() => setIsBulkEditModalOpen(false)}
+          selectedTasks={filteredTasks.filter(t => selectedTaskIds.includes(t.id))}
+          onBulkUpdate={handleBulkUpdate}
+        />
+      </ErrorBoundary>
 
       {/* Bulk Actions Bar */}
-      {selectedTaskIds.length > 0 && (
-        <BulkActionsBar
-          selectedCount={selectedTaskIds.length}
-          onClearSelection={handleClearSelection}
-          onBulkEdit={handleBulkEdit}
-          onBulkDelete={handleBulkDelete}
-          onBulkStatusChange={handleBulkStatusChange}
-        />
-      )}
+      <ErrorBoundary
+        name="BulkActionsBar"
+        errorTitle="Bulk Actions Error"
+        errorMessage="Failed to load bulk actions. Please try again."
+      >
+        {selectedTaskIds.length > 0 && (
+          <BulkActionsBar
+            selectedCount={selectedTaskIds.length}
+            onClearSelection={handleClearSelection}
+            onBulkEdit={handleBulkEdit}
+            onBulkDelete={handleBulkDelete}
+            onBulkStatusChange={handleBulkStatusChange}
+          />
+        )}
+      </ErrorBoundary>
     </div>
   );
 };

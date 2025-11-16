@@ -25,6 +25,7 @@ import secureLogger from '../utils/secureLogger';
 import { readCounter } from '../services/readCounter';
 import taskCacheService from '../services/taskCacheService';
 import taskCommentsCacheService from '../services/taskCommentsCacheService';
+import { sanitizeCommentText } from '../utils/sanitize';
 
 // Create a new task
 export const createTask = async (taskData) => {
@@ -86,7 +87,7 @@ export const createTask = async (taskData) => {
 };
 
 // Update a task
-export const updateTask = async (taskId, updates) => {
+export const updateTask = async (taskId, updates, userId = null) => {
   try {
     const taskRef = doc(firestore, 'tasks', taskId);
 
@@ -95,9 +96,14 @@ export const updateTask = async (taskId, updates) => {
       updatedAt: serverTimestamp()
     };
 
+    // Track who updated the task (for audit trail)
+    if (userId) {
+      updateData.updatedBy = userId;
+    }
+
     await updateDoc(taskRef, updateData);
     readCounter.recordRead('updateDoc', 'tasks', 'updateTask', 1);
-    secureLogger.debug('Task updated successfully', { taskId });
+    secureLogger.debug('Task updated successfully', { taskId, updatedBy: userId });
 
     // Cache update removed - real-time listener will handle cache sync
     // Workflow sync moved to TaskContext listener to avoid offline read errors
@@ -133,28 +139,64 @@ export const deleteTask = async (taskId, organizationID) => {
 };
 
 // Batch update task orders (for drag-and-drop reordering)
-export const batchUpdateTaskOrders = async (updates) => {
+export const batchUpdateTaskOrders = async (updates, userId = null) => {
   try {
+    // Validate input
+    if (!updates || !Array.isArray(updates) || updates.length === 0) {
+      throw new Error('Invalid updates: must be a non-empty array');
+    }
+
+    // Firestore has a 500 operation limit per batch
+    if (updates.length > 500) {
+      throw new Error(`Too many updates: ${updates.length}. Maximum 500 operations per batch.`);
+    }
+
     const batch = writeBatch(firestore);
+    let operationCount = 0;
 
     updates.forEach(({ taskId, status, order }) => {
-      const taskRef = doc(firestore, 'tasks', taskId);
+      // Validate individual update
+      if (!taskId || typeof taskId !== 'string') {
+        throw new Error('Invalid taskId in update');
+      }
+
       const updateData = {
         updatedAt: serverTimestamp()
       };
 
+      // Track who performed the batch update
+      if (userId) {
+        updateData.updatedBy = userId;
+      }
+
       if (status !== undefined) {
+        if (typeof status !== 'string') {
+          throw new Error(`Invalid status type for task ${taskId}`);
+        }
         updateData.status = status;
       }
+
       if (order !== undefined) {
+        if (typeof order !== 'number') {
+          throw new Error(`Invalid order type for task ${taskId}`);
+        }
         updateData.order = order;
       }
 
+      // At least one field must be updated
+      if (Object.keys(updateData).length === 1) {
+        throw new Error(`No valid fields to update for task ${taskId}`);
+      }
+
+      const taskRef = doc(firestore, 'tasks', taskId);
       batch.update(taskRef, updateData);
+      operationCount++;
     });
 
+    // Commit the batch transaction
     await batch.commit();
-    secureLogger.debug('Batch task order update successful', { updateCount: updates.length });
+    secureLogger.debug('Batch task order update successful', { updateCount: operationCount, updatedBy: userId });
+    readCounter.recordRead('batchUpdateTaskOrders', 'tasks', 'TaskPanel', operationCount);
 
     return true;
   } catch (error) {
@@ -538,6 +580,8 @@ export const addTaskComment = async (taskId, commentData) => {
 
     const newComment = {
       ...commentData,
+      // Sanitize comment text to prevent XSS
+      text: sanitizeCommentText(commentData.text || ''),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };

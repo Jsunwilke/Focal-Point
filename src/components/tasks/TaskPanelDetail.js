@@ -8,6 +8,7 @@ import { useTask } from '../../contexts/TaskContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWorkflow } from '../../contexts/WorkflowContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
+import { useToast } from '../../contexts/ToastContext';
 import { Timestamp } from 'firebase/firestore';
 import DatePickerWithPresets from '../shared/DatePickerWithPresets';
 import RichTextEditor from '../shared/RichTextEditor';
@@ -33,6 +34,7 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
   const { userProfile, organization } = useAuth();
   const { teamMembers, users } = useDataCache();
   const { sessions, workflows } = useWorkflow();
+  const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState('details');
   const [isEditing, setIsEditing] = useState(false);
@@ -122,21 +124,24 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
     if (!taskId) return;
 
     let unsubscribe = null;
+    let isMounted = true;
 
     const loadComments = async () => {
       try {
         // Check cache first
         const cachedComments = taskCommentsCacheService.getCachedComments(taskId);
 
-        if (cachedComments) {
+        if (cachedComments && isMounted) {
           setComments(cachedComments);
           readCounter.recordCacheHit('taskComments', 'TaskPanelDetail', cachedComments.length);
-        } else {
+        } else if (isMounted) {
           readCounter.recordCacheMiss('taskComments', 'TaskPanelDetail');
         }
 
         // Fetch from Firestore
         const fetchedComments = await getTaskComments(taskId);
+        if (!isMounted) return;
+
         setComments(fetchedComments);
 
         // Update cache
@@ -144,15 +149,19 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
 
         // Set up real-time listener for new comments
         const latestTimestamp = taskCommentsCacheService.getLatestCommentTimestamp(taskId);
+        if (!isMounted) return;
+
         unsubscribe = subscribeToTaskComments(taskId, (newComments) => {
-          if (newComments && newComments.length > 0) {
+          if (isMounted && newComments && newComments.length > 0) {
             // Append new comments to existing ones
             const updatedComments = taskCommentsCacheService.appendNewComments(taskId, newComments);
             setComments(updatedComments);
           }
         }, latestTimestamp);
       } catch (error) {
-        console.error('Error loading comments:', error);
+        if (isMounted) {
+          console.error('Error loading comments:', error);
+        }
       }
     };
 
@@ -160,8 +169,10 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
 
     // Cleanup listener on unmount or task change
     return () => {
+      isMounted = false;
       if (unsubscribe) {
         unsubscribe();
+        unsubscribe = null;
       }
     };
   }, [taskId]);
@@ -302,6 +313,7 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
 
   // Handle subtask completion toggle
   const handleSubtaskToggle = async (subtaskId) => {
+    if (!task || !task.subtasks) return;
     const subtask = task.subtasks.find(st => st.id === subtaskId);
     if (!subtask) return;
 
@@ -334,6 +346,7 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
 
   // Remove subtask
   const handleRemoveSubtask = async (subtaskId) => {
+    if (!task || !task.subtasks) return;
     try {
       const updatedSubtasks = task.subtasks.filter(st => st.id !== subtaskId);
       await updateTask(task.id, { subtasks: updatedSubtasks });
@@ -346,6 +359,30 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
   const handleSave = async () => {
     setLoading(true);
     try {
+      // Validate due date before saving
+      if (formData.dueDate) {
+        const [year, month, day] = formData.dueDate.split('-');
+        const dueDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 18, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Check if due date is in the past (only for non-completed tasks)
+        if (dueDate < today && formData.status !== 'completed') {
+          showToast('Due date validation', 'Due date cannot be in the past for pending tasks', 'error');
+          setLoading(false);
+          return;
+        }
+
+        // Check if due date is too far in the future (more than 2 years)
+        const maxFutureDate = new Date();
+        maxFutureDate.setFullYear(maxFutureDate.getFullYear() + 2);
+        if (dueDate > maxFutureDate) {
+          showToast('Due date validation', 'Due date cannot be more than 2 years in the future', 'error');
+          setLoading(false);
+          return;
+        }
+      }
+
       const updates = {
         ...formData
       };
@@ -353,7 +390,7 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
       // Parse date as local date to avoid timezone offset issues
       if (formData.dueDate) {
         const [year, month, day] = formData.dueDate.split('-');
-        const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
+        const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 18, 0, 0);
         updates.dueDate = Timestamp.fromDate(localDate);
       } else {
         updates.dueDate = null;
@@ -363,31 +400,28 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
       const oldStatus = task.status;
       const newStatus = formData.status;
 
+      // CRITICAL: Handle time tracking BEFORE updating task status
+      // This prevents race conditions where status changes before tracking operations complete
+
       // Auto-start tracking when moving TO "in_progress"
       if (oldStatus !== 'in_progress' && newStatus === 'in_progress') {
         try {
-          // Check if user is already clocked in
+          // Check if user is already clocked in (use current time to get most recent)
           const currentEntry = await getCurrentTimeEntry(userProfile.id, organization.id);
 
-          if (currentEntry) {
+          if (currentEntry && currentEntry.status === 'clocked-in') {
             // Update existing time entry to add this taskId
             await updateTimeEntryTask(currentEntry.id, taskId);
           } else {
             // Clock in with this taskId
             await clockIn(userProfile.id, organization.id, null, null, taskId);
           }
-
-          // Log activity
-          await logActivity(
-            taskId,
-            ACTIVITY_TYPES.TIME_LOGGED,
-            { action: 'auto_started_tracking' },
-            userProfile.id,
-            organization.id
-          );
         } catch (trackError) {
           console.error('Failed to auto-start tracking:', trackError);
-          // Don't fail task update if tracking fails
+          // Don't fail task update if tracking fails, but log it
+          setLoading(false);
+          showToast('Time tracking may not have started', 'warning');
+          setLoading(true);
         }
       }
 
@@ -395,8 +429,35 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
       if (oldStatus === 'in_progress' && newStatus !== 'in_progress') {
         try {
           await clockOutTaskTimeEntry(userProfile.id, organization.id, taskId);
+        } catch (trackError) {
+          console.error('Failed to auto-stop tracking:', trackError);
+          // Don't fail task update if tracking fails, but log it
+          setLoading(false);
+          showToast('Time tracking may not have stopped', 'warning');
+          setLoading(true);
+        }
+      }
 
-          // Log activity
+      // NOW update the task after time tracking is handled
+      await updateTask(task.id, updates, userProfile?.id);
+
+      // Log time tracking activities AFTER task update succeeds
+      if (oldStatus !== 'in_progress' && newStatus === 'in_progress') {
+        try {
+          await logActivity(
+            taskId,
+            ACTIVITY_TYPES.TIME_LOGGED,
+            { action: 'auto_started_tracking' },
+            userProfile.id,
+            organization.id
+          );
+        } catch (activityError) {
+          console.error('Failed to log time tracking start:', activityError);
+        }
+      }
+
+      if (oldStatus === 'in_progress' && newStatus !== 'in_progress') {
+        try {
           await logActivity(
             taskId,
             ACTIVITY_TYPES.TIME_LOGGED,
@@ -404,13 +465,10 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
             userProfile.id,
             organization.id
           );
-        } catch (trackError) {
-          console.error('Failed to auto-stop tracking:', trackError);
-          // Don't fail task update if tracking fails
+        } catch (activityError) {
+          console.error('Failed to log time tracking stop:', activityError);
         }
       }
-
-      await updateTask(task.id, updates);
       setIsEditing(false);
     } catch (error) {
       console.error('Error saving task:', error);
@@ -509,30 +567,49 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
         organization.id
       );
 
-      // Update state with new attachments
+      // Validate response before updating state
+      if (!uploadedAttachments || uploadedAttachments.length === 0) {
+        console.error('Upload returned no attachments');
+        showToast('Upload failed: No attachments returned', 'error');
+        return;
+      }
+
+      // Update state with new attachments (Firebase write already succeeded)
       setAttachments(prev => [...prev, ...uploadedAttachments]);
 
       // Update cache
       const updatedAttachments = [...attachments, ...uploadedAttachments];
       attachmentCacheService.setCachedAttachments(taskId, updatedAttachments);
 
-      // Log activity for each uploaded attachment
-      for (const attachment of uploadedAttachments) {
-        await logActivity(
-          taskId,
-          ACTIVITY_TYPES.ATTACHMENT_UPLOADED,
-          {
-            fileName: attachment.originalFileName,
-            fileSize: attachment.fileSize,
-            fileType: attachment.fileType,
-            attachmentId: attachment.id
-          },
-          userProfile.id,
-          organization.id
-        );
+      // Log activity for each uploaded attachment (non-critical)
+      try {
+        for (const attachment of uploadedAttachments) {
+          await logActivity(
+            taskId,
+            ACTIVITY_TYPES.ATTACHMENT_UPLOADED,
+            {
+              fileName: attachment.originalFileName,
+              fileSize: attachment.fileSize,
+              fileType: attachment.fileType,
+              attachmentId: attachment.id
+            },
+            userProfile.id,
+            organization.id
+          );
+        }
+      } catch (activityError) {
+        console.error('Failed to log attachment upload activity:', activityError);
+        // Activity logging is non-critical - don't fail the upload
       }
+
+      showToast(`${uploadedAttachments.length} file(s) uploaded successfully`, 'success');
     } catch (error) {
       console.error('Error uploading attachments:', error);
+      showToast(
+        'Unable to Upload Files',
+        'The files could not be uploaded. Please check your connection and try again.',
+        'error'
+      );
     } finally {
       setLoading(false);
     }
@@ -547,32 +624,45 @@ const TaskPanelDetail = ({ taskId, onBack }) => {
       // Get attachment details before deleting for activity log
       const attachment = attachments.find(att => att.id === attachmentId);
 
+      // Delete from Firebase first - if this fails, nothing else happens
       await attachmentsService.deleteAttachment(attachmentId, taskId, organization.id);
 
-      // Update state
+      // Firebase delete succeeded - now update state and cache
       setAttachments(prev => prev.filter(att => att.id !== attachmentId));
 
       // Update cache
       const updatedAttachments = attachments.filter(att => att.id !== attachmentId);
       attachmentCacheService.setCachedAttachments(taskId, updatedAttachments);
 
-      // Log activity for attachment deletion
+      // Log activity for attachment deletion (non-critical)
       if (attachment) {
-        await logActivity(
-          taskId,
-          ACTIVITY_TYPES.ATTACHMENT_DELETED,
-          {
-            fileName: attachment.originalFileName,
-            fileSize: attachment.fileSize,
-            fileType: attachment.fileType,
-            attachmentId: attachment.id
-          },
-          userProfile.id,
-          organization.id
-        );
+        try {
+          await logActivity(
+            taskId,
+            ACTIVITY_TYPES.ATTACHMENT_DELETED,
+            {
+              fileName: attachment.originalFileName,
+              fileSize: attachment.fileSize,
+              fileType: attachment.fileType,
+              attachmentId: attachment.id
+            },
+            userProfile.id,
+            organization.id
+          );
+        } catch (activityError) {
+          console.error('Failed to log attachment deletion activity:', activityError);
+          // Activity logging is non-critical - don't fail the deletion
+        }
       }
+
+      showToast('Attachment deleted successfully', 'success');
     } catch (error) {
       console.error('Error deleting attachment:', error);
+      showToast(
+        'Unable to Delete Attachment',
+        'The attachment could not be deleted. Please try again.',
+        'error'
+      );
     } finally {
       setLoading(false);
     }

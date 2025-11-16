@@ -294,6 +294,11 @@ export const markAllNotificationsAsRead = async (userId, organizationID) => {
     const querySnapshot = await getDocs(q);
     readCounter.recordRead('query', 'taskNotifications', 'markAllNotificationsAsRead', querySnapshot.size);
 
+    // Validate batch size (Firestore limit is 500 operations per batch)
+    if (querySnapshot.size > 500) {
+      throw new Error(`Too many notifications to update in single batch: ${querySnapshot.size}. Maximum 500 per batch.`);
+    }
+
     const batch = writeBatch(firestore);
     const now = serverTimestamp();
 
@@ -341,6 +346,11 @@ export const deleteOldNotifications = async (userId, organizationID, daysOld = 3
 
     const querySnapshot = await getDocs(q);
     readCounter.recordRead('query', 'taskNotifications', 'deleteOldNotifications', querySnapshot.size);
+
+    // Validate batch size (Firestore limit is 500 operations per batch)
+    if (querySnapshot.size > 500) {
+      throw new Error(`Too many notifications to delete in single batch: ${querySnapshot.size}. Maximum 500 per batch.`);
+    }
 
     const batch = writeBatch(firestore);
 

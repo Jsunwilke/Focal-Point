@@ -51,6 +51,8 @@ const TaskPanel = () => {
   const userDropdownRef = useRef(null);
   const searchInputRef = useRef(null);
   const panelRef = useRef(null);
+  const isDraggingRef = useRef(false); // Prevent concurrent drag operations
+  const dragTimeoutRef = useRef(null); // Track optimistic order timeout
 
   // Quick Add state
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
@@ -143,7 +145,12 @@ const TaskPanel = () => {
         title: quickAddTitle.trim(),
         type: 'general',
         priority: quickAddPriority,
-        dueDate: quickAddDueDate ? Timestamp.fromDate(new Date(quickAddDueDate)) : null,
+        dueDate: quickAddDueDate ? (() => {
+          // Parse as local date at 6 PM (18:00) to avoid timezone issues
+          const [year, month, day] = quickAddDueDate.split('-');
+          const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 18, 0, 0);
+          return Timestamp.fromDate(localDate);
+        })() : null,
         assignedTo: [userProfile.id], // Auto-assign to current user
         status: TASK_STATUS.TODO,  // Use proper status constant
         description: ''  // Add empty description as it might be required
@@ -181,6 +188,16 @@ const TaskPanel = () => {
       return () => document.removeEventListener('keydown', handleKeyDown);
     }
   }, [isQuickAddOpen]);
+
+  // Cleanup drag timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (dragTimeoutRef.current) {
+        clearTimeout(dragTimeoutRef.current);
+        dragTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Get tasks based on selected user
   const panelTasks = useMemo(() => {
@@ -356,8 +373,22 @@ const TaskPanel = () => {
 
   // Handle drag and drop reordering
   const handleDragEnd = async (result) => {
+    // CRITICAL: Prevent concurrent drag operations to avoid conflicts
+    if (isDraggingRef.current) {
+      console.warn('Drag already in progress - ignoring concurrent drag');
+      return;
+    }
+
     if (!result.destination) return;
     if (result.destination.index === result.source.index) return;
+
+    isDraggingRef.current = true;
+
+    // Clear any pending timeout to prevent race conditions
+    if (dragTimeoutRef.current) {
+      clearTimeout(dragTimeoutRef.current);
+      dragTimeoutRef.current = null;
+    }
 
     const items = Array.from(sortedTasks);
     const [reorderedItem] = items.splice(result.source.index, 1);
@@ -383,17 +414,23 @@ const TaskPanel = () => {
 
       // Use batch operation for efficient Firestore updates
       if (updates.length > 0) {
-        await batchUpdateTaskOrders(updates);
+        // Pass userId for audit trail
+        await batchUpdateTaskOrders(updates, userProfile?.id);
       }
 
-      // Clear optimistic order after a delay to allow Firebase to sync
-      setTimeout(() => {
+      // Clear optimistic order only after batch write succeeds
+      // Use timeout to allow Firebase listener to sync (typically 100-300ms)
+      dragTimeoutRef.current = setTimeout(() => {
         setOptimisticOrder(null);
+        dragTimeoutRef.current = null;
+        isDraggingRef.current = false;
       }, 500);
     } catch (error) {
       console.error('Failed to reorder tasks:', error);
       // Clear optimistic order on error to revert to real data
       setOptimisticOrder(null);
+      isDraggingRef.current = false;
+      showToast('Failed to reorder tasks. Please try again.', 'error');
     }
   };
 
@@ -503,12 +540,12 @@ const TaskPanel = () => {
             {/* Second row: Quick Add and New buttons */}
             <div className="task-panel__header-actions">
               <button
-                className="task-panel__quick-add-toggle-btn"
+                className={`task-panel__quick-add-toggle-btn ${isQuickAddOpen ? 'task-panel__quick-add-toggle-btn--active' : ''}`}
                 onClick={() => setIsQuickAddOpen(!isQuickAddOpen)}
                 aria-label="Toggle quick add"
-                title="Quick add task"
+                title={isQuickAddOpen ? "Close quick add" : "Quick add task"}
               >
-                <Plus size={16} />
+                <Plus size={16} style={{ transform: isQuickAddOpen ? 'rotate(45deg)' : 'none', transition: 'transform 0.2s' }} />
                 Quick Add
               </button>
               <button
@@ -582,7 +619,7 @@ const TaskPanel = () => {
           </div>
 
           {/* Quick Add Form */}
-          {isQuickAddOpen && (
+          <div className={`task-panel__quick-add-wrapper ${isQuickAddOpen ? 'task-panel__quick-add-wrapper--open' : ''}`}>
             <div className="task-panel__quick-add">
               <form onSubmit={handleQuickAddSubmit} className="task-panel__quick-add-form">
                 <div className="task-panel__quick-add-title-row">
@@ -628,7 +665,7 @@ const TaskPanel = () => {
                 </div>
               </form>
             </div>
-          )}
+          </div>
 
           {/* Task list */}
           <DragDropContext onDragEnd={handleDragEnd}>

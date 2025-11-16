@@ -57,6 +57,9 @@ export const TaskProvider = ({ children }) => {
   const userTasksInitialized = useRef(false);
   const teamTasksInitialized = useRef(false);
 
+  // Ref for rate limiting (prevent spam task creation)
+  const lastTaskCreationTime = useRef(0);
+
   // Check if user can view team tasks (admin/manager)
   const canViewTeamTasks = userProfile?.role === 'admin' || userProfile?.role === 'manager';
 
@@ -287,6 +290,14 @@ export const TaskProvider = ({ children }) => {
   // Create a new task
   const createTask = useCallback(async (taskData) => {
     try {
+      // Rate limiting: prevent spam task creation (min 500ms between creations)
+      const now = Date.now();
+      if (now - lastTaskCreationTime.current < 500) {
+        showToast('Please wait before creating another task', 'info');
+        throw new Error('Rate limited: Too many task creations');
+      }
+      lastTaskCreationTime.current = now;
+
       const newTask = await createTaskFirebase({
         ...taskData,
         organizationID: organization.id,
@@ -389,9 +400,13 @@ export const TaskProvider = ({ children }) => {
       // Get the current task to track changes
       const currentTask = [...myTasks, ...teamTasks].find(t => t.id === taskId);
 
-      await updateTaskFirebase(taskId, updates);
+      // IMPORTANT: Firebase write must succeed before any state/cache updates
+      // This prevents showing stale data if the write fails
+      // Pass userId to track who updated the task
+      await updateTaskFirebase(taskId, updates, userProfile?.id);
 
-      // Log activities for specific field changes
+      // Firebase write succeeded - now handle logging and notifications
+      // These can fail without reverting the Firebase write, but we don't revert the UI
       if (currentTask && userProfile?.id && organization?.id) {
         try {
           // Status change
@@ -507,12 +522,12 @@ export const TaskProvider = ({ children }) => {
           }
         } catch (activityError) {
           console.error('Failed to log task update activity:', activityError);
+          // Activity logging failure is non-critical - don't prevent state update
         }
       }
 
-      showToast('Task updated successfully', 'success');
-
-      // Update task in state
+      // CRITICAL: Only update state AFTER Firebase write succeeds
+      // This ensures the UI shows correct data even if logging fails
       setMyTasks(prevTasks =>
         prevTasks.map(task =>
           task.id === taskId ? { ...task, ...updates } : task
@@ -526,6 +541,8 @@ export const TaskProvider = ({ children }) => {
           )
         );
       }
+
+      showToast('Task updated successfully', 'success');
 
       return true;
     } catch (error) {
@@ -609,15 +626,11 @@ export const TaskProvider = ({ children }) => {
     try {
       const currentTask = [...myTasks, ...teamTasks].find(t => t.id === taskId);
 
-      await updateTaskFirebase(taskId, {
-        status: TASK_STATUS.COMPLETED,
-        completedAt: Timestamp.now(),
-        completedBy: userProfile.id
-      });
-
-      // Auto-stop time tracking if user is tracking this task
+      // CRITICAL: Handle time tracking BEFORE updating task status
+      // This prevents race conditions where status changes before tracking operations complete
       if (userProfile?.id && organization?.id) {
         try {
+          // Auto-stop time tracking if user is tracking this task
           await clockOutTaskTimeEntry(userProfile.id, organization.id, taskId);
         } catch (timeError) {
           console.error('Failed to auto-stop time tracking:', timeError);
@@ -625,7 +638,14 @@ export const TaskProvider = ({ children }) => {
         }
       }
 
-      // Log activity
+      // NOW update the task status after time tracking is handled
+      await updateTaskFirebase(taskId, {
+        status: TASK_STATUS.COMPLETED,
+        completedAt: Timestamp.now(),
+        completedBy: userProfile.id
+      }, userProfile?.id);
+
+      // Log activity AFTER task update succeeds
       if (userProfile?.id && organization?.id) {
         try {
           const activityType = currentTask?.status === 'completed'
