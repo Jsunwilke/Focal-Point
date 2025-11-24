@@ -1330,10 +1330,10 @@ service cloud.firestore {
       allow read: if request.auth != null && 
                      belongsToSameOrg(request.auth.uid, resource.data.organizationId);
       
-      // Admins and photographers can create yearbook lists
-      allow create: if request.auth != null && 
+      // Admins, managers, and photographers can create yearbook lists
+      allow create: if request.auth != null &&
                        belongsToSameOrg(request.auth.uid, request.resource.data.organizationId) &&
-                       (isAdmin(request.auth.uid) || getUserRole(request.auth.uid) == 'photographer') &&
+                       (isAdminOrManager(request.auth.uid) || getUserRole(request.auth.uid) == 'photographer') &&
                        // Validate required fields
                        request.resource.data.keys().hasAll(['organizationId', 'schoolId', 'schoolName', 'schoolYear']) &&
                        // Validate data types
@@ -1355,10 +1355,10 @@ service cloud.firestore {
                        (!request.resource.data.keys().hasAny(['startDate']) || request.resource.data.startDate is timestamp) &&
                        (!request.resource.data.keys().hasAny(['endDate']) || request.resource.data.endDate is timestamp);
       
-      // Admins and photographers can update yearbook lists
-      allow update: if request.auth != null && 
+      // Admins, managers, and photographers can update yearbook lists
+      allow update: if request.auth != null &&
                        belongsToSameOrg(request.auth.uid, resource.data.organizationId) &&
-                       (isAdmin(request.auth.uid) || getUserRole(request.auth.uid) == 'photographer') &&
+                       (isAdminOrManager(request.auth.uid) || getUserRole(request.auth.uid) == 'photographer') &&
                        // Prevent changing core identity fields
                        request.resource.data.organizationId == resource.data.organizationId &&
                        request.resource.data.schoolId == resource.data.schoolId &&
@@ -1371,9 +1371,9 @@ service cloud.firestore {
                        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['totalCount']) || 
                         (request.resource.data.totalCount is number && request.resource.data.totalCount >= 0));
       
-      // Only admins can delete yearbook lists
-      allow delete: if request.auth != null && 
-                       isAdmin(request.auth.uid) &&
+      // Admins and managers can delete yearbook lists
+      allow delete: if request.auth != null &&
+                       isAdminOrManager(request.auth.uid) &&
                        belongsToSameOrg(request.auth.uid, resource.data.organizationId);
     }
 

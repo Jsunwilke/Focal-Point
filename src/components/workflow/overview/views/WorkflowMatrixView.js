@@ -575,14 +575,6 @@ const TaskCell = React.memo(({
         />
         <CellBadge done={isDone} />
       </div>
-      {displayMicros && displayMicros.length > 0 && (
-        <MicroMeter
-          label={step.title}
-          templateMicros={step.micros}
-          normalizedMicros={displayMicros}
-          onToggle={(microKey) => handleMicroToggle(workflow.id, step.id, microKey, displayMicros, displayInitials)}
-        />
-      )}
       {showDates && (
         <input
           type="date"
@@ -592,21 +584,32 @@ const TaskCell = React.memo(({
           tabIndex={-1}
         />
       )}
-      {/* Task Button */}
-      <div className="workflow-matrix__cell-task-button">
-        <TaskButton
-          workflowId={workflow.id}
-          stepId={step.id}
-          sessionId={workflow.sessionId}
-          tasks={stepTasks}
-          onTaskClick={onTaskClick}
-          linkedTaskId={stepProgress.linkedTaskId || null}
-          linkedTaskStatus={
-            stepProgress.linkedTaskId
-              ? stepTasks.find(t => t.id === stepProgress.linkedTaskId)?.status || null
-              : null
-          }
-        />
+      {/* Microsteps and Task Button Row */}
+      <div className="workflow-matrix__cell-bottom-row">
+        {displayMicros && displayMicros.length > 0 && (
+          <MicroMeter
+            label={step.title}
+            templateMicros={step.micros}
+            normalizedMicros={displayMicros}
+            onToggle={(microKey) => handleMicroToggle(workflow.id, step.id, microKey, displayMicros, displayInitials)}
+          />
+        )}
+        {/* Task Button */}
+        <div className="workflow-matrix__cell-task-button">
+          <TaskButton
+            workflowId={workflow.id}
+            stepId={step.id}
+            sessionId={workflow.sessionId}
+            tasks={stepTasks}
+            onTaskClick={onTaskClick}
+            linkedTaskId={stepProgress.linkedTaskId || null}
+            linkedTaskStatus={
+              stepProgress.linkedTaskId
+                ? stepTasks.find(t => t.id === stepProgress.linkedTaskId)?.status || null
+                : null
+            }
+          />
+        </div>
       </div>
     </div>
   );

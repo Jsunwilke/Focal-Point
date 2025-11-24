@@ -313,7 +313,8 @@ export const YearbookProvider = ({ children }) => {
   // Check if user can edit shoot lists
   const canEdit = useMemo(() => {
     if (!userProfile) return false;
-    return userProfile.role === 'admin' || 
+    return userProfile.role === 'admin' ||
+           userProfile.role === 'manager' ||
            userProfile.role === 'photographer' ||
            userProfile.permissions?.includes('yearbook.edit');
   }, [userProfile]);

@@ -281,6 +281,13 @@
   gap: 6px;
 }
 
+.workflow-matrix__cell-bottom-row {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  align-items: center;
+}
+
 /* Initials Input */
 .workflow-matrix__initials-input {
   width: 48px;
@@ -379,9 +386,9 @@
 /* Micro-step meter */
 .micro-meter-container {
   position: relative;
-  width: 96px;
+  width: 60px;
   user-select: none;
-  margin-top: 2px;
+  margin-top: 0px;
 }
 
 .micro-meter-button {
@@ -400,7 +407,7 @@
 }
 
 .micro-meter-bar {
-  height: 8px;
+  height: 5px;
   background-color: #f4f4f5;
   position: relative;
 }
@@ -412,11 +419,11 @@
 }
 
 .micro-meter-text {
-  padding: 1px 0;
+  padding: 0px 0;
   color: #1e3a8a;
   background-color: #eff6ff;
   font-weight: 500;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 /* Hover tooltip */
@@ -514,7 +521,7 @@
 
 /* Task Button in Cell */
 .workflow-matrix__cell-task-button {
-  margin-top: 6px;
+  margin-top: 0px;
   display: flex;
   justify-content: flex-start;
 }
